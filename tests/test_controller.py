@@ -386,3 +386,35 @@ async def test_entity_ids_match_readme(hass, home):
         "number.wohnzimmer_video_idle_timeout",
         "button.wohnzimmer_all_off",
     }
+
+
+# ------------------------------------------------------------------ cover art
+
+
+MA_COVER = "http://192.168.10.21:8095/imageproxy/abc?size=512&fmt=jpg"
+
+
+async def test_music_cover_goes_through_ha_proxy(hass, home, hass_client, aioclient_mock):
+    """Music Assistant gives an absolute http URL: serve it via the HA image proxy."""
+    aioclient_mock.get(MA_COVER, content=b"JPEGDATA", headers={"Content-Type": "image/jpeg"})
+    await setup_room(hass)
+    home.music("playing", entity_picture=MA_COVER, media_title="All Summer Long")
+    await hass.async_block_till_done()
+
+    picture = hass.states.get(ROOM).attributes["entity_picture"]
+    assert picture.startswith(f"/api/media_player_proxy/{ROOM}?token=")
+    assert "192.168.10.21" not in picture
+
+    client = await hass_client()
+    resp = await client.get(picture)
+    assert resp.status == 200
+    assert await resp.read() == b"JPEGDATA"
+
+
+async def test_relative_cover_is_passed_through(hass, home):
+    """Kodi's picture is already an HA proxy path: keep it."""
+    await setup_room(hass)
+    kodi_pic = "/api/media_player_proxy/media_player.kodi?token=x&cache=y"
+    home.kodi("playing", entity_picture=kodi_pic)
+    await hass.async_block_till_done()
+    assert hass.states.get(ROOM).attributes["entity_picture"] == kodi_pic
