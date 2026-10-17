@@ -1,0 +1,25 @@
+start_follow:
+  fields:
+    group:
+      selector:
+        entity:
+          domain: media_player
+    volume:
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.01
+    media_content_id:
+      example: "library://radio/42"
+      selector:
+        text:
+    media_content_type:
+      example: music
+      selector:
+        text:
+    fallback_rooms:
+      selector:
+        entity:
+          domain: media_player
+          multiple: true

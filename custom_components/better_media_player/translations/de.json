@@ -1,15 +1,13 @@
 {
   "config": {
     "step": {
-      "user": {
-        "title": "Neuer Raum",
-        "description": "Ein Better Media Player pro Raum. Wählst du einen Bereich, werden Kodi- und Music-Assistant-Player dieses Bereichs im nächsten Schritt vorausgewählt.",
-        "data": { "name": "Name", "area": "Bereich" }
-      },
       "sources": {
         "title": "Media Player",
         "description": "Mindestens ein Player. Der Video-Player (z. B. Kodi) braucht Bild und Lautsprecher, der Musik-Player (z. B. ein Music-Assistant-/sendspin-Player) nur die Lautsprecher. Keinen Gruppen-Player auswählen.",
-        "data": { "video_player": "Video-Player", "audio_player": "Musik-Player" },
+        "data": {
+          "video_player": "Video-Player",
+          "audio_player": "Musik-Player"
+        },
         "data_description": {
           "video_player": "Wird über sein eigenes Ein/Aus geschaltet (z. B. Kodi mit deiner Wake-on-LAN-Automation).",
           "audio_player": "Der Player des Raums, keine Music-Assistant-Gruppe."
@@ -18,7 +16,11 @@
       "devices": {
         "title": "Stromgeräte",
         "description": "Steckdosen, die nur noch dieser Raum schaltet. Andere Automationen für diese Steckdosen deaktivieren. Die Geräte müssen bei Stromzufuhr selbst starten.",
-        "data": { "display": "Bild (TV, Beamer)", "speakers": "Lautsprecher / Verstärker / AVR", "bass": "Subwoofer" },
+        "data": {
+          "display": "Bild (TV, Beamer)",
+          "speakers": "Lautsprecher / Verstärker / AVR",
+          "bass": "Subwoofer"
+        },
         "data_description": {
           "display": "Geht zuerst an und zuletzt aus.",
           "speakers": "Für beide Player gemeinsam. Geht an, wenn der Player bereit ist, und zuerst aus.",
@@ -73,6 +75,49 @@
           "audio_standby_w": "Lautsprecher: Standby unter",
           "audio_standby_max": "Lautsprecher: höchstens warten"
         }
+      },
+      "room": {
+        "title": "Neuer Raum",
+        "description": "Ein Better Media Player pro Raum. Wählst du einen Bereich, werden Kodi- und Music-Assistant-Player dieses Bereichs im nächsten Schritt vorausgewählt.",
+        "data": {
+          "name": "Name",
+          "area": "Bereich"
+        }
+      },
+      "user": {
+        "title": "Better Media Player",
+        "description": "Was möchtest du hinzufügen?",
+        "menu_options": {
+          "room": "Einen Raum",
+          "hub": "Zentrale Einstellungen (Gruppen-Richtlinien, Follow-Me)"
+        }
+      },
+      "hub": {
+        "title": "Zentrale Einstellungen",
+        "description": "Richtlinien für Music-Assistant-Gruppen-Player. Folgt Anwesenheit: Solange die Gruppe spielt, werden alle Follow-Räume vorgewärmt und Räume treten nach Anwesenheit bei oder aus. Immer: Wiedergabe in der Gruppe schaltet die Lautsprecher ihrer Mitglieder ein. Nicht aufgeführte Gruppen werden ignoriert.",
+        "data": {
+          "follow_groups": "Follow-Me-Gruppen",
+          "always_groups": "Gruppen „immer\"",
+          "default_volume": "Standard-Lautstärke Follow"
+        },
+        "data_description": {
+          "default_volume": "Gilt, wenn die Gruppe noch keine Lautstärke hat (z. B. nachdem sie leer war)."
+        }
+      },
+      "follow": {
+        "title": "Follow-Me",
+        "description": "Nur für Räume mit Musik-Player. Ohne Anwesenheitssensoren nimmt der Raum nicht an Follow-Me teil.",
+        "data": {
+          "occupancy": "Anwesenheitssensoren",
+          "presence_run_down": "Verlassen, wenn niemand da ist seit",
+          "volume_offset": "Lautstärke-Offset",
+          "prewarm": "Lautsprecher vorwärmen"
+        },
+        "data_description": {
+          "occupancy": "Einer an = jemand ist da. Alle nicht verfügbar = unbekannt, dann ändert sich nichts.",
+          "volume_offset": "Prozentpunkte gegenüber der Gruppenlautstärke beim Beitritt, z. B. -10.",
+          "prewarm": "Lautsprecher an, sobald irgendwo Follow-Musik spielt, damit der Ton beim Betreten sofort da ist."
+        }
       }
     },
     "error": {
@@ -82,7 +127,11 @@
       "display_needs_video": "Ein Bild-Gerät braucht einen Video-Player.",
       "duplicate_device": "Ein Gerät darf nur einmal verwendet werden.",
       "needs_player": "Braucht den zugehörigen Player.",
-      "needs_power": "Braucht einen Leistungssensor."
+      "needs_power": "Braucht einen Leistungssensor.",
+      "group_twice": "Eine Gruppe kann nur eine Richtlinie haben."
+    },
+    "abort": {
+      "hub_exists": "Zentrale Einstellungen gibt es schon. Ändern über Konfigurieren."
     }
   },
   "options": {
@@ -96,17 +145,35 @@
           "advanced": "Player: Sonderfälle",
           "timing": "Zeiten",
           "standby": "Standby abwarten",
+          "follow": "Follow-Me",
           "save": "Speichern"
+        },
+        "data": {
+          "follow_groups": "Follow-Me-Gruppen",
+          "always_groups": "Gruppen „immer\"",
+          "default_volume": "Standard-Lautstärke Follow"
         }
       },
-      "room": { "title": "Raum", "data": { "area": "Bereich" } },
+      "room": {
+        "title": "Raum",
+        "data": {
+          "area": "Bereich"
+        }
+      },
       "sources": {
         "title": "Media Player",
-        "data": { "video_player": "Video-Player", "audio_player": "Musik-Player" }
+        "data": {
+          "video_player": "Video-Player",
+          "audio_player": "Musik-Player"
+        }
       },
       "devices": {
         "title": "Stromgeräte",
-        "data": { "display": "Bild (TV, Beamer)", "speakers": "Lautsprecher / Verstärker / AVR", "bass": "Subwoofer" }
+        "data": {
+          "display": "Bild (TV, Beamer)",
+          "speakers": "Lautsprecher / Verstärker / AVR",
+          "bass": "Subwoofer"
+        }
       },
       "advanced": {
         "title": "Player: Sonderfälle",
@@ -144,6 +211,20 @@
           "audio_standby_w": "Lautsprecher: Standby unter",
           "audio_standby_max": "Lautsprecher: höchstens warten"
         }
+      },
+      "follow": {
+        "title": "Follow-Me",
+        "data": {
+          "occupancy": "Anwesenheitssensoren",
+          "presence_run_down": "Verlassen, wenn niemand da ist seit",
+          "volume_offset": "Lautstärke-Offset",
+          "prewarm": "Lautsprecher vorwärmen"
+        },
+        "data_description": {
+          "occupancy": "Einer an = jemand ist da. Alle nicht verfügbar = unbekannt, dann ändert sich nichts.",
+          "volume_offset": "Prozentpunkte gegenüber der Gruppenlautstärke beim Beitritt, z. B. -10.",
+          "prewarm": "Lautsprecher an, sobald irgendwo Follow-Musik spielt, damit der Ton beim Betreten sofort da ist."
+        }
       }
     },
     "error": {
@@ -153,9 +234,12 @@
       "display_needs_video": "Ein Bild-Gerät braucht einen Video-Player.",
       "duplicate_device": "Ein Gerät darf nur einmal verwendet werden.",
       "needs_player": "Braucht den zugehörigen Player.",
-      "needs_power": "Braucht einen Leistungssensor."
+      "needs_power": "Braucht einen Leistungssensor.",
+      "group_twice": "Eine Gruppe kann nur eine Richtlinie haben."
     },
-    "abort": { "invalid_config": "Die Einstellungen passen nicht zusammen. Bitte Media Player und Stromgeräte prüfen." }
+    "abort": {
+      "invalid_config": "Die Einstellungen passen nicht zusammen. Bitte Media Player und Stromgeräte prüfen."
+    }
   },
   "entity": {
     "sensor": {
@@ -172,20 +256,93 @@
           "error": "Fehler",
           "disabled": "Automatik aus"
         }
+      },
+      "follow_state": {
+        "name": "Follow-Me",
+        "state": {
+          "inactive": "Inaktiv",
+          "following": "Folgt",
+          "waiting": "Wartet auf Anwesenheit",
+          "override": "Bleibt (manueller Start)",
+          "excluded_quiet": "Ausgenommen: Ruhe",
+          "excluded_video": "Ausgenommen: Video",
+          "excluded_off": "Ausgenommen: Raum aus",
+          "excluded_busy": "Ausgenommen: spielt anderswo",
+          "presence_unknown": "Anwesenheit unbekannt"
+        }
+      },
+      "follow": {
+        "name": "Follow-Räume"
       }
     },
     "binary_sensor": {
-      "problem": { "name": "Problem" },
-      "display_demand": { "name": "Bild benötigt" },
-      "audio_demand": { "name": "Lautsprecher benötigt" }
+      "problem": {
+        "name": "Problem"
+      },
+      "display_demand": {
+        "name": "Bild benötigt"
+      },
+      "audio_demand": {
+        "name": "Lautsprecher benötigt"
+      }
     },
-    "switch": { "auto_power": { "name": "Automatisch schalten" } },
+    "switch": {
+      "auto_power": {
+        "name": "Automatisch schalten"
+      },
+      "quiet": {
+        "name": "Ruhe"
+      }
+    },
     "number": {
-      "display_run_down": { "name": "Nachlauf Bild" },
-      "audio_run_down": { "name": "Nachlauf Lautsprecher" },
-      "host_run_down": { "name": "Nachlauf Player-Hardware" },
-      "video_idle_timeout": { "name": "Video-Leerlauf-Timeout" }
+      "display_run_down": {
+        "name": "Nachlauf Bild"
+      },
+      "audio_run_down": {
+        "name": "Nachlauf Lautsprecher"
+      },
+      "host_run_down": {
+        "name": "Nachlauf Player-Hardware"
+      },
+      "video_idle_timeout": {
+        "name": "Video-Leerlauf-Timeout"
+      }
     },
-    "button": { "all_off": { "name": "Alles aus" } }
+    "button": {
+      "all_off": {
+        "name": "Alles aus"
+      },
+      "start_follow": {
+        "name": "Follow starten"
+      }
+    }
+  },
+  "services": {
+    "start_follow": {
+      "name": "Follow starten",
+      "description": "Startet oder erweitert eine Follow-Me-Sitzung: Räume, in denen jemand ist, treten der Follow-Gruppe bei, dann startet die Wiedergabe.",
+      "fields": {
+        "group": {
+          "name": "Gruppe",
+          "description": "Follow-Gruppe; Standard: die erste konfigurierte."
+        },
+        "volume": {
+          "name": "Lautstärke",
+          "description": "Gruppenlautstärke 0-1; Raum-Offsets gelten weiter."
+        },
+        "media_content_id": {
+          "name": "Medium",
+          "description": "Was gespielt werden soll; leer: letzte Queue fortsetzen."
+        },
+        "media_content_type": {
+          "name": "Medientyp",
+          "description": "z. B. music."
+        },
+        "fallback_rooms": {
+          "name": "Ersatzräume",
+          "description": "Werden genommen, wenn niemand erkannt wird; Raum-Player oder deren Musik-Player."
+        }
+      }
+    }
   }
 }

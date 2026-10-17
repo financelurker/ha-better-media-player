@@ -25,6 +25,8 @@ from .conftest import GROUP, KODI, MUSIC, SPEAKERS, TV, setup_room
 
 async def _start(hass: HomeAssistant, area: str | None = None):
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+    assert result["type"] is FlowResultType.MENU
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "room"})
     assert result["type"] is FlowResultType.FORM
     data = {"name": "Wohnzimmer"}
     if area:
@@ -47,6 +49,8 @@ async def test_full_flow(hass, home):
     assert result["step_id"] == "timing"
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     assert result["step_id"] == "standby"
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["step_id"] == "follow"
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Wohnzimmer"

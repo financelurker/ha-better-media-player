@@ -1,15 +1,13 @@
 {
   "config": {
     "step": {
-      "user": {
-        "title": "New room",
-        "description": "One Better Media Player per room. If you pick an area, Kodi and Music Assistant players of that area are pre-selected in the next step.",
-        "data": { "name": "Name", "area": "Area" }
-      },
       "sources": {
         "title": "Media players",
         "description": "At least one player. The video player (e.g. Kodi) needs display and speakers, the music player (e.g. a Music Assistant / sendspin player) only the speakers. Do not select a group player.",
-        "data": { "video_player": "Video player", "audio_player": "Music player" },
+        "data": {
+          "video_player": "Video player",
+          "audio_player": "Music player"
+        },
         "data_description": {
           "video_player": "Turned on/off via its own turn on/off (e.g. Kodi with your Wake-on-LAN automation).",
           "audio_player": "A single room player, not a Music Assistant group."
@@ -18,7 +16,11 @@
       "devices": {
         "title": "Power devices",
         "description": "Plugs that are switched by this room only. Disable other automations for these plugs. Devices must start by themselves when they get power.",
-        "data": { "display": "Display (TV, projector)", "speakers": "Speakers / amplifier / AVR", "bass": "Subwoofer" },
+        "data": {
+          "display": "Display (TV, projector)",
+          "speakers": "Speakers / amplifier / AVR",
+          "bass": "Subwoofer"
+        },
         "data_description": {
           "display": "On first, off last.",
           "speakers": "Shared by both players. On after the player is ready, off first.",
@@ -73,6 +75,49 @@
           "audio_standby_w": "Speakers standby below",
           "audio_standby_max": "Speakers: wait at most"
         }
+      },
+      "room": {
+        "title": "New room",
+        "description": "One Better Media Player per room. If you pick an area, Kodi and Music Assistant players of that area are pre-selected in the next step.",
+        "data": {
+          "name": "Name",
+          "area": "Area"
+        }
+      },
+      "user": {
+        "title": "Better Media Player",
+        "description": "What do you want to add?",
+        "menu_options": {
+          "room": "A room",
+          "hub": "Central settings (group policies, follow me)"
+        }
+      },
+      "hub": {
+        "title": "Central settings",
+        "description": "Policies for Music Assistant group players. Follow: while the group plays, all follow rooms are prewarmed and rooms join or leave by occupancy. Always: playback in the group powers the speakers of its members. Groups not listed are ignored.",
+        "data": {
+          "follow_groups": "Follow-me groups",
+          "always_groups": "Always-on groups",
+          "default_volume": "Default follow volume"
+        },
+        "data_description": {
+          "default_volume": "Used when the group has no volume yet (e.g. after it was empty)."
+        }
+      },
+      "follow": {
+        "title": "Follow me",
+        "description": "Only for rooms with a music player. Without occupancy sensors the room does not take part in follow me.",
+        "data": {
+          "occupancy": "Occupancy sensors",
+          "presence_run_down": "Leave after nobody is there for",
+          "volume_offset": "Volume offset",
+          "prewarm": "Prewarm speakers"
+        },
+        "data_description": {
+          "occupancy": "Any of them on = someone is there. All unavailable = unknown, nothing changes.",
+          "volume_offset": "Percentage points relative to the group volume when the room joins, e.g. -10.",
+          "prewarm": "Speakers on as soon as follow music plays anywhere, so sound is there instantly when you come in."
+        }
       }
     },
     "error": {
@@ -82,7 +127,11 @@
       "display_needs_video": "A display needs a video player.",
       "duplicate_device": "A device may only be used once.",
       "needs_player": "Needs the corresponding player.",
-      "needs_power": "Needs a power sensor."
+      "needs_power": "Needs a power sensor.",
+      "group_twice": "A group can only have one policy."
+    },
+    "abort": {
+      "hub_exists": "Central settings already exist. Change them via Configure."
     }
   },
   "options": {
@@ -96,17 +145,35 @@
           "advanced": "Players: special cases",
           "timing": "Times",
           "standby": "Wait for standby",
+          "follow": "Follow me",
           "save": "Save"
+        },
+        "data": {
+          "follow_groups": "Follow-me groups",
+          "always_groups": "Always-on groups",
+          "default_volume": "Default follow volume"
         }
       },
-      "room": { "title": "Room", "data": { "area": "Area" } },
+      "room": {
+        "title": "Room",
+        "data": {
+          "area": "Area"
+        }
+      },
       "sources": {
         "title": "Media players",
-        "data": { "video_player": "Video player", "audio_player": "Music player" }
+        "data": {
+          "video_player": "Video player",
+          "audio_player": "Music player"
+        }
       },
       "devices": {
         "title": "Power devices",
-        "data": { "display": "Display (TV, projector)", "speakers": "Speakers / amplifier / AVR", "bass": "Subwoofer" }
+        "data": {
+          "display": "Display (TV, projector)",
+          "speakers": "Speakers / amplifier / AVR",
+          "bass": "Subwoofer"
+        }
       },
       "advanced": {
         "title": "Players: special cases",
@@ -144,6 +211,20 @@
           "audio_standby_w": "Speakers standby below",
           "audio_standby_max": "Speakers: wait at most"
         }
+      },
+      "follow": {
+        "title": "Follow me",
+        "data": {
+          "occupancy": "Occupancy sensors",
+          "presence_run_down": "Leave after nobody is there for",
+          "volume_offset": "Volume offset",
+          "prewarm": "Prewarm speakers"
+        },
+        "data_description": {
+          "occupancy": "Any of them on = someone is there. All unavailable = unknown, nothing changes.",
+          "volume_offset": "Percentage points relative to the group volume when the room joins, e.g. -10.",
+          "prewarm": "Speakers on as soon as follow music plays anywhere, so sound is there instantly when you come in."
+        }
       }
     },
     "error": {
@@ -153,9 +234,12 @@
       "display_needs_video": "A display needs a video player.",
       "duplicate_device": "A device may only be used once.",
       "needs_player": "Needs the corresponding player.",
-      "needs_power": "Needs a power sensor."
+      "needs_power": "Needs a power sensor.",
+      "group_twice": "A group can only have one policy."
     },
-    "abort": { "invalid_config": "The settings are not consistent. Check media players and power devices." }
+    "abort": {
+      "invalid_config": "The settings are not consistent. Check media players and power devices."
+    }
   },
   "entity": {
     "sensor": {
@@ -172,20 +256,93 @@
           "error": "Error",
           "disabled": "Automatic off"
         }
+      },
+      "follow_state": {
+        "name": "Follow",
+        "state": {
+          "inactive": "Inactive",
+          "following": "Following",
+          "waiting": "Waiting for presence",
+          "override": "Kept (manual start)",
+          "excluded_quiet": "Left out: quiet",
+          "excluded_video": "Left out: video",
+          "excluded_off": "Left out: room off",
+          "excluded_busy": "Left out: plays elsewhere",
+          "presence_unknown": "Presence unknown"
+        }
+      },
+      "follow": {
+        "name": "Follow rooms"
       }
     },
     "binary_sensor": {
-      "problem": { "name": "Problem" },
-      "display_demand": { "name": "Display needed" },
-      "audio_demand": { "name": "Speakers needed" }
+      "problem": {
+        "name": "Problem"
+      },
+      "display_demand": {
+        "name": "Display needed"
+      },
+      "audio_demand": {
+        "name": "Speakers needed"
+      }
     },
-    "switch": { "auto_power": { "name": "Automatic power" } },
+    "switch": {
+      "auto_power": {
+        "name": "Automatic power"
+      },
+      "quiet": {
+        "name": "Quiet"
+      }
+    },
     "number": {
-      "display_run_down": { "name": "Display run-down" },
-      "audio_run_down": { "name": "Speaker run-down" },
-      "host_run_down": { "name": "Player hardware run-down" },
-      "video_idle_timeout": { "name": "Video idle timeout" }
+      "display_run_down": {
+        "name": "Display run-down"
+      },
+      "audio_run_down": {
+        "name": "Speaker run-down"
+      },
+      "host_run_down": {
+        "name": "Player hardware run-down"
+      },
+      "video_idle_timeout": {
+        "name": "Video idle timeout"
+      }
     },
-    "button": { "all_off": { "name": "All off" } }
+    "button": {
+      "all_off": {
+        "name": "All off"
+      },
+      "start_follow": {
+        "name": "Start follow"
+      }
+    }
+  },
+  "services": {
+    "start_follow": {
+      "name": "Start follow",
+      "description": "Start or extend a follow-me session: rooms where someone is join the follow group, then playback starts.",
+      "fields": {
+        "group": {
+          "name": "Group",
+          "description": "Follow group; default: the first configured one."
+        },
+        "volume": {
+          "name": "Volume",
+          "description": "Group volume 0-1; room offsets still apply."
+        },
+        "media_content_id": {
+          "name": "Media",
+          "description": "What to play; empty: continue the last queue."
+        },
+        "media_content_type": {
+          "name": "Media type",
+          "description": "e.g. music."
+        },
+        "fallback_rooms": {
+          "name": "Fallback rooms",
+          "description": "Used when nobody is detected; room players or their music players."
+        }
+      }
+    }
   }
 }

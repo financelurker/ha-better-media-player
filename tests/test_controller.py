@@ -380,6 +380,7 @@ async def test_entity_ids_match_readme(hass, home):
         "binary_sensor.wohnzimmer_display_needed",
         "binary_sensor.wohnzimmer_speakers_needed",
         "switch.wohnzimmer_automatic_power",
+        "switch.wohnzimmer_quiet",
         "number.wohnzimmer_display_run_down",
         "number.wohnzimmer_speaker_run_down",
         "number.wohnzimmer_player_hardware_run_down",

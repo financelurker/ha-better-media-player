@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 import voluptuous as vol
-
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant, callback
@@ -16,6 +15,7 @@ from homeassistant.helpers import selector as sel
 from .const import (
     ACTION_DOMAINS,
     ATTR_MASS_PLAYER_TYPE,
+    CONF_ALWAYS_GROUPS,
     CONF_AREA,
     CONF_AUDIO_HOST,
     CONF_AUDIO_OFF_ACTION,
@@ -28,6 +28,7 @@ from .const import (
     CONF_AUDIO_STANDBY_MAX,
     CONF_AUDIO_STANDBY_W,
     CONF_BASS,
+    CONF_DEFAULT_VOLUME,
     CONF_DISPLAY,
     CONF_DISPLAY_ON_WAIT,
     CONF_DISPLAY_POWER,
@@ -36,8 +37,12 @@ from .const import (
     CONF_DISPLAY_STANDBY_MAX,
     CONF_DISPLAY_STANDBY_W,
     CONF_ENTRY_TYPE,
+    CONF_FOLLOW_GROUPS,
     CONF_HOST_ON_WAIT,
     CONF_HOST_RUN_DOWN,
+    CONF_OCCUPANCY,
+    CONF_PRESENCE_RUN_DOWN,
+    CONF_PREWARM,
     CONF_SPEAKERS,
     CONF_START_TIMEOUT,
     CONF_VIDEO_HOST,
@@ -45,9 +50,12 @@ from .const import (
     CONF_VIDEO_OFF_ACTION,
     CONF_VIDEO_ON_ACTION,
     CONF_VIDEO_PLAYER,
+    CONF_VOLUME_OFFSET,
     DEFAULTS,
     DOMAIN,
+    ENTRY_TYPE_HUB,
     ENTRY_TYPE_ROOM,
+    HUB_DEFAULTS,
     MASS_TYPE_GROUP,
     SWITCH_DOMAINS,
 )
@@ -143,6 +151,36 @@ def schema_standby() -> vol.Schema:
     )
 
 
+def schema_follow() -> vol.Schema:
+    d = DEFAULTS
+    return vol.Schema(
+        {
+            vol.Optional(CONF_OCCUPANCY): _entity("binary_sensor", multiple=True),
+            vol.Optional(CONF_PRESENCE_RUN_DOWN, default=d[CONF_PRESENCE_RUN_DOWN]): _num(0, 60, 0.5, "min"),
+            vol.Optional(CONF_VOLUME_OFFSET, default=d[CONF_VOLUME_OFFSET]): _num(-50, 50, 1, "%"),
+            vol.Optional(CONF_PREWARM, default=d[CONF_PREWARM]): sel.BooleanSelector(),
+        }
+    )
+
+
+def schema_hub() -> vol.Schema:
+    return vol.Schema(
+        {
+            vol.Optional(CONF_FOLLOW_GROUPS): _entity("media_player", multiple=True),
+            vol.Optional(CONF_ALWAYS_GROUPS): _entity("media_player", multiple=True),
+            vol.Optional(
+                CONF_DEFAULT_VOLUME, default=HUB_DEFAULTS[CONF_DEFAULT_VOLUME]
+            ): _num(1, 100, 1, "%"),
+        }
+    )
+
+
+def _validate_hub(options: dict) -> dict[str, str]:
+    if set(options.get(CONF_FOLLOW_GROUPS) or []) & set(options.get(CONF_ALWAYS_GROUPS) or []):
+        return {CONF_ALWAYS_GROUPS: "group_twice"}
+    return {}
+
+
 STEPS = {
     "room": lambda: schema_room(False),
     "sources": schema_sources,
@@ -150,6 +188,7 @@ STEPS = {
     "advanced": schema_advanced,
     "timing": schema_timing,
     "standby": schema_standby,
+    "follow": schema_follow,
 }
 
 
@@ -233,6 +272,9 @@ class BetterMediaPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
         self._title = ""
 
     async def async_step_user(self, user_input: dict | None = None) -> ConfigFlowResult:
+        return self.async_show_menu(step_id="user", menu_options=["room", "hub"])
+
+    async def async_step_room(self, user_input: dict | None = None) -> ConfigFlowResult:
         schema = schema_room(True)
         if user_input is not None:
             self._title = user_input.pop(CONF_NAME)
@@ -240,7 +282,24 @@ class BetterMediaPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
             for key, value in _area_suggestions(self.hass, self._options.get(CONF_AREA)).items():
                 self._options.setdefault(key, value)
             return await self.async_step_sources()
-        return self.async_show_form(step_id="user", data_schema=schema)
+        return self.async_show_form(step_id="room", data_schema=schema)
+
+    async def async_step_hub(self, user_input: dict | None = None) -> ConfigFlowResult:
+        for entry in self._async_current_entries():
+            if entry.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_HUB:
+                return self.async_abort(reason="hub_exists")
+        schema = schema_hub()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            errors = _validate_hub(user_input)
+            if not errors:
+                options = {**HUB_DEFAULTS, **{k: v for k, v in user_input.items() if v not in (None, "", [])}}
+                return self.async_create_entry(
+                    title="Better Media Player", data={CONF_ENTRY_TYPE: ENTRY_TYPE_HUB}, options=options
+                )
+        return self.async_show_form(
+            step_id="hub", data_schema=self.add_suggested_values_to_schema(schema, user_input or {}), errors=errors
+        )
 
     async def async_step_sources(self, user_input: dict | None = None) -> ConfigFlowResult:
         return await self._step("sources", user_input, self.async_step_devices)
@@ -255,7 +314,10 @@ class BetterMediaPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
         return await self._step("timing", user_input, self.async_step_standby)
 
     async def async_step_standby(self, user_input: dict | None = None) -> ConfigFlowResult:
-        return await self._step("standby", user_input, self._finish)
+        return await self._step("standby", user_input, self.async_step_follow)
+
+    async def async_step_follow(self, user_input: dict | None = None) -> ConfigFlowResult:
+        return await self._step("follow", user_input, self._finish)
 
     async def _step(self, step_id: str, user_input, next_step) -> ConfigFlowResult:
         schema = STEPS[step_id]()
@@ -281,6 +343,8 @@ class BetterMediaPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry) -> OptionsFlow:
+        if config_entry.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_HUB:
+            return HubOptionsFlow()
         return BetterMediaPlayerOptionsFlow()
 
 
@@ -337,4 +401,25 @@ class BetterMediaPlayerOptionsFlow(OptionsFlow):
 
     async def async_step_standby(self, user_input=None) -> ConfigFlowResult:
         return await self._section("standby", user_input)
+
+    async def async_step_follow(self, user_input=None) -> ConfigFlowResult:
+        return await self._section("follow", user_input)
+
+
+class HubOptionsFlow(OptionsFlow):
+    """Central settings: one form."""
+
+    async def async_step_init(self, user_input=None) -> ConfigFlowResult:
+        schema = schema_hub()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            errors = _validate_hub(user_input)
+            if not errors:
+                return self.async_create_entry(
+                    data={**HUB_DEFAULTS, **{k: v for k, v in user_input.items() if v not in (None, "", [])}}
+                )
+        current = {**HUB_DEFAULTS, **self.config_entry.options}
+        return self.async_show_form(
+            step_id="init", data_schema=self.add_suggested_values_to_schema(schema, current), errors=errors
+        )
 

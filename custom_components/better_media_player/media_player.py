@@ -15,7 +15,11 @@ from homeassistant.components.media_player import (
     MediaType,
     RepeatMode,
 )
-from homeassistant.const import ATTR_ENTITY_PICTURE, ATTR_FRIENDLY_NAME, ATTR_SUPPORTED_FEATURES
+from homeassistant.const import (
+    ATTR_ENTITY_PICTURE,
+    ATTR_FRIENDLY_NAME,
+    ATTR_SUPPORTED_FEATURES,
+)
 from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util

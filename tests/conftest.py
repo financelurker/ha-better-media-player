@@ -31,6 +31,12 @@ TV = "switch.tv_plug"
 SPEAKERS = "switch.speaker_plug"
 BASS = "switch.bass_plug"
 TV_POWER = "sensor.tv_power"
+FOLLOW = "media_player.all_players_follow"
+KITCHEN = "media_player.kitchen_player"
+KITCHEN_SPK = "switch.kitchen_speakers"
+LIVING_OCC = "binary_sensor.living_occupancy"
+KITCHEN_OCC = "binary_sensor.kitchen_occupancy"
+GROUPS = (GROUP, FOLLOW)
 
 KODI_FEATURES = int(
     F.TURN_ON | F.TURN_OFF | F.PLAY | F.PAUSE | F.STOP | F.VOLUME_SET | F.VOLUME_MUTE | F.SEEK
@@ -66,8 +72,21 @@ class FakeHome:
         self.set(MUSIC, state, supported_features=MA_FEATURES, friendly_name="Office Player",
                  mass_player_type="player", **attrs)
 
-    def group(self, state: str, members: list[str]) -> None:
-        self.set(GROUP, state, group_members=members, mass_player_type="group", friendly_name="All Players")
+    def group(self, state: str, members: list[str], entity_id: str = GROUP, **attrs: Any) -> None:
+        name = "All Players" if entity_id == GROUP else "All Players (follow)"
+        self.set(entity_id, state, group_members=members, mass_player_type="group", friendly_name=name,
+                 supported_features=MA_FEATURES, **attrs)
+        if state in ("playing", "paused"):
+            for m in members:
+                self.set(m, state)
+
+    def kitchen(self, state: str, **attrs: Any) -> None:
+        self.set(KITCHEN, state, supported_features=MA_FEATURES, friendly_name="Kitchen Player",
+                 mass_player_type="player", **attrs)
+
+    def members(self, group: str) -> list[str]:
+        st = self.hass.states.get(group)
+        return list(st.attributes.get("group_members", [])) if st else []
 
     def services(self, entity_id: str | None = None) -> list[tuple[str, str, str]]:
         return [c for c in self.calls if entity_id is None or c[2] == entity_id]
@@ -94,17 +113,42 @@ class FakeHome:
             elif entity_id == KODI and service == "turn_off" and self.kodi_suspends:
                 self.kodi("off")
             elif service == "unjoin":
-                g = self.hass.states.get(GROUP)
-                if g is not None:
-                    members = [m for m in g.attributes.get("group_members", []) if m != entity_id]
-                    self.group("idle" if not members else g.state, members)
+                self._leave_groups(entity_id)
                 self.set(entity_id, "idle")
+            elif service == "join" and entity_id in GROUPS:
+                g = self.hass.states.get(entity_id)
+                for p in data.get("group_members", []):
+                    self._leave_groups(p, except_group=entity_id)  # MA moves it silently
+                    members = self.members(entity_id)
+                    if p not in members:
+                        members.append(p)
+                    self.set(entity_id, g.state, group_members=members)
+                    self.set(p, g.state if g.state in ("playing", "paused") else "idle")
+            elif service == "volume_set":
+                self.set(entity_id, st.state, volume_level=data["volume_level"])
+            elif service in ("media_play", "play_media") and entity_id in GROUPS:
+                if self.members(entity_id):
+                    self.group("playing", self.members(entity_id), entity_id)
             elif service == "media_stop":
                 self.set(entity_id, "idle")
             elif service == "media_pause":
                 self.set(entity_id, "paused")
             return True
         return True
+
+    def _leave_groups(self, player: str, except_group: str | None = None) -> None:
+        for gid in GROUPS:
+            if gid == except_group:
+                continue
+            g = self.hass.states.get(gid)
+            if g is None or player not in g.attributes.get("group_members", []):
+                continue
+            members = [m for m in g.attributes["group_members"] if m != player]
+            if members:
+                self.set(gid, g.state, group_members=members)
+            else:
+                # Music Assistant pauses a group when its last member leaves
+                self.set(gid, "paused" if g.state == "playing" else g.state, group_members=[], volume_level=0)
 
 
 @pytest.fixture
@@ -115,7 +159,8 @@ def home(hass: HomeAssistant):
     async def fake_call(self, domain, service, service_data=None, blocking=False, context=None, *a, **kw):
         ids = (service_data or {}).get("entity_id")
         if isinstance(ids, str) and ids.split(".")[1] in {
-            "tv_plug", "speaker_plug", "bass_plug", "kodi", "office_player", "kodi_box_plug", "wol"
+            "tv_plug", "speaker_plug", "bass_plug", "kodi", "office_player", "kodi_box_plug", "wol",
+            "all_players", "all_players_follow", "kitchen_player", "kitchen_speakers",
         }:
             if fake.handle(domain, service, ids, service_data, context):
                 return None
