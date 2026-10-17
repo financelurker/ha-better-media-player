@@ -6,7 +6,7 @@ from homeassistant.const import Platform
 
 DOMAIN = "better_media_player"
 NAME = "Better Media Player"
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
 PLATFORMS: list[Platform] = [
     Platform.MEDIA_PLAYER,
@@ -24,6 +24,52 @@ TICK_SECONDS = 10
 # same domain, so existing rooms never need to be migrated.
 CONF_ENTRY_TYPE = "entry_type"
 ENTRY_TYPE_ROOM = "room"
+ENTRY_TYPE_HUB = "hub"
+
+HUB_PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BUTTON]
+
+# --- Hub (central settings) ----------------------------------------------------
+CONF_FOLLOW_GROUPS = "follow_groups"
+CONF_ALWAYS_GROUPS = "always_groups"
+CONF_DEFAULT_VOLUME = "default_volume"  # %
+
+POLICY_ALWAYS = "always"
+POLICY_FOLLOW = "follow"
+POLICY_IGNORE = "ignore"
+
+HUB_DEFAULTS: dict = {CONF_DEFAULT_VOLUME: 25}
+
+SERVICE_START_FOLLOW = "start_follow"
+ATTR_GROUP = "group"
+ATTR_VOLUME = "volume"
+ATTR_FALLBACK_ROOMS = "fallback_rooms"
+
+# --- Room: follow me ----------------------------------------------------------
+CONF_OCCUPANCY = "occupancy"
+CONF_PRESENCE_RUN_DOWN = "presence_run_down"  # min
+CONF_VOLUME_OFFSET = "volume_offset"  # percentage points
+CONF_PREWARM = "prewarm"
+
+FOLLOW_INACTIVE = "inactive"  # no follow group playing
+FOLLOW_ACTIVE = "following"  # member of the playing follow group
+FOLLOW_WAITING = "waiting"  # prewarmed, waiting for presence
+FOLLOW_OVERRIDE = "override"  # member without presence (manual / fallback start)
+FOLLOW_EXCLUDED_QUIET = "excluded_quiet"
+FOLLOW_EXCLUDED_VIDEO = "excluded_video"
+FOLLOW_EXCLUDED_OFF = "excluded_off"  # room was turned off during this session
+FOLLOW_EXCLUDED_BUSY = "excluded_busy"  # plays directly or in another group
+FOLLOW_UNKNOWN = "presence_unknown"
+FOLLOW_STATES = [
+    FOLLOW_INACTIVE,
+    FOLLOW_ACTIVE,
+    FOLLOW_WAITING,
+    FOLLOW_OVERRIDE,
+    FOLLOW_EXCLUDED_QUIET,
+    FOLLOW_EXCLUDED_VIDEO,
+    FOLLOW_EXCLUDED_OFF,
+    FOLLOW_EXCLUDED_BUSY,
+    FOLLOW_UNKNOWN,
+]
 
 # --- Room --------------------------------------------------------------------
 CONF_AREA = "area"
@@ -94,6 +140,9 @@ DEFAULTS: dict = {
     CONF_AUDIO_STANDBY: False,
     CONF_AUDIO_STANDBY_W: 3.0,
     CONF_AUDIO_STANDBY_MAX: 5,
+    CONF_PRESENCE_RUN_DOWN: 2,
+    CONF_VOLUME_OFFSET: 0,
+    CONF_PREWARM: True,
 }
 
 # --- Status ------------------------------------------------------------------

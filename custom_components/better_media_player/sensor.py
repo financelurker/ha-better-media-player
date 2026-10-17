@@ -1,4 +1,4 @@
-"""Room status sensor."""
+"""Room status, room follow state and central follow sensor."""
 
 from __future__ import annotations
 
@@ -7,9 +7,9 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from . import BetterMediaPlayerConfigEntry
-from .const import STATUSES
-from .entity import BetterMediaPlayerEntity
+from . import BetterMediaPlayerConfigEntry, is_hub
+from .const import FOLLOW_STATES, STATUSES
+from .entity import BetterMediaPlayerEntity, HubEntity
 
 
 async def async_setup_entry(
@@ -17,7 +17,14 @@ async def async_setup_entry(
     entry: BetterMediaPlayerConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    async_add_entities([StatusSensor(entry, entry.runtime_data, "status")])
+    if is_hub(entry):
+        async_add_entities([FollowSensor(entry, entry.runtime_data, "follow")])
+        return
+    ctrl = entry.runtime_data
+    entities: list[SensorEntity] = [StatusSensor(entry, ctrl, "status")]
+    if ctrl.follow_capable:
+        entities.append(FollowStateSensor(entry, ctrl, "follow_state"))
+    async_add_entities(entities)
 
 
 class StatusSensor(BetterMediaPlayerEntity, SensorEntity):
@@ -38,4 +45,39 @@ class StatusSensor(BetterMediaPlayerEntity, SensorEntity):
             "last_source": ctrl.last_source,
             "error": ctrl.error,
             "suppressed_sources": [s.key for s in ctrl.sources.values() if s.suppressed],
+        }
+
+
+class FollowStateSensor(BetterMediaPlayerEntity, SensorEntity):
+    """Where this room stands in the current follow session."""
+
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = FOLLOW_STATES
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def native_value(self) -> str:
+        return self.ctrl.follow_state
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"presence": self.ctrl.presence(), "prewarm": self.ctrl.prewarm}
+
+
+class FollowSensor(HubEntity, SensorEntity):
+    """Rooms that are in the playing follow group right now."""
+
+    _attr_native_unit_of_measurement = "rooms"
+
+    @property
+    def native_value(self) -> int:
+        return len(self.hub.follow_members)
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {
+            "active_group": self.hub.active_group,
+            "rooms": self.hub.follow_members,
+            "follow_groups": self.hub.follow_groups,
+            "always_groups": self.hub.always_groups,
         }

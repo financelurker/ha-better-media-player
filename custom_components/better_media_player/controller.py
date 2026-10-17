@@ -26,6 +26,8 @@ from typing import Any
 
 from homeassistant.components.media_player import (
     DOMAIN as MP_DOMAIN,
+)
+from homeassistant.components.media_player import (
     MediaPlayerEntityFeature,
     MediaPlayerState,
 )
@@ -70,10 +72,17 @@ from .const import (
     CONF_DISPLAY_STANDBY_MAX,
     CONF_DISPLAY_STANDBY_W,
     CONF_HOST_ON_WAIT,
+    CONF_OCCUPANCY,
+    CONF_PRESENCE_RUN_DOWN,
+    CONF_PREWARM,
     CONF_SPEAKERS,
     CONF_START_TIMEOUT,
+    CONF_VOLUME_OFFSET,
     DEFAULTS,
     DOMAIN,
+    FOLLOW_INACTIVE,
+    POLICY_FOLLOW,
+    POLICY_IGNORE,
     ROLE_AUDIO,
     ROLE_AUDIO_HOST,
     ROLE_BASS,
@@ -96,6 +105,7 @@ from .const import (
     STORAGE_VERSION,
     TICK_SECONDS,
 )
+from .hub import get_hub, get_rooms
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -121,6 +131,10 @@ GROUP_ACTIVE_STATES = {MediaPlayerState.PLAYING, MediaPlayerState.PAUSED, MediaP
 VIDEO_STOPPED = {STATE_OFF, MediaPlayerState.STANDBY}
 AUDIO_STOPPED = {STATE_OFF, MediaPlayerState.STANDBY, MediaPlayerState.IDLE, MediaPlayerState.ON, MediaPlayerState.PAUSED}
 NOT_AVAILABLE = {STATE_UNAVAILABLE, STATE_UNKNOWN}
+
+
+def _hub(hass: HomeAssistant):
+    return get_hub(hass)
 
 
 def _now() -> float:
@@ -254,6 +268,11 @@ class RoomController:
         self.manual = False
         self.error: str | None = None
 
+        # follow me (v0.2)
+        self.occupancy: list[str] = list(o.get(CONF_OCCUPANCY) or [])
+        self.prewarm = False
+        self.follow_state = FOLLOW_INACTIVE
+
     # ------------------------------------------------------------------ setup
 
     @property
@@ -301,9 +320,17 @@ class RoomController:
 
         self._unsubs.append(async_at_started(self.hass, _started))
 
+        get_rooms(self.hass)[self.entry.entry_id] = self
+        if (hub := _hub(self.hass)) is not None:
+            hub.async_refresh_tracking()
+            hub.async_schedule("room_added")
+
     async def async_stop(self) -> None:
         self._started = False
         self._stopped = True
+        get_rooms(self.hass).pop(self.entry.entry_id, None)
+        if (hub := _hub(self.hass)) is not None:
+            hub.async_refresh_tracking()
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()
@@ -428,7 +455,24 @@ class RoomController:
         return state in PLAYING_STATES
 
     def source_active(self, src: Source) -> bool:
-        return self.source_active_raw(src) and not src.suppressed
+        if not self.source_active_raw(src) or src.suppressed:
+            return False
+        if src.key == SOURCE_AUDIO:
+            return self._group_policy_allows(src.player)
+        return True
+
+    def _group_policy_allows(self, player: str) -> bool:
+        """Playback via a group counts only if the hub's policy for it is not 'ignore'."""
+        hub = _hub(self.hass)
+        if hub is None:
+            return True  # no central settings: every group counts (v0.1 behaviour)
+        groups = self.groups_of(player)
+        if not groups:
+            return True  # direct playback
+        policies = {hub.policy(g) for g in groups}
+        if self.quiet:
+            policies.discard(POLICY_FOLLOW)  # quiet room: follow music does not count
+        return bool(policies - {POLICY_IGNORE})
 
     def source_ready(self, src: Source) -> bool:
         """Started far enough to be used."""
@@ -461,9 +505,85 @@ class RoomController:
         )
 
     def role_demand(self, role: Role) -> bool:
+        if self.prewarm and role.key in (ROLE_AUDIO, ROLE_BASS, ROLE_AUDIO_HOST) and not self.quiet:
+            return True
         return any(
             self.source_active(self.sources[s]) for s in role.sources if s in self.sources
         )
+
+    # ------------------------------------------------------------- follow me
+
+    @property
+    def audio_player(self) -> str | None:
+        src = self.sources.get(SOURCE_AUDIO)
+        return src.player if src else None
+
+    @property
+    def follow_capable(self) -> bool:
+        return self.audio_player is not None and bool(self.occupancy)
+
+    @property
+    def follow_tracked_entities(self) -> list[str]:
+        out = list(self.occupancy)
+        out += [s.player for s in self.sources.values()]
+        return out
+
+    @property
+    def quiet(self) -> bool:
+        return bool(self.data.get("quiet", False))
+
+    @property
+    def video_active(self) -> bool:
+        src = self.sources.get(SOURCE_VIDEO)
+        # suppressed (turned off, still suspending) or idle-timed-out video does not count
+        return src is not None and self.source_active(src)
+
+    @property
+    def audio_playing_directly(self) -> bool:
+        src = self.sources.get(SOURCE_AUDIO)
+        return (
+            src is not None
+            and self.source_playing(src)
+            and not self.groups_of(src.player)
+        )
+
+    @property
+    def prewarm_enabled(self) -> bool:
+        return bool(self.opts[CONF_PREWARM])
+
+    @property
+    def presence_run_down(self) -> float:
+        return float(self.opts[CONF_PRESENCE_RUN_DOWN]) * 60.0
+
+    @property
+    def volume_offset(self) -> float:
+        return float(self.opts[CONF_VOLUME_OFFSET])
+
+    def presence(self) -> str:
+        """'present', 'empty' or 'unknown' (all sensors unavailable)."""
+        known = False
+        for entity_id in self.occupancy:
+            state = self._state(entity_id)
+            if state is None or state.state in NOT_AVAILABLE:
+                continue
+            known = True
+            if state.state == STATE_ON:
+                return "present"
+        return "empty" if known else "unknown"
+
+    @callback
+    def set_follow_state(self, state: str) -> None:
+        if self.follow_state != state:
+            self.follow_state = state
+            self._notify()
+
+    @callback
+    def set_prewarm(self, on: bool) -> None:
+        if self.prewarm == on:
+            return
+        self.prewarm = on
+        if self._started:
+            self._spawn(self.async_update("prewarm"))
 
     def groups_of(self, player: str) -> list[str]:
         """Media players (e.g. Music Assistant groups) that currently contain player."""
@@ -921,6 +1041,9 @@ class RoomController:
         """Explicit "room off": stop sources, then power down in order."""
         self._cancel_sequence()
         self._reset_overrides()
+        if (hub := _hub(self.hass)) is not None:
+            hub.room_turned_off(self)
+        self.prewarm = False
         # flag everything first: state events during the awaits below must not
         # start the room again
         for src in self.sources.values():
@@ -936,6 +1059,23 @@ class RoomController:
                 role.force_off = True
         self._cancel_sequence()
         await self.async_update("turn_off")
+
+    async def async_set_quiet(self, on: bool) -> None:
+        """Quiet mode: the room takes no part in follow; speakers off right away."""
+        self.data["quiet"] = on
+        self._save()
+        if on:
+            self.prewarm = False
+            hub = _hub(self.hass)
+            if hub is not None:
+                await hub.async_update("quiet")
+            for key in (ROLE_BASS, ROLE_AUDIO):
+                role = self.roles.get(key)
+                if role is not None and self.role_on(role):
+                    role.force_off = True  # honoured once nothing else needs the speakers
+        elif (hub := _hub(self.hass)) is not None:
+            hub.async_schedule("quiet")
+        await self.async_update("quiet")
 
     async def async_set_auto_power(self, on: bool) -> None:
         self.data["auto_power"] = on

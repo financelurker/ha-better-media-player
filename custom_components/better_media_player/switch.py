@@ -1,4 +1,4 @@
-"""Auto-power switch."""
+"""Auto-power and quiet switches."""
 
 from __future__ import annotations
 
@@ -18,7 +18,11 @@ async def async_setup_entry(
     entry: BetterMediaPlayerConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    async_add_entities([AutoPowerSwitch(entry, entry.runtime_data, "auto_power")])
+    ctrl = entry.runtime_data
+    entities: list[SwitchEntity] = [AutoPowerSwitch(entry, ctrl, "auto_power")]
+    if ctrl.audio_player is not None:
+        entities.append(QuietSwitch(entry, ctrl, "quiet"))
+    async_add_entities(entities)
 
 
 class AutoPowerSwitch(BetterMediaPlayerEntity, SwitchEntity):
@@ -35,3 +39,19 @@ class AutoPowerSwitch(BetterMediaPlayerEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self.ctrl.async_set_auto_power(False)
+
+
+class QuietSwitch(BetterMediaPlayerEntity, SwitchEntity):
+    """On: follow music leaves this room out (e.g. bedroom at night)."""
+
+    _attr_icon = "mdi:sleep"
+
+    @property
+    def is_on(self) -> bool:
+        return self.ctrl.quiet
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self.ctrl.async_set_quiet(True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self.ctrl.async_set_quiet(False)
