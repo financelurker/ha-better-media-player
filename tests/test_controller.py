@@ -7,6 +7,7 @@ from datetime import timedelta
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 
 from custom_components.better_media_player.const import (
@@ -366,3 +367,22 @@ async def test_player_behind_host_plug(hass, home, freezer):
     await _tick(hass, freezer, 130)  # nothing played: speakers + hardware run down
     assert not home.on(SPEAKERS)
     assert not home.on("switch.kodi_box_plug")
+
+
+async def test_entity_ids_match_readme(hass, home):
+    hass.states.async_set("switch.kodi_box_plug", "off")
+    entry = await setup_room(hass, audio_host="switch.kodi_box_plug")
+    ids = {e.entity_id for e in er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)}
+    assert ids == {
+        "media_player.wohnzimmer",
+        "sensor.wohnzimmer_status",
+        "binary_sensor.wohnzimmer_problem",
+        "binary_sensor.wohnzimmer_display_needed",
+        "binary_sensor.wohnzimmer_speakers_needed",
+        "switch.wohnzimmer_automatic_power",
+        "number.wohnzimmer_display_run_down",
+        "number.wohnzimmer_speaker_run_down",
+        "number.wohnzimmer_player_hardware_run_down",
+        "number.wohnzimmer_video_idle_timeout",
+        "button.wohnzimmer_all_off",
+    }

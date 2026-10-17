@@ -1,62 +1,130 @@
 # Better Media Player
 
-One smart media player per room for Home Assistant: it combines the room's media
-players (e.g. **Kodi** and a **Music Assistant** / sendspin player) with the power plugs
-of **TV, speakers and subwoofer** into a single `media_player` entity — in the spirit of
-Better Thermostat.
+One smart media player per room: your room's media players and the power plugs of TV, speakers and subwoofer, combined into a single Home Assistant entity.
 
-German documentation: [ANLEITUNG.md](ANLEITUNG.md)
+Better Media Player is a custom integration in the spirit of Better Thermostat. Each room gets one `media_player` entity that knows which of its players is active, powers the right devices in a safe order and switches them off again when nothing needs them.
 
-## What it does (v0.1)
+- **Power sequencing:** devices are switched in a fixed order, so speakers never pop and the player is only used once it is ready.
+- **Shared speakers:** one set of speakers (plus subwoofer) serves both a video player such as Kodi and a music player such as Music Assistant.
+- **Auto-on:** music that starts on the room player, also as part of a Music Assistant group, powers the speakers by itself.
+- **Room off:** leaves a Music Assistant group, stops playback, turns the video player off and powers everything down.
+- **Manual override:** switch a plug by hand and the room steps back until all plugs are off again.
 
-- **One entity per room** (`media_player.<room>`): power button, source selection
-  (video / music), volume and transport controls go to the player that is currently active.
-- **Safe power sequence**
-  - on: player hardware plug → display → wake the player and wait until it is ready → speakers → subwoofer
-  - off: subwoofer → speakers → display → player hardware plug
-- **Demand-based power**: the display is powered while the video player is on, the
-  speakers while the video player is on *or* music is playing. Shared speakers stay on as
-  long as either player needs them. After that, each part runs down (display 10 min,
-  speakers 2 min by default).
-- **Auto-on**: music that starts on the room player (also as part of a Music Assistant
-  group) switches the speakers on by itself.
-- **Room off**: leaves a Music Assistant group (`media_player.unjoin`), stops direct
-  playback, turns the video player off and powers everything down.
-- **Video idle timeout**: Kodi sitting in the menu for 30 min is turned off.
-- **Optional standby wait**: with power sensors, the TV plug is only cut after the TV went
-  to standby by itself (or after a maximum time).
-- **Manual override**: switch a plug by hand and the room stops switching until all plugs
-  are off again.
-- Capability-aware: players are turned on/off only if they support it; otherwise an
-  optional script/button/switch can be used, or the player's hardware can hang on a plug.
-
-## Requirements
-
-- Home Assistant 2025.2 or newer.
-- Power devices must start by themselves when they get power (or be switched otherwise).
-- Every plug belongs to exactly **one** controller: disable other automations for these plugs.
-- Kodi: `turn_on` / `turn_off` only fire Kodi's device triggers. Your Wake-on-LAN and
-  suspend automations for these triggers stay in place.
+> **Status:** early development (v0.1). Group policies and occupancy sensors ("music follows me") are planned for v0.2.
 
 ## Installation
 
-HACS → custom repository → `https://github.com/financelurker/ha-better-media-player`
-(category *Integration*), or copy `custom_components/better_media_player` to
-`/config/custom_components/`. Restart, then add **Better Media Player** once per room.
+Requires Home Assistant 2025.2 or newer.
 
-## Entities per room
+### HACS
 
-| Entity | Purpose |
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=financelurker&repository=ha-better-media-player&category=integration)
+
+1. Click the button above. It opens the repository in HACS and adds it as a custom repository if needed.
+2. Install **Better Media Player** and restart Home Assistant.
+
+Without the button: HACS → ⋮ → **Custom repositories** → add `https://github.com/financelurker/ha-better-media-player` as type *Integration*.
+
+### Manual
+
+1. Copy `custom_components/better_media_player` into `config/custom_components/`.
+2. Restart Home Assistant.
+
+## Usage
+
+[![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=better_media_player)
+
+Settings → Devices & services → Add integration → **Better Media Player**, once per room.
+
+| Step | What you enter |
+|---|---|
+| **New room** | Name and area. Kodi and Music Assistant players of the area are pre-selected in the next step. |
+| **Media players** | Video player (e.g. Kodi) and/or music player (the room's own player, not a group). |
+| **Power devices** | Display (TV, projector), speakers (one or more: active speakers, amplifier, AVR), subwoofer. |
+| **Players: special cases** | Only if a player cannot turn itself on/off (on/off action) or its hardware hangs on a plug. |
+| **Times** | Run-down times, video idle timeout, start timeout, waits after switching on. |
+| **Wait for standby** | Optional, needs power sensors. |
+
+Everything can be changed later via **Configure**.
+
+> **Before you start:** every plug belongs to exactly one controller. Disable automations, scripts or helpers that switch the same plugs (Settings → Entities → plug → **Related** shows them). Devices must start by themselves when they get power.
+
+> **Kodi:** `turn_on` / `turn_off` only fire Kodi's device triggers. Keep your Wake-on-LAN and suspend automations for these triggers; they do the actual work.
+
+### Scenarios
+
+| Room | Media players | Power devices |
+|---|---|---|
+| TV room | Kodi | TV, speakers |
+| Office | Music Assistant player | speakers |
+| Living room | Kodi + Music Assistant player | TV, speakers (shared), subwoofer |
+
+## How it decides
+
+### Order
+
+| | Sequence |
+|---|---|
+| **On** | player hardware plug → display → wake the player and wait until it is ready → speakers → subwoofer |
+| **Off** | subwoofer → speakers → display → player hardware plug |
+
+If the player is not ready within the start timeout (90 s), everything switched on is switched off again and the room reports an error.
+
+### Demand and run-down
+
+| Device | Needed while … | Run-down |
+|---|---|---|
+| Display | the video player is on (menu, paused, playing) | 10 min |
+| Speakers, subwoofer | the video player is on **or** music is playing | 2 min |
+| Player hardware | its player is active | 2 min |
+
+Paused music is not demand: the speakers switch off after the run-down and on again when playback resumes. A video player that sits idle in its menu is turned off after 30 min.
+
+### Power button and sources
+
+- **On** starts the last used source; the first time after setup that is the video player. The last source survives restarts.
+- **Source** selects video or music explicitly. The other source is stopped (Kodi off, music leaves its group or is paused).
+- **Off** (or **All off**): leave a Music Assistant group with `media_player.unjoin` (if it was the last member, Music Assistant pauses the group), otherwise stop direct playback; turn the video player off; switch all plugs off in order. A player that takes a while to stop does not switch the room back on; only new playback does.
+- **Volume and transport** go to the player that is currently active.
+
+### Wait for standby
+
+With power sensors, a plug is cut only after its device has drawn less than the threshold for 30 s, at most after the maximum wait. Useful for OLED TVs that run panel care in standby. A TV that never goes to standby on its own (no CEC) gains nothing from this; then only the run-down applies.
+
+## Entities
+
+| Entity | Description |
 |---|---|
 | `media_player.<room>` | the room player |
-| `sensor.<room>_status` | off, starting, on, playing, run-down, waiting for standby, manual, error, automatic off |
-| `binary_sensor.<room>_problem` | start failed (reason in attributes) |
-| `binary_sensor.<room>_display_needed` / `_speakers_needed` | current demand |
-| `switch.<room>_automatic_power` | automatic switching on/off |
-| `number.<room>_*_run_down`, `_video_idle_timeout` | times |
-| `button.<room>_all_off` | same as turning the room off |
+| `sensor.<room>_status` | see table below |
+| `binary_sensor.<room>_problem` | start failed; reason in the attributes |
+| `binary_sensor.<room>_display_needed` | display demand right now |
+| `binary_sensor.<room>_speakers_needed` | speaker demand right now |
+| `switch.<room>_automatic_power` | off: no automatic switching; commands to the room player still work |
+| `number.<room>_display_run_down`, `_speaker_run_down`, `_player_hardware_run_down`, `_video_idle_timeout` | times in minutes |
+| `button.<room>_all_off` | same as turning the room player off |
+
+| Status | Meaning |
+|---|---|
+| `off` | everything without power |
+| `starting` | power-on sequence running |
+| `on` | a source is active but not playing |
+| `playing` | a source is playing |
+| `run_down` | plugs still on, no demand |
+| `stopping` | waiting for a device to reach standby |
+| `manual` | a plug was switched by hand; automatic switching paused |
+| `error` | start failed |
+| `disabled` | automatic power is off |
 
 ## Roadmap
 
-v0.2: per-group policies (e.g. "follow me" group with occupancy sensors), a central
-settings entry, pausing a follow group when nobody is home.
+- **v0.2:** policies per Music Assistant group (always / follow occupancy / ignore), occupancy sensors per room, a central settings entry, pause a "follow" group when nobody is in any room.
+- Later: check via power measurement whether a device really runs.
+
+German documentation: [ANLEITUNG.md](ANLEITUNG.md)
+
+## License
+
+Eclipse Public License 2.0, see [LICENSE](LICENSE).
+
+This project is not affiliated with Home Assistant, the Open Home Foundation, Kodi or Music Assistant.
