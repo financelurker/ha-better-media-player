@@ -1,0 +1,87 @@
+homeassistant:
+  name: Demo Home
+  unit_system: metric
+  time_zone: Europe/Vienna
+  country: AT
+  currency: EUR
+  language: en
+  elevation: 200
+  latitude: 48.2
+  longitude: 16.37
+  customize:
+    media_player.lounge_room:
+      friendly_name: Kodi
+      entity_picture: /local/cover-show.jpg
+    media_player.walkman:
+      friendly_name: Family Room Player
+      entity_picture: /local/cover-music.jpg
+
+frontend:
+config:
+http:
+onboarding:
+person:
+history:
+logbook:
+recorder:
+  purge_keep_days: 1
+demo:
+
+logger:
+  default: warning
+  logs:
+    custom_components.better_media_player: debug
+
+input_boolean:
+  tv_plug_state:
+    name: TV plug state
+  speaker_plug_state:
+    name: Speaker plug state
+  sub_plug_state:
+    name: Subwoofer plug state
+
+template:
+  - switch:
+      - name: TV plug
+        unique_id: tv_plug
+        state: "{{ is_state('input_boolean.tv_plug_state', 'on') }}"
+        icon: mdi:television
+        turn_on:
+          - action: input_boolean.turn_on
+            target: { entity_id: input_boolean.tv_plug_state }
+        turn_off:
+          - action: input_boolean.turn_off
+            target: { entity_id: input_boolean.tv_plug_state }
+      - name: Speaker plug
+        unique_id: speaker_plug
+        state: "{{ is_state('input_boolean.speaker_plug_state', 'on') }}"
+        icon: mdi:speaker
+        turn_on:
+          - action: input_boolean.turn_on
+            target: { entity_id: input_boolean.speaker_plug_state }
+        turn_off:
+          - action: input_boolean.turn_off
+            target: { entity_id: input_boolean.speaker_plug_state }
+      - name: Subwoofer plug
+        unique_id: sub_plug
+        state: "{{ is_state('input_boolean.sub_plug_state', 'on') }}"
+        icon: mdi:speaker-wireless
+        turn_on:
+          - action: input_boolean.turn_on
+            target: { entity_id: input_boolean.sub_plug_state }
+        turn_off:
+          - action: input_boolean.turn_off
+            target: { entity_id: input_boolean.sub_plug_state }
+    sensor:
+      - name: TV power
+        unique_id: tv_power
+        unit_of_measurement: W
+        device_class: power
+        state_class: measurement
+        state: "{{ 87.4 if is_state('input_boolean.tv_plug_state', 'on') else 0.3 }}"
+      - name: Speaker power
+        unique_id: speaker_power
+        unit_of_measurement: W
+        device_class: power
+        state_class: measurement
+        state: "{{ 12.8 if is_state('input_boolean.speaker_plug_state', 'on') else 0.0 }}"

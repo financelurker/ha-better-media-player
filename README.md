@@ -10,6 +10,36 @@ Better Media Player is a custom integration in the spirit of Better Thermostat. 
 - **Room off:** leaves a Music Assistant group, stops playback, turns the video player off and powers everything down.
 - **Manual override:** switch a plug by hand and the room steps back until all plugs are off again.
 
+## Screenshots
+
+Taken from the Home Assistant demo integration: two demo players stand in for Kodi and a Music Assistant player, the plugs are template switches ([how](scripts/screenshots/README.md)).
+
+**Movie night:** Kodi plays, so the TV, the speakers and the subwoofer have power. The room player shows what is playing and controls it.
+
+![Dashboard while Kodi plays](docs/images/dashboard.png)
+
+**Music only:** after switching the source to music, Kodi is turned off and the TV plug is cut. Speakers and subwoofer stay on for the music.
+
+![Dashboard while music plays](docs/images/dashboard-music.png)
+
+**Room player:** one entity with power, transport, source selection and the media info of the active player.
+
+<img src="docs/images/more-info.png" alt="More-info dialog of the room player" width="420">
+
+**Device page:** status, demand sensors, automatic power, run-down times and the *All off* button.
+
+![Device page](docs/images/device.png)
+
+**Settings:** every part of the setup can be changed later via **Configure**.
+
+| Menu | Media players | Power devices | Times |
+|---|---|---|---|
+| ![Options menu](docs/images/options-menu.png) | ![Media players](docs/images/options-players.png) | ![Power devices](docs/images/options-devices.png) | ![Times](docs/images/options-times.png) |
+
+**Mobile:**
+
+<img src="docs/images/dashboard-mobile.png" alt="Dashboard on a phone" width="320">
+
 > **Status:** early development (v0.1). Group policies and occupancy sensors ("music follows me") are planned for v0.2.
 
 ## Installation
