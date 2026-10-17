@@ -19,8 +19,9 @@ Subwoofer zu **einer** Entität zusammen.
 1. Ordner `custom_components/better_media_player` nach `/config/custom_components/` kopieren
    (oder über HACS als benutzerdefiniertes Repository hinzufügen).
 2. Home Assistant neu starten.
-3. *Einstellungen → Geräte & Dienste → Integration hinzufügen → Better Media Player*,
-   einmal **pro Raum**.
+3. *Einstellungen → Geräte & Dienste → Integration hinzufügen → Better Media Player →
+   Einen Raum*, einmal **pro Raum**.
+4. Für Follow-Me zusätzlich einmal *Zentrale Einstellungen* hinzufügen.
 
 ## Einrichtung
 
@@ -32,6 +33,7 @@ Subwoofer zu **einer** Entität zusammen.
 | Player: Sonderfälle | Nur nötig, wenn ein Player sich nicht selbst schalten lässt (Ein-/Aus-Aktion) oder seine Hardware an einer Steckdose hängt. |
 | Zeiten | Nachlauf, Leerlauf-Timeout, Start-Timeout, Wartezeiten nach dem Einschalten. |
 | Standby abwarten | Optional, nur mit Leistungssensoren. |
+| Follow-Me | Anwesenheitssensoren, Nachlauf der Anwesenheit, Lautstärke-Offset, Vorwärmen. Ohne Anwesenheitssensoren nimmt der Raum nicht teil. |
 
 Alles lässt sich später unter *Konfigurieren* ändern.
 
@@ -63,7 +65,8 @@ Pausierte Musik zählt nicht als Bedarf: nach 2 min gehen die Lautsprecher aus, 
 Weiterspielen wieder an. Die Nachlaufzeiten sind auch als Zahl-Entitäten einstellbar.
 
 **Musik startet von selbst** (z. B. über eine Music-Assistant-Gruppe): Der Raum schaltet seine
-Lautsprecher ein. In v0.1 gilt das für jede Gruppe. Die ersten 1–2 Sekunden können fehlen,
+Lautsprecher ein. Ohne zentrale Einstellungen gilt das für jede Gruppe, mit ihnen nur für
+Gruppen mit Richtlinie *immer* oder *folgt Anwesenheit*. Die ersten 1–2 Sekunden können fehlen,
 während der Verstärker hochfährt.
 
 **Kodi im Menü**: Läuft Kodi 30 min ohne Wiedergabe, wird es ausgeschaltet.
@@ -92,6 +95,55 @@ Leistung 30 s unter der Schwelle liegt, spätestens nach der Maximalzeit. Sinnvo
 OLED-TVs, die im Standby eine Panelpflege machen. Ohne CEC geht der TV nie selbst in den
 Standby; dann bringt diese Option nichts und es gilt nur der Nachlauf.
 
+## Follow-Me
+
+Braucht den Eintrag **Zentrale Einstellungen**. Dort bekommt jeder Music-Assistant-Gruppen-Player
+eine Richtlinie:
+
+| Richtlinie | Verhalten |
+|---|---|
+| Folgt Anwesenheit | Die Musik folgt den Personen (siehe unten). |
+| Immer | Wiedergabe in der Gruppe schaltet die Lautsprecher ihrer Mitglieder ein. |
+| *(nicht aufgeführt)* | Ignoriert: Wiedergabe in der Gruppe schaltet nichts ein. |
+
+Solange eine Follow-Gruppe spielt:
+
+- **Vorwärmen:** Die Lautsprecher aller Follow-Räume gehen an, damit der Ton beim Betreten
+  sofort da ist.
+- **Beitritt:** Ein Raum mit Anwesenheit tritt der Gruppe bei. Vorher wird seine Lautstärke
+  gesetzt: Gruppenlautstärke plus Offset des Raums (z. B. Schlafzimmer −10 Prozentpunkte).
+  Hat die Gruppe gerade 0 %, gilt die zuletzt gemerkte Lautstärke, sonst der Standard (25 %).
+- **Verlassen:** Ohne Anwesenheit verlässt der Raum die Gruppe nach seinem Nachlauf (2 min).
+  Verlässt der letzte Raum die Gruppe, pausiert Music Assistant sie; die Lautsprecher gehen
+  nach ihrem Nachlauf aus.
+- **Kein Raub:** Spielt ein Raum etwas anderes (direkt oder in einer anderen Gruppe), bleibt er
+  unberührt.
+- **Ausgenommen:** Räume mit laufendem Video (Kodi; nach dem Ende wieder dabei), Räume im
+  **Ruhe**-Modus (Switch pro Raum; verlässt sofort, Lautsprecher sofort aus) und Räume, die in
+  dieser Sitzung ausgeschaltet wurden (bis die Sitzung endet).
+- **Anwesenheit unbekannt** (alle Sensoren nicht verfügbar): keine Änderung. Die Musik bricht
+  also nicht ab, nur weil die Sensor-Integration hängt.
+- **Manuell oder per Ersatzraum gestartet:** Räume ohne Anwesenheit bleiben, solange nirgends
+  jemand erkannt wird. Danach gelten die normalen Regeln.
+- Es spielt immer nur eine Follow-Gruppe.
+
+Eine leere Gruppe lässt sich nicht starten. Gestartet wird daher in Music Assistant mit
+mindestens einem Raum, über den Button **Follow starten** oder per Skript/Automation:
+
+```yaml
+action: better_media_player.start_follow
+data:
+  group: media_player.all_players_follow   # optional, Standard: erste Follow-Gruppe
+  media_content_id: "library://radio/42"   # optional, Standard: letzte Queue fortsetzen
+  media_content_type: music                # optional
+  volume: 0.15                             # optional, Gruppenlautstärke 0-1; Offsets gelten weiter
+  fallback_rooms:                          # optional, falls niemand erkannt wird
+    - media_player.schlafzimmer
+```
+
+> Gruppen-Player mit **statischen** Mitgliedern werden nicht unterstützt: Music Assistant
+> stoppt die ganze Gruppe, wenn ein statisches Mitglied entfernt wird.
+
 ## Status
 
 | Status | Bedeutung |
@@ -106,8 +158,17 @@ Standby; dann bringt diese Option nichts und es gilt nur der Nachlauf.
 | Fehler | Start fehlgeschlagen (Grund im Problem-Sensor) |
 | Automatik aus | Switch *Automatisch schalten* ist aus |
 
-## Noch nicht in v0.1
+| Follow-Me-Status (Sensor pro Raum) | Bedeutung |
+|---|---|
+| Inaktiv | keine Follow-Gruppe spielt |
+| Folgt | Raum ist in der spielenden Follow-Gruppe |
+| Wartet auf Anwesenheit | vorgewärmt, wartet auf jemanden |
+| Bleibt (manueller Start) | ohne Anwesenheit behalten |
+| Ausgenommen: Ruhe / Video / Raum aus | aus diesen Gründen nicht dabei |
+| Ausgenommen: spielt anderswo | spielt direkt oder in einer anderen Gruppe |
+| Anwesenheit unbekannt | Sensoren nicht verfügbar, keine Änderung |
 
-- Gruppen-Richtlinien (z. B. „All Players (follow)" folgt der Anwesenheit), Anwesenheitssensoren,
-  zentraler Eintrag. Das kommt mit v0.2.
+## Noch nicht enthalten
+
 - Prüfung per Leistungsmessung, ob ein Gerät wirklich läuft.
+- Gruppen-Player mit statischen Mitgliedern.

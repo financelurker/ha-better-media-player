@@ -9,6 +9,7 @@ Better Media Player is a custom integration in the spirit of Better Thermostat. 
 - **Auto-on:** music that starts on the room player, also as part of a Music Assistant group, powers the speakers by itself.
 - **Room off:** leaves a Music Assistant group, stops playback, turns the video player off and powers everything down.
 - **Manual override:** switch a plug by hand and the room steps back until all plugs are off again.
+- **Follow me:** music on a Music Assistant follow group moves with you from room to room, using the room's occupancy sensors.
 
 ## Screenshots
 
@@ -40,7 +41,7 @@ Taken from the Home Assistant demo integration: two demo players stand in for Ko
 
 <img src="docs/images/dashboard-mobile.png" alt="Dashboard on a phone" width="320">
 
-> **Status:** early development (v0.1). Group policies and occupancy sensors ("music follows me") are planned for v0.2.
+> **Status:** early development (v0.2).
 
 ## Installation
 
@@ -64,7 +65,7 @@ Without the button: HACS → ⋮ → **Custom repositories** → add `https://gi
 
 [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=better_media_player)
 
-Settings → Devices & services → Add integration → **Better Media Player**, once per room.
+Settings → Devices & services → Add integration → **Better Media Player** → **A room**, once per room. For follow me, add **Central settings** once as well.
 
 | Step | What you enter |
 |---|---|
@@ -74,6 +75,7 @@ Settings → Devices & services → Add integration → **Better Media Player**,
 | **Players: special cases** | Only if a player cannot turn itself on/off (on/off action) or its hardware hangs on a plug. |
 | **Times** | Run-down times, video idle timeout, start timeout, waits after switching on. |
 | **Wait for standby** | Optional, needs power sensors. |
+| **Follow me** | Occupancy sensors, presence run-down, volume offset, prewarm. Rooms without occupancy sensors do not take part. |
 
 Everything can be changed later via **Configure**.
 
@@ -117,6 +119,42 @@ Paused music is not demand: the speakers switch off after the run-down and on ag
 - **Off** (or **All off**): leave a Music Assistant group with `media_player.unjoin` (if it was the last member, Music Assistant pauses the group), otherwise stop direct playback; turn the video player off; switch all plugs off in order. A player that takes a while to stop does not switch the room back on; only new playback does.
 - **Volume and transport** go to the player that is currently active.
 
+### Follow me
+
+Needs the **Central settings** entry. There you assign each Music Assistant group player a policy:
+
+| Policy | Behaviour |
+|---|---|
+| **Follow** | The music follows the people (see below). |
+| **Always** | Playback in the group powers the speakers of its members, like direct playback. |
+| *(not listed)* | Ignored: playback in the group powers nothing. Without central settings every group counts. |
+
+While a follow group plays:
+
+- **Prewarm:** the speakers of all follow rooms are switched on, so the sound is there as soon as you walk in.
+- **Join:** a room with presence joins the group. Its volume is set first: group volume plus the room's offset (e.g. bedroom −10 percentage points).
+- **Leave:** a room without presence leaves after its presence run-down (2 min). When the last room leaves, Music Assistant pauses the group, and the speakers switch off after their run-down.
+- **Never steals:** a room that plays something else (directly or in another group) is left alone.
+- **Left out:** rooms with video playing (Kodi), rooms in **quiet** mode (switch per room; leaves at once and cuts the speakers) and rooms turned **off** during the session (until the session ends).
+- **Unknown presence** (all sensors unavailable) changes nothing, so music does not stop because a sensor integration is down.
+- **Manual and fallback rooms** without presence stay as long as nobody is detected anywhere.
+- One follow group plays at a time.
+
+An empty group cannot start, so start follow in Music Assistant with at least one room, with the **Start follow** button, or from scripts and automations:
+
+```yaml
+action: better_media_player.start_follow
+data:
+  group: media_player.all_players_follow   # optional, default: first follow group
+  media_content_id: "library://radio/42"   # optional, default: continue the last queue
+  media_content_type: music                # optional
+  volume: 0.15                             # optional, group volume 0-1; offsets still apply
+  fallback_rooms:                          # optional, when nobody is detected
+    - media_player.bedroom
+```
+
+> Group players with **static** members are not supported: Music Assistant stops the whole group when a static member is removed. Use groups with dynamic members only.
+
 ### Wait for standby
 
 With power sensors, a plug is cut only after its device has drawn less than the threshold for 30 s, at most after the maximum wait. Useful for OLED TVs that run panel care in standby. A TV that never goes to standby on its own (no CEC) gains nothing from this; then only the run-down applies.
@@ -133,6 +171,10 @@ With power sensors, a plug is cut only after its device has drawn less than the 
 | `switch.<room>_automatic_power` | off: no automatic switching; commands to the room player still work |
 | `number.<room>_display_run_down`, `_speaker_run_down`, `_player_hardware_run_down`, `_video_idle_timeout` | times in minutes |
 | `button.<room>_all_off` | same as turning the room player off |
+| `switch.<room>_quiet` | quiet mode: the room takes no part in follow me |
+| `sensor.<room>_follow` | follow state of the room (with occupancy sensors only) |
+| `sensor.better_media_player_follow_rooms` | central: rooms in the playing follow group |
+| `button.better_media_player_start_follow` | central: continue the last follow queue where someone is |
 
 | Status | Meaning |
 |---|---|
@@ -146,10 +188,20 @@ With power sensors, a plug is cut only after its device has drawn less than the 
 | `error` | start failed |
 | `disabled` | automatic power is off |
 
+| Follow state | Meaning |
+|---|---|
+| `inactive` | no follow group plays |
+| `following` | the room is in the playing follow group |
+| `waiting` | prewarmed, waiting for presence |
+| `override` | kept without presence (manual or fallback start) |
+| `excluded_quiet` / `excluded_video` / `excluded_off` | left out: quiet mode / video / turned off this session |
+| `excluded_busy` | plays something else (directly or in another group) |
+| `presence_unknown` | occupancy sensors unavailable; nothing changes |
+
 ## Roadmap
 
-- **v0.2:** policies per Music Assistant group (always / follow occupancy / ignore), occupancy sensors per room, a central settings entry, pause a "follow" group when nobody is in any room.
-- Later: check via power measurement whether a device really runs.
+- Check via power measurement whether a device really runs.
+- Support for group players with static members (contributions welcome).
 
 German documentation: [ANLEITUNG.md](ANLEITUNG.md)
 
