@@ -116,6 +116,10 @@ POWERED_STATES = {
     MediaPlayerState.BUFFERING,
 }
 IDLE_STATES = {MediaPlayerState.ON, MediaPlayerState.IDLE}
+GROUP_ACTIVE_STATES = {MediaPlayerState.PLAYING, MediaPlayerState.PAUSED, MediaPlayerState.BUFFERING}
+# a suppressed source is released only when it has really stopped
+VIDEO_STOPPED = {STATE_OFF, MediaPlayerState.STANDBY}
+AUDIO_STOPPED = {STATE_OFF, MediaPlayerState.STANDBY, MediaPlayerState.IDLE, MediaPlayerState.ON, MediaPlayerState.PAUSED}
 NOT_AVAILABLE = {STATE_UNAVAILABLE, STATE_UNKNOWN}
 
 
@@ -238,10 +242,13 @@ class RoomController:
         self._unsubs: list[Callable[[], None]] = []
         self._listeners: list[Callable[[], None]] = []
         self._started = False
+        self._stopped = False
         self._seq_task: asyncio.Task | None = None
         self._side_tasks: set[asyncio.Task] = set()
         self._own_contexts: deque[str] = deque(maxlen=OWN_CONTEXTS)
         self._last_command: dict[str, tuple[bool, float]] = {}
+        # recent commands per entity, to recognise late device reports as our own
+        self._recent_commands: dict[str, deque[tuple[bool, float]]] = {}
 
         self.status = STATUS_OFF
         self.manual = False
@@ -295,16 +302,27 @@ class RoomController:
         self._unsubs.append(async_at_started(self.hass, _started))
 
     async def async_stop(self) -> None:
+        self._started = False
+        self._stopped = True
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()
+        seq = self._seq_task
         self._cancel_sequence()
+        if seq is not None:
+            try:
+                await seq
+            except BaseException:  # noqa: BLE001 - cancelled or failed, both fine here
+                pass
         for task in list(self._side_tasks):
             task.cancel()
         await self._store.async_save(self.data)
 
     @callback
     def _spawn(self, coro) -> None:
+        if self._stopped:
+            coro.close()
+            return
         task = self.hass.async_create_task(coro, eager_start=False)
         self._side_tasks.add(task)
         task.add_done_callback(self._side_tasks.discard)
@@ -348,7 +366,7 @@ class RoomController:
                 if self.error:
                     self.error = None
 
-        if entity_id in self.power_entities and new is not None and old is not None:
+        if self._started and entity_id in self.power_entities and new is not None and old is not None:
             if (
                 old.state in (STATE_ON, STATE_OFF)
                 and new.state in (STATE_ON, STATE_OFF)
@@ -375,10 +393,9 @@ class RoomController:
         ctx = new.context
         if ctx is not None and (ctx.id in self._own_contexts or ctx.parent_id in self._own_contexts):
             return True
-        last = self._last_command.get(entity_id)
-        if last is not None:
-            on, ts = last
-            if (new.state == STATE_ON) == on and _now() - ts < OWN_CHANGE_SECONDS:
+        now = _now()
+        for on, ts in self._recent_commands.get(entity_id, ()):
+            if (new.state == STATE_ON) == on and now - ts < OWN_CHANGE_SECONDS:
                 return True
         return False
 
@@ -431,7 +448,7 @@ class RoomController:
         return state is not None and state.state not in NOT_AVAILABLE
 
     def role_on(self, role: Role) -> bool:
-        return any(self.is_on(e) for e in role.entities)
+        return any(self.is_on(e) or self._pending_on(e) for e in role.entities)
 
     def _pending_on(self, entity_id: str) -> bool:
         """Turn-on was sent recently; slow devices (Zigbee & co.) report later."""
@@ -454,6 +471,8 @@ class RoomController:
         for state in self.hass.states.async_all(MP_DOMAIN):
             if state.entity_id == player:
                 continue
+            if state.state not in GROUP_ACTIVE_STATES:
+                continue  # static groups list their members even while off
             members = state.attributes.get("group_members") or []
             if player in members:
                 out.append(state.entity_id)
@@ -536,7 +555,8 @@ class RoomController:
 
     def _update_sources(self, now: float) -> None:
         for src in self.sources.values():
-            if src.suppressed and not self.source_active_raw(src):
+            stopped = VIDEO_STOPPED if src.key == SOURCE_VIDEO else AUDIO_STOPPED
+            if src.suppressed and self.player_state(src) in stopped:
                 src.suppressed = False
             if (
                 src.key == SOURCE_VIDEO
@@ -566,24 +586,50 @@ class RoomController:
             self._start_sequence(None)
 
     async def _auto_off(self, now: float) -> None:
+        """Switch roles off in OFF_ORDER.
+
+        A role waits while an earlier role of the same source is still on and not
+        needed (run-down, standby wait, or its off command is still on its way),
+        so e.g. the player's hardware is never cut before the display.
+        """
+        holding: list[Role] = []
         for key in OFF_ORDER:
             role = self.roles.get(key)
-            if role is None or not self.role_on(role) or self.role_demand(role):
-                if role is not None and not self.role_on(role):
-                    role.force_off = False
-                    role.stop_since = None
-                    role.low_since = None
+            if role is None:
                 continue
+            if not self.role_on(role):
+                if not self._off_recent(role, now):
+                    # keep force_off a little longer: a slow device may still
+                    # report a late "on" from an earlier command
+                    role.force_off = False
+                role.stop_since = None
+                role.low_since = None
+                continue
+            if self.role_demand(role):
+                continue
+            blocked = any(set(h.sources) & set(role.sources) for h in holding)
             due = role.force_off or (
                 self.auto_power
                 and role.last_demand is not None
                 and now - role.last_demand >= self.run_down(role)
             )
-            if not due:
+            if not due or blocked:
+                holding.append(role)
                 continue
             if role.standby and not self._standby_reached(role, now):
+                holding.append(role)
                 continue
             await self._switch_role(role, False)
+            if self.role_on(role) and self._off_recent(role, now):
+                holding.append(role)
+
+    def _off_recent(self, role: Role, now: float) -> bool:
+        """An off command for this role is still on its way."""
+        for entity_id in role.entities:
+            last = self._last_command.get(entity_id)
+            if last is not None and not last[0] and now - last[1] < 2 * COMMAND_RETRY_SECONDS:
+                return True
+        return False
 
     def _standby_reached(self, role: Role, now: float) -> bool:
         """Wait until the device went to standby on its own (or max time)."""
@@ -626,13 +672,16 @@ class RoomController:
     # --------------------------------------------------------------- commands
 
     async def _switch(self, entity_id: str, on: bool, force: bool = False) -> None:
-        if not self.is_available(entity_id) or self.is_on(entity_id) == on:
+        if not self.is_available(entity_id):
+            return
+        if self.is_on(entity_id) == on and not (not on and self._pending_on(entity_id)):
             return
         now = _now()
         last = self._last_command.get(entity_id)
         if not force and last is not None and last[0] == on and now - last[1] < COMMAND_RETRY_SECONDS:
             return
         self._last_command[entity_id] = (on, now)
+        self._recent_commands.setdefault(entity_id, deque(maxlen=4)).append((on, now))
         domain = entity_id.split(".", 1)[0]
         if domain not in ("switch", "light", "input_boolean"):
             domain = "homeassistant"
@@ -652,12 +701,9 @@ class RoomController:
             if not on and entity_id in needed:
                 continue
             await self._switch(entity_id, on, force)
-        if not on:
-            role.force_off = False
-            role.stop_since = None
-            role.low_since = None
-        else:
+        if on:
             role.last_demand = _now()
+        # force_off / standby state are reset in _auto_off once the role is really off
 
     async def _call(self, domain: str, service: str, data: dict) -> bool:
         ctx = Context()
@@ -697,7 +743,11 @@ class RoomController:
         """Stop a source: leave groups, stop playback, power it down if possible."""
         if src.key == SOURCE_AUDIO:
             groups = self.groups_of(src.player)
-            if groups and self.player_supports(src, MediaPlayerEntityFeature.GROUPING):
+            if (
+                groups
+                and self.player_state(src) in GROUP_ACTIVE_STATES
+                and self.player_supports(src, MediaPlayerEntityFeature.GROUPING)
+            ):
                 _LOGGER.info("%s: removing %s from %s", self.entry.title, src.player, groups)
                 await self._player(src, "unjoin")
             elif self.source_playing(src):
@@ -725,6 +775,8 @@ class RoomController:
 
     @callback
     def _start_sequence(self, source: str | None) -> None:
+        if self._stopped:
+            return
         if self.sequence_running:
             if source is None:
                 return
@@ -786,14 +838,15 @@ class RoomController:
                     role.last_demand = _now()
 
             if src is not None and src.key in needed_sources:
-                timeout = float(self.opts[CONF_START_TIMEOUT])
+                # one deadline for the whole player start
+                deadline = _now() + float(self.opts[CONF_START_TIMEOUT])
                 if src.host and not await self._wait_until(
-                    lambda: self.player_available(src), timeout
+                    lambda: self.player_available(src), deadline - _now()
                 ):
                     raise _StartFailed(f"{src.player} did not become available")
                 if not self.source_ready(src):
                     await self._source_on(src)
-                    if not await self._wait_until(lambda: self.source_ready(src), timeout):
+                    if not await self._wait_until(lambda: self.source_ready(src), deadline - _now()):
                         raise _StartFailed(f"{src.player} did not start")
 
             for role in after_player:
@@ -808,13 +861,15 @@ class RoomController:
             _LOGGER.warning("%s: start failed: %s", self.entry.title, err)
             self.error = str(err)
             for role in reversed(switched):
+                role.force_off = True  # retried by _auto_off until really off
                 await self._switch_role(role, False, force=True)
         finally:
             if asyncio.current_task() is self._seq_task:
                 self._seq_task = None
-            self._update_status()
-            self._notify()
-            if self._started:
+            if not self._stopped:
+                self._update_status()
+                self._notify()
+            if self._started and not self._stopped:
                 self._spawn(self.async_update("sequence_done"))
 
     # ----------------------------------------------------------- user actions
@@ -852,8 +907,10 @@ class RoomController:
                 await self._source_off(other)
             else:
                 # music: leave a group, otherwise just pause
-                if self.groups_of(other.player) and self.player_supports(
-                    other, MediaPlayerEntityFeature.GROUPING
+                if (
+                    self.groups_of(other.player)
+                    and self.player_state(other) in GROUP_ACTIVE_STATES
+                    and self.player_supports(other, MediaPlayerEntityFeature.GROUPING)
                 ):
                     await self._player(other, "unjoin")
                 elif self.player_supports(other, MediaPlayerEntityFeature.PAUSE):
@@ -864,13 +921,20 @@ class RoomController:
         """Explicit "room off": stop sources, then power down in order."""
         self._cancel_sequence()
         self._reset_overrides()
+        # flag everything first: state events during the awaits below must not
+        # start the room again
         for src in self.sources.values():
             if self.source_active_raw(src) or self.groups_of(src.player):
                 src.suppressed = True
+        for role in self.roles.values():
+            if self.role_on(role):
+                role.force_off = True
+        for src in self.sources.values():
             await self._source_off(src)
         for role in self.roles.values():
             if self.role_on(role):
                 role.force_off = True
+        self._cancel_sequence()
         await self.async_update("turn_off")
 
     async def async_set_auto_power(self, on: bool) -> None:
