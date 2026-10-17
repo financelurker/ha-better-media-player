@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlparse
 
 from homeassistant.components.media_player import (
     ATTR_MEDIA_ENQUEUE,
@@ -218,8 +219,15 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
 
     @property
     def entity_picture(self) -> str | None:
-        # child pictures already went through the HA image proxy
-        return self.media_image_url
+        url = self.media_image_url
+        if not url or self.state == MediaPlayerState.OFF:
+            return None
+        if urlparse(url).hostname is None:
+            # already served by Home Assistant (e.g. Kodi's /api/media_player_proxy/...)
+            return url
+        # absolute URL (e.g. Music Assistant's own image server, often plain http):
+        # serve it through our own HA image proxy so it also works via https / remotely
+        return self.media_image_local
 
     # ---------------------------------------------------------------- commands
 
