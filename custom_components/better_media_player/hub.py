@@ -81,8 +81,9 @@ PRESENT = "present"
 EMPTY = "empty"
 UNKNOWN = "unknown"
 
-COMMAND_REPEAT_SECONDS = 30  # do not repeat the same join/unjoin within this time
+COMMAND_REPEAT_SECONDS = 30  # do not repeat the same command within this time
 START_GRACE_SECONDS = 30  # after start_follow, MA may report "playing" late
+VIDEO_RESUME_MAX_SECONDS = 3 * 3600  # resume after video only within this time
 
 
 def _now() -> float:
@@ -103,16 +104,20 @@ class FollowSession:
 
     group: str | None = None
     started_at: float = 0.0
+    started_by_us: bool = False  # via start_follow: MA may report "playing" late
     backed: set[str] = field(default_factory=set)  # members backed by presence
+    leaving: set[str] = field(default_factory=set)  # unjoin sent, MA not done yet
     opted_out: set[str] = field(default_factory=set)  # turned off this session
-    video_left: set[str] = field(default_factory=set)  # left because of video
+    video_left: dict[str, float] = field(default_factory=dict)  # last room left for video
     member_since: dict[str, float] = field(default_factory=dict)
     empty_since: dict[str, float] = field(default_factory=dict)
 
-    def reset(self, group: str | None) -> None:
+    def reset(self, group: str | None, by_us: bool = False) -> None:
         self.group = group
         self.started_at = _now()
+        self.started_by_us = by_us
         self.backed.clear()
+        self.leaving.clear()
         self.opted_out.clear()
         self.video_left.clear()
         self.member_since.clear()
@@ -141,7 +146,7 @@ class FollowManager:
         self._stopped = False
         self._playing_since: dict[str, int] = {}  # start order, newest = highest
         self._start_counter = 0
-        self._commands: dict[str, tuple[str, float]] = {}
+        self._commands: dict[tuple[str, str], float] = {}  # (player, action) -> last sent
         # groups that may already have been playing before HA (re)started
         self._maybe_restored: set[str] = set()
         self.active_group: str | None = None
@@ -265,9 +270,10 @@ class FollowManager:
         """
         state = self.hass.states.get(group)
         vol = state.attributes.get("volume_level") if state else None
-        rooms = self._member_rooms(group)
-        if vol is not None and float(vol) > 0 and self.group_members(group):
-            offset = statistics.fmean([r.volume_offset for r in rooms]) if rooms else 0.0
+        members = self.group_members(group)
+        if vol is not None and float(vol) > 0 and members:
+            by_player = {r.audio_player: r.volume_offset for r in get_rooms(self.hass).values()}
+            offset = statistics.fmean([by_player.get(p, 0.0) for p in members])
             return max(0.0, min(100.0, float(vol) * 100 - offset))
         stored = self.data.get("volumes", {}).get(group)
         if stored:
@@ -317,40 +323,58 @@ class FollowManager:
         self._notify()
 
     def _resumable(self, group: str) -> bool:
-        """Paused and empty only because the last room left for video."""
-        return (
-            self.session.group == group
-            and self.group_state(group) == MediaPlayerState.PAUSED
-            and not self.group_members(group)
-            and bool(self.session.video_left)
-        )
+        """Paused because the last room left for video (recently); resume pending.
+
+        Also true while that room is already back in the group but Music Assistant
+        has not resumed yet (join reported late, play not yet effective).
+        """
+        now = _now()
+        s = self.session
+        if s.group != group or self.group_state(group) != MediaPlayerState.PAUSED:
+            return False
+        recent = {rid for rid, ts in s.video_left.items() if now - ts < VIDEO_RESUME_MAX_SECONDS}
+        if not recent:
+            return False
+        members = self.group_members(group)
+        if not members:
+            return True
+        member_ids = {r.entry.entry_id for r in self._member_rooms(group)}
+        return member_ids <= recent
+
+    def _pick_group(self, playing: list[str], now: float) -> str | None:
+        s = self.session
+        if (
+            s.group in self.follow_groups
+            and s.started_by_us
+            and now - s.started_at < START_GRACE_SECONDS
+        ):
+            return s.group  # just started by us; MA may still report the old group
+        if playing:
+            return max(playing, key=lambda g: self._playing_since.get(g, 0))
+        if s.group in self.follow_groups:
+            if self._resumable(s.group):
+                return s.group
+            if self.group_state(s.group) == MediaPlayerState.PAUSED and self.group_members(s.group):
+                return s.group  # paused by someone: the session goes on, nothing changes
+        return None
 
     async def _evaluate(self) -> None:
         now = _now()
         s = self.session
         rooms = self.follow_rooms()
         playing = [g for g in self.follow_groups if self.group_state(g) in PLAYING]
-        group: str | None = None
-        if playing:
-            group = max(playing, key=lambda g: self._playing_since.get(g, 0))
-        elif s.group in self.follow_groups and self._resumable(s.group):
-            group = s.group
+        group = self._pick_group(playing, now)
 
         for g in self.follow_groups:
             self._remember_volume(g)
 
         # session end
         if s.group and s.group != group:
-            keep = (
-                self.group_state(s.group) in UNCERTAIN  # MA reconnecting: no decisions
-                or now - s.started_at < START_GRACE_SECONDS  # MA reports the start late
-            )
-            if keep and not playing:
-                self.active_group = s.group
+            if self.group_state(s.group) in UNCERTAIN and not playing:
+                self.active_group = s.group  # MA reconnecting: no decisions
                 return
-            if s.group not in playing:
-                _LOGGER.debug("Follow session of %s ended", s.group)
-                s.reset(None)
+            _LOGGER.debug("Follow session of %s ended", s.group)
+            s.reset(None)
         # session start
         if group is not None and s.group != group:
             restored = group in self._maybe_restored
@@ -361,25 +385,38 @@ class FollowManager:
                 s.backed = {r.entry.entry_id for r in self._member_rooms(group)}
         self.active_group = group
 
-        # only one follow group at a time: empty the older ones (they pause)
-        for other in playing:
-            if other != group:
-                for member in self.group_members(other):
-                    await self._unjoin(member, f"{other} replaced by {group}")
-
         if group is None:
             for room in get_rooms(self.hass).values():
                 room.set_prewarm(False)
                 room.set_follow_state(FOLLOW_INACTIVE)
             return
 
-        group_playing = self.group_state(group) in PLAYING
-        members = self.group_members(group)
         presences = {r.entry.entry_id: r.presence() for r in rooms}
         exclusions = {r.entry.entry_id: self.room_exclusion(r, group) for r in rooms}
-        anyone = any(
-            presences[rid] == PRESENT and exclusions[rid] is None for rid in presences
-        )
+
+        # only one follow group at a time: empty the older ones (they pause). Rooms
+        # that are about to join the new group are moved by Music Assistant itself.
+        moving = {
+            r.audio_player
+            for r in rooms
+            if presences[r.entry.entry_id] == PRESENT and exclusions[r.entry.entry_id] is None
+        }
+        for other in self.follow_groups:
+            if other != group and self.group_state(other) in PLAYING:
+                for member in self.group_members(other):
+                    if member not in moving:
+                        await self._unjoin(member, f"{other} replaced by {group}")
+
+        group_playing = self.group_state(group) in PLAYING
+        resumable = self._resumable(group)
+        if not group_playing and not resumable and not (s.started_by_us and now - s.started_at < START_GRACE_SECONDS):
+            # paused by someone: membership stays as it is, prewarm runs down
+            for room in get_rooms(self.hass).values():
+                room.set_prewarm(False)
+            return
+
+        members = self.group_members(group)
+        anyone = any(presences[rid] == PRESENT and exclusions[rid] is None for rid in presences)
 
         for room in rooms:
             rid = room.entry.entry_id
@@ -392,11 +429,22 @@ class FollowManager:
             if member:
                 s.member_since.setdefault(rid, now)
                 if excluded in HARD_EXCLUSIONS:
-                    if excluded == FOLLOW_EXCLUDED_VIDEO:
-                        s.video_left.add(rid)
+                    if excluded == FOLLOW_EXCLUDED_VIDEO and members == [room.audio_player]:
+                        s.video_left[rid] = now  # the last room left for video: resume later
                     await self._leave(room, f"room {excluded}")
                     room.set_follow_state(excluded)
                     continue
+                if group_playing:
+                    s.video_left.pop(rid, None)  # resumed and back in the group
+                elif rid in s.video_left and resumable:
+                    await self._resume(group)  # back in the group, MA not playing yet
+                if rid in s.leaving:
+                    if presence == PRESENT:
+                        s.leaving.discard(rid)  # came back; MA may still remove it, then it rejoins
+                    else:
+                        await self._leave(room, "still leaving")  # retried after the repeat window
+                        room.set_follow_state(FOLLOW_WAITING)
+                        continue
                 if presence == PRESENT:
                     s.backed.add(rid)
                     s.empty_since.pop(rid, None)
@@ -426,16 +474,15 @@ class FollowManager:
             s.member_since.pop(rid, None)
             s.empty_since.pop(rid, None)
             s.backed.discard(rid)
-            if rid in s.video_left and excluded != FOLLOW_EXCLUDED_VIDEO and presence != PRESENT:
-                s.video_left.discard(rid)
+            s.leaving.discard(rid)
+            if rid in s.video_left and excluded != FOLLOW_EXCLUDED_VIDEO and presence == EMPTY:
+                s.video_left.pop(rid, None)  # video over, nobody there: no resume
             if excluded:
                 room.set_follow_state(excluded)
             elif presence == PRESENT and (group_playing or rid in s.video_left):
                 await self._join(room, group)
-                s.backed.add(rid)
                 if not group_playing:
-                    await self._call("media_play", {ATTR_ENTITY_ID: group})
-                s.video_left.discard(rid)
+                    await self._resume(group)
                 room.set_follow_state(FOLLOW_ACTIVE)
             elif presence == UNKNOWN:
                 room.set_follow_state(FOLLOW_UNKNOWN)
@@ -456,32 +503,45 @@ class FollowManager:
             return False
         return True
 
-    def _recent(self, player: str, action: str) -> bool:
-        last = self._commands.get(player)
-        return last is not None and last[0] == action and _now() - last[1] < COMMAND_REPEAT_SECONDS
+    def _due(self, target: str, action: str) -> bool:
+        """True if this command was not sent within the repeat window; marks it sent."""
+        now = _now()
+        last = self._commands.get((target, action))
+        if last is not None and now - last < COMMAND_REPEAT_SECONDS:
+            return False
+        self._commands[(target, action)] = now
+        # an opposite command lifts the block (leave, then come back right away)
+        if action == "unjoin":
+            for key in [k for k in self._commands if k[0] == target and k[1].startswith("join:")]:
+                del self._commands[key]
+        elif action.startswith("join:"):
+            self._commands.pop((target, "unjoin"), None)
+        return True
 
     async def _join(self, room: RoomController, group: str, base: float | None = None) -> None:
         player = room.audio_player
-        if self._recent(player, f"join:{group}"):
+        if not self._due(player, f"join:{group}"):
             return  # MA has not reported the last join yet
-        self._commands[player] = (f"join:{group}", _now())
         base = self.base_volume(group) if base is None else base
         volume = max(0.0, min(100.0, base + room.volume_offset))
         _LOGGER.info("Follow: %s joins %s at %.0f%%", room.entry.title, group, volume)
         await self._call("volume_set", {ATTR_ENTITY_ID: player, "volume_level": volume / 100})
         await self._call("join", {ATTR_ENTITY_ID: group, "group_members": [player]})
 
+    async def _resume(self, group: str) -> None:
+        if self._due(group, "play"):
+            await self._call("media_play", {ATTR_ENTITY_ID: group})
+
     async def _unjoin(self, player: str, why: str) -> None:
-        if self._recent(player, "unjoin"):
+        if not self._due(player, "unjoin"):
             return
-        self._commands[player] = ("unjoin", _now())
         _LOGGER.info("Follow: %s leaves its group (%s)", player, why)
         await self._call("unjoin", {ATTR_ENTITY_ID: player})
 
     async def _leave(self, room: RoomController, why: str) -> None:
-        rid = room.entry.entry_id
-        self.session.empty_since.pop(rid, None)
-        self.session.backed.discard(rid)
+        # stays 'backed' until MA really removed it, so it can never turn into an override
+        self.session.leaving.add(room.entry.entry_id)
+        self.session.empty_since.pop(room.entry.entry_id, None)
         await self._unjoin(room.audio_player, f"{room.entry.title}: {why}")
 
     @callback
@@ -509,14 +569,21 @@ class FollowManager:
                 base = round(float(volume) * 100, 1)
                 self.data["volumes"][group] = base
             if s.group != group:
-                s.reset(group)  # new session (a running one keeps its 'room off' rooms)
+                s.reset(group, by_us=True)  # new session (a running one keeps its 'room off' rooms)
             self._maybe_restored.discard(group)
             s.started_at = _now()
+            s.started_by_us = True
             members = self.group_members(group)
             eligible = [r for r in self.follow_rooms() if self.room_exclusion(r, group) is None]
             targets = [r for r in eligible if r.presence() == PRESENT]
             for room in targets:
                 s.backed.add(room.entry.entry_id)
+            if not targets:
+                # started or resumed while nobody is detected: current members are kept
+                # as override until presence shows up somewhere
+                for room in self._member_rooms(group):
+                    s.backed.discard(room.entry.entry_id)
+                    s.empty_since.pop(room.entry.entry_id, None)
             if not targets and not members:
                 capable = [r for r in (fallback_rooms or []) if r.follow_capable]
                 if len(capable) < len(fallback_rooms or []):

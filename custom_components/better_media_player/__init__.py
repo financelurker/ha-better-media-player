@@ -116,6 +116,9 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Delete stored data of a removed entry."""
     store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
     await store.async_remove()
+    if is_hub(entry):
+        # a re-added central entry starts fresh instead of inheriting an old session
+        hass.data.get(DOMAIN, {}).pop("session", None)
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:

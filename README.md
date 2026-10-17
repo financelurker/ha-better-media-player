@@ -135,10 +135,11 @@ While a follow group plays:
 - **Join:** a room with presence joins the group. Its volume is set first: group volume plus the room's offset (e.g. bedroom −10 percentage points).
 - **Leave:** a room without presence leaves after its presence run-down (2 min). When the last room leaves, Music Assistant pauses the group, and the speakers switch off after their run-down.
 - **Never steals:** a room that plays something else (directly or in another group) is left alone.
-- **Left out:** rooms with video playing (Kodi; when the video ends the room comes back, and if it was the last room the group resumes), rooms in **quiet** mode (switch per room; leaves at once and cuts the speakers) and rooms turned **off** during the session (until the session ends).
+- **Left out:** rooms with video playing (Kodi; when the video ends the room comes back, and if it was the last room the group resumes, within 3 h), rooms in **quiet** mode (switch per room; leaves at once and cuts the speakers) and rooms turned **off** during the session (until the session ends).
 - **Unknown presence** (all sensors unavailable) changes nothing, so music does not stop because a sensor integration is down.
 - **Manual and fallback rooms** without presence stay as long as nobody is detected in any follow room; then the normal rules apply, including the run-down.
-- One follow group plays at a time.
+- **Paused by you:** the session goes on, rooms stay as they are, the prewarmed speakers run down. On resume the rules apply again.
+- One follow group plays at a time; starting another one empties the older group (it pauses).
 
 An empty group cannot start, so start follow in Music Assistant with at least one room, with the **Start follow** button, or from scripts and automations:
 

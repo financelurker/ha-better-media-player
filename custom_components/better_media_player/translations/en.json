@@ -131,7 +131,8 @@
       "group_twice": "A group can only have one policy."
     },
     "abort": {
-      "hub_exists": "Central settings already exist. Change them via Configure."
+      "hub_exists": "Central settings already exist. Change them via Configure.",
+      "already_in_progress": "Central settings are already being set up."
     }
   },
   "options": {

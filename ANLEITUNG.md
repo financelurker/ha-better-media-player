@@ -119,14 +119,17 @@ Solange eine Follow-Gruppe spielt:
 - **Kein Raub:** Spielt ein Raum etwas anderes (direkt oder in einer anderen Gruppe), bleibt er
   unberührt.
 - **Ausgenommen:** Räume mit laufendem Video (Kodi; nach dem Ende wieder dabei; war es der
-  letzte Raum, spielt die Gruppe dann weiter), Räume im
+  letzte Raum, spielt die Gruppe dann weiter, innerhalb von 3 h), Räume im
   **Ruhe**-Modus (Switch pro Raum; verlässt sofort, Lautsprecher sofort aus) und Räume, die in
   dieser Sitzung ausgeschaltet wurden (bis die Sitzung endet).
 - **Anwesenheit unbekannt** (alle Sensoren nicht verfügbar): keine Änderung. Die Musik bricht
   also nicht ab, nur weil die Sensor-Integration hängt.
 - **Manuell oder per Ersatzraum gestartet:** Räume ohne Anwesenheit bleiben, solange in keinem
   Follow-Raum jemand erkannt wird. Danach gelten die normalen Regeln, inklusive Nachlauf.
-- Es spielt immer nur eine Follow-Gruppe.
+- **Von dir pausiert:** Die Sitzung läuft weiter, die Räume bleiben, wie sie sind, die vorgewärmten
+  Lautsprecher laufen nach. Beim Fortsetzen gelten wieder die Regeln.
+- Es spielt immer nur eine Follow-Gruppe; startet eine andere, wird die ältere geleert (sie
+  pausiert).
 
 Eine leere Gruppe lässt sich nicht starten. Gestartet wird daher in Music Assistant mit
 mindestens einem Raum, über den Button **Follow starten** oder per Skript/Automation:

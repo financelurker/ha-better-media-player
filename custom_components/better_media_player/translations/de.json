@@ -131,7 +131,8 @@
       "group_twice": "Eine Gruppe kann nur eine Richtlinie haben."
     },
     "abort": {
-      "hub_exists": "Zentrale Einstellungen gibt es schon. Ändern über Konfigurieren."
+      "hub_exists": "Zentrale Einstellungen gibt es schon. Ändern über Konfigurieren.",
+      "already_in_progress": "Die zentralen Einstellungen werden bereits eingerichtet."
     }
   },
   "options": {
