@@ -1,0 +1,191 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Neuer Raum",
+        "description": "Ein Better Media Player pro Raum. Wählst du einen Bereich, werden Kodi- und Music-Assistant-Player dieses Bereichs im nächsten Schritt vorausgewählt.",
+        "data": { "name": "Name", "area": "Bereich" }
+      },
+      "sources": {
+        "title": "Media Player",
+        "description": "Mindestens ein Player. Der Video-Player (z. B. Kodi) braucht Bild und Lautsprecher, der Musik-Player (z. B. ein Music-Assistant-/sendspin-Player) nur die Lautsprecher. Keinen Gruppen-Player auswählen.",
+        "data": { "video_player": "Video-Player", "audio_player": "Musik-Player" },
+        "data_description": {
+          "video_player": "Wird über sein eigenes Ein/Aus geschaltet (z. B. Kodi mit deiner Wake-on-LAN-Automation).",
+          "audio_player": "Der Player des Raums, keine Music-Assistant-Gruppe."
+        }
+      },
+      "devices": {
+        "title": "Stromgeräte",
+        "description": "Steckdosen, die nur noch dieser Raum schaltet. Andere Automationen für diese Steckdosen deaktivieren. Die Geräte müssen bei Stromzufuhr selbst starten.",
+        "data": { "display": "Bild (TV, Beamer)", "speakers": "Lautsprecher / Verstärker / AVR", "bass": "Subwoofer" },
+        "data_description": {
+          "display": "Geht zuerst an und zuletzt aus.",
+          "speakers": "Für beide Player gemeinsam. Geht an, wenn der Player bereit ist, und zuerst aus.",
+          "bass": "Geht nach den Lautsprechern an und vor ihnen aus."
+        }
+      },
+      "advanced": {
+        "title": "Player: Sonderfälle",
+        "description": "Nur nötig, wenn ein Player sich nicht selbst ein-/ausschalten lässt oder seine Hardware an einer Steckdose hängt. Sonst leer lassen.",
+        "data": {
+          "video_on_action": "Video-Player: Ein-Aktion",
+          "video_off_action": "Video-Player: Aus-Aktion",
+          "video_host": "Video-Player: Steckdose seiner Hardware",
+          "audio_on_action": "Musik-Player: Ein-Aktion",
+          "audio_off_action": "Musik-Player: Aus-Aktion",
+          "audio_host": "Musik-Player: Steckdose seiner Hardware"
+        },
+        "data_description": {
+          "video_on_action": "Nur verwendet, wenn der Player kein Einschalten unterstützt (Skript, Button, Schalter).",
+          "video_host": "Der Player ist erst verfügbar, nachdem diese Steckdose an ist."
+        }
+      },
+      "timing": {
+        "title": "Zeiten",
+        "data": {
+          "display_run_down": "Nachlauf Bild",
+          "audio_run_down": "Nachlauf Lautsprecher",
+          "host_run_down": "Nachlauf Player-Hardware",
+          "video_idle_timeout": "Untätigen Video-Player abschalten nach",
+          "start_timeout": "Start-Timeout",
+          "host_on_wait": "Warten nach Player-Steckdose an",
+          "display_on_wait": "Warten nach Bild an",
+          "audio_on_wait": "Warten nach Lautsprecher an"
+        },
+        "data_description": {
+          "display_run_down": "Wie lange das Bild nach dem Ende des Video-Players noch Strom hat.",
+          "audio_run_down": "Wie lange die Lautsprecher nach dem Ende der Wiedergabe noch Strom haben.",
+          "video_idle_timeout": "Video-Player an, aber es läuft nichts (z. B. im Menü). 0 = nie.",
+          "start_timeout": "Ist der Player nach dieser Zeit nicht bereit, wird der Start abgebrochen."
+        }
+      },
+      "standby": {
+        "title": "Standby abwarten (optional)",
+        "description": "Mit Leistungssensoren wird die Steckdose erst getrennt, wenn das Gerät selbst in den Standby gegangen ist (z. B. Panelpflege bei OLED). Ohne gilt die Nachlaufzeit.",
+        "data": {
+          "display_power": "Leistungssensoren Bild",
+          "display_standby": "Bild: Standby abwarten",
+          "display_standby_w": "Bild: Standby unter",
+          "display_standby_max": "Bild: höchstens warten",
+          "audio_power": "Leistungssensoren Lautsprecher",
+          "audio_standby": "Lautsprecher: Standby abwarten",
+          "audio_standby_w": "Lautsprecher: Standby unter",
+          "audio_standby_max": "Lautsprecher: höchstens warten"
+        }
+      }
+    },
+    "error": {
+      "no_player": "Mindestens einen Player auswählen.",
+      "same_player": "Video- und Musik-Player müssen verschieden sein.",
+      "group_player": "Das ist eine Music-Assistant-Gruppe. Bitte den Player des Raums auswählen.",
+      "display_needs_video": "Ein Bild-Gerät braucht einen Video-Player.",
+      "duplicate_device": "Ein Gerät darf nur einmal verwendet werden.",
+      "needs_player": "Braucht den zugehörigen Player.",
+      "needs_power": "Braucht einen Leistungssensor."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Einstellungen",
+        "menu_options": {
+          "room": "Raum",
+          "sources": "Media Player",
+          "devices": "Stromgeräte",
+          "advanced": "Player: Sonderfälle",
+          "timing": "Zeiten",
+          "standby": "Standby abwarten",
+          "save": "Speichern"
+        }
+      },
+      "room": { "title": "Raum", "data": { "area": "Bereich" } },
+      "sources": {
+        "title": "Media Player",
+        "data": { "video_player": "Video-Player", "audio_player": "Musik-Player" }
+      },
+      "devices": {
+        "title": "Stromgeräte",
+        "data": { "display": "Bild (TV, Beamer)", "speakers": "Lautsprecher / Verstärker / AVR", "bass": "Subwoofer" }
+      },
+      "advanced": {
+        "title": "Player: Sonderfälle",
+        "data": {
+          "video_on_action": "Video-Player: Ein-Aktion",
+          "video_off_action": "Video-Player: Aus-Aktion",
+          "video_host": "Video-Player: Steckdose seiner Hardware",
+          "audio_on_action": "Musik-Player: Ein-Aktion",
+          "audio_off_action": "Musik-Player: Aus-Aktion",
+          "audio_host": "Musik-Player: Steckdose seiner Hardware"
+        }
+      },
+      "timing": {
+        "title": "Zeiten",
+        "data": {
+          "display_run_down": "Nachlauf Bild",
+          "audio_run_down": "Nachlauf Lautsprecher",
+          "host_run_down": "Nachlauf Player-Hardware",
+          "video_idle_timeout": "Untätigen Video-Player abschalten nach",
+          "start_timeout": "Start-Timeout",
+          "host_on_wait": "Warten nach Player-Steckdose an",
+          "display_on_wait": "Warten nach Bild an",
+          "audio_on_wait": "Warten nach Lautsprecher an"
+        }
+      },
+      "standby": {
+        "title": "Standby abwarten",
+        "data": {
+          "display_power": "Leistungssensoren Bild",
+          "display_standby": "Bild: Standby abwarten",
+          "display_standby_w": "Bild: Standby unter",
+          "display_standby_max": "Bild: höchstens warten",
+          "audio_power": "Leistungssensoren Lautsprecher",
+          "audio_standby": "Lautsprecher: Standby abwarten",
+          "audio_standby_w": "Lautsprecher: Standby unter",
+          "audio_standby_max": "Lautsprecher: höchstens warten"
+        }
+      }
+    },
+    "error": {
+      "no_player": "Mindestens einen Player auswählen.",
+      "same_player": "Video- und Musik-Player müssen verschieden sein.",
+      "group_player": "Das ist eine Music-Assistant-Gruppe. Bitte den Player des Raums auswählen.",
+      "display_needs_video": "Ein Bild-Gerät braucht einen Video-Player.",
+      "duplicate_device": "Ein Gerät darf nur einmal verwendet werden.",
+      "needs_player": "Braucht den zugehörigen Player.",
+      "needs_power": "Braucht einen Leistungssensor."
+    },
+    "abort": { "invalid_config": "Die Einstellungen passen nicht zusammen. Bitte Media Player und Stromgeräte prüfen." }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "off": "Aus",
+          "starting": "Startet",
+          "on": "An",
+          "playing": "Spielt",
+          "run_down": "Nachlauf",
+          "stopping": "Wartet auf Standby",
+          "manual": "Manuell",
+          "error": "Fehler",
+          "disabled": "Automatik aus"
+        }
+      }
+    },
+    "binary_sensor": {
+      "problem": { "name": "Problem" },
+      "display_demand": { "name": "Bild benötigt" },
+      "audio_demand": { "name": "Lautsprecher benötigt" }
+    },
+    "switch": { "auto_power": { "name": "Automatisch schalten" } },
+    "number": {
+      "display_run_down": { "name": "Nachlauf Bild" },
+      "audio_run_down": { "name": "Nachlauf Lautsprecher" },
+      "host_run_down": { "name": "Nachlauf Player-Hardware" },
+      "video_idle_timeout": { "name": "Video-Leerlauf-Timeout" }
+    },
+    "button": { "all_off": { "name": "Alles aus" } }
+  }
+}
