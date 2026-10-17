@@ -285,6 +285,8 @@ class BetterMediaPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(step_id="room", data_schema=schema)
 
     async def async_step_hub(self, user_input: dict | None = None) -> ConfigFlowResult:
+        await self.async_set_unique_id(ENTRY_TYPE_HUB)
+        self._abort_if_unique_id_configured(error="hub_exists")
         for entry in self._async_current_entries():
             if entry.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_HUB:
                 return self.async_abort(reason="hub_exists")

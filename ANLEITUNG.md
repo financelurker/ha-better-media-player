@@ -118,13 +118,14 @@ Solange eine Follow-Gruppe spielt:
   nach ihrem Nachlauf aus.
 - **Kein Raub:** Spielt ein Raum etwas anderes (direkt oder in einer anderen Gruppe), bleibt er
   unberührt.
-- **Ausgenommen:** Räume mit laufendem Video (Kodi; nach dem Ende wieder dabei), Räume im
+- **Ausgenommen:** Räume mit laufendem Video (Kodi; nach dem Ende wieder dabei; war es der
+  letzte Raum, spielt die Gruppe dann weiter), Räume im
   **Ruhe**-Modus (Switch pro Raum; verlässt sofort, Lautsprecher sofort aus) und Räume, die in
   dieser Sitzung ausgeschaltet wurden (bis die Sitzung endet).
 - **Anwesenheit unbekannt** (alle Sensoren nicht verfügbar): keine Änderung. Die Musik bricht
   also nicht ab, nur weil die Sensor-Integration hängt.
-- **Manuell oder per Ersatzraum gestartet:** Räume ohne Anwesenheit bleiben, solange nirgends
-  jemand erkannt wird. Danach gelten die normalen Regeln.
+- **Manuell oder per Ersatzraum gestartet:** Räume ohne Anwesenheit bleiben, solange in keinem
+  Follow-Raum jemand erkannt wird. Danach gelten die normalen Regeln, inklusive Nachlauf.
 - Es spielt immer nur eine Follow-Gruppe.
 
 Eine leere Gruppe lässt sich nicht starten. Gestartet wird daher in Music Assistant mit
@@ -137,7 +138,7 @@ data:
   media_content_id: "library://radio/42"   # optional, Standard: letzte Queue fortsetzen
   media_content_type: music                # optional
   volume: 0.15                             # optional, Gruppenlautstärke 0-1; Offsets gelten weiter
-  fallback_rooms:                          # optional, falls niemand erkannt wird
+  fallback_rooms:                          # optional, falls niemand erkannt wird (Räume mit Anwesenheitssensoren)
     - media_player.schlafzimmer
 ```
 

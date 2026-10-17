@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
+from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
@@ -15,18 +15,11 @@ from homeassistant.util import dt as dt_util
 
 from custom_components.better_media_player.const import (
     CONF_ALWAYS_GROUPS,
-    CONF_AUDIO_PLAYER,
     CONF_DEFAULT_VOLUME,
-    CONF_ENTRY_TYPE,
     CONF_FOLLOW_GROUPS,
     CONF_OCCUPANCY,
-    CONF_SPEAKERS,
     CONF_VOLUME_OFFSET,
-    DEFAULTS,
     DOMAIN,
-    ENTRY_TYPE_HUB,
-    ENTRY_TYPE_ROOM,
-    HUB_DEFAULTS,
 )
 
 from .conftest import (
@@ -40,6 +33,7 @@ from .conftest import (
     MUSIC,
     SPEAKERS,
     TV,
+    setup_hub,
     setup_room,
 )
 
@@ -53,47 +47,6 @@ async def _tick(hass: HomeAssistant, freezer, seconds: float) -> None:
         async_fire_time_changed(hass, dt_util.utcnow())
         await hass.async_block_till_done()
         left -= 10
-
-
-async def setup_hub(hass: HomeAssistant, **overrides) -> MockConfigEntry:
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        title="Better Media Player",
-        data={CONF_ENTRY_TYPE: ENTRY_TYPE_HUB},
-        options={**HUB_DEFAULTS, CONF_FOLLOW_GROUPS: [FOLLOW], CONF_ALWAYS_GROUPS: [GROUP], **overrides},
-    )
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
-    return entry
-
-
-async def setup_kitchen(hass: HomeAssistant) -> MockConfigEntry:
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        title="Kitchen",
-        data={CONF_ENTRY_TYPE: ENTRY_TYPE_ROOM},
-        options={**DEFAULTS, CONF_AUDIO_PLAYER: KITCHEN, CONF_SPEAKERS: [KITCHEN_SPK], CONF_OCCUPANCY: [KITCHEN_OCC]},
-    )
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
-    return entry
-
-
-@pytest.fixture
-async def house(hass, home):
-    """Living room (Kodi + music, offset -10) and kitchen (music only), both with occupancy."""
-    hass.states.async_set(LIVING_OCC, "off")
-    hass.states.async_set(KITCHEN_OCC, "off")
-    hass.states.async_set(KITCHEN_SPK, "off")
-    home.kitchen("idle")
-    home.group("idle", [], FOLLOW)
-    home.group("idle", [], GROUP)
-    await setup_room(hass, occupancy=[LIVING_OCC], volume_offset=-10)
-    await setup_kitchen(hass)
-    await setup_hub(hass)
-    return home
 
 
 async def _start_follow(hass, **data):

@@ -13,6 +13,11 @@ from homeassistant.components.media_player import MediaPlayerEntityFeature as F
 from homeassistant.core import HomeAssistant, ServiceRegistry
 
 from custom_components.better_media_player.const import (
+    CONF_ALWAYS_GROUPS,
+    CONF_FOLLOW_GROUPS,
+    CONF_OCCUPANCY,
+    ENTRY_TYPE_HUB,
+    HUB_DEFAULTS,
     CONF_AUDIO_PLAYER,
     CONF_BASS,
     CONF_DISPLAY,
@@ -199,3 +204,48 @@ async def setup_room(hass: HomeAssistant, **overrides: Any) -> MockConfigEntry:
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
     return entry
+
+
+# ------------------------------------------------------------- follow me (v0.2)
+
+async def setup_hub(hass: HomeAssistant, **overrides) -> MockConfigEntry:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Better Media Player",
+        data={CONF_ENTRY_TYPE: ENTRY_TYPE_HUB},
+        options={**HUB_DEFAULTS, CONF_FOLLOW_GROUPS: [FOLLOW], CONF_ALWAYS_GROUPS: [GROUP], **overrides},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    return entry
+
+
+async def setup_kitchen(hass: HomeAssistant) -> MockConfigEntry:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Kitchen",
+        data={CONF_ENTRY_TYPE: ENTRY_TYPE_ROOM},
+        options={**DEFAULTS, CONF_AUDIO_PLAYER: KITCHEN, CONF_SPEAKERS: [KITCHEN_SPK], CONF_OCCUPANCY: [KITCHEN_OCC]},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    return entry
+
+
+@pytest.fixture
+async def house(hass, home):
+    """Living room (Kodi + music, offset -10) and kitchen (music only), both with occupancy."""
+    hass.states.async_set(LIVING_OCC, "off")
+    hass.states.async_set(KITCHEN_OCC, "off")
+    hass.states.async_set(KITCHEN_SPK, "off")
+    home.kitchen("idle")
+    home.group("idle", [], FOLLOW)
+    home.group("idle", [], GROUP)
+    await setup_room(hass, occupancy=[LIVING_OCC], volume_offset=-10)
+    await setup_kitchen(hass)
+    await setup_hub(hass)
+    return home
+
+

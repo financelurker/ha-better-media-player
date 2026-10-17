@@ -505,7 +505,7 @@ class RoomController:
         )
 
     def role_demand(self, role: Role) -> bool:
-        if self.prewarm and role.key in (ROLE_AUDIO, ROLE_BASS) and not self.quiet:
+        if self.prewarm and role.key in (ROLE_AUDIO, ROLE_BASS, ROLE_AUDIO_HOST) and not self.quiet:
             return True
         return any(
             self.source_active(self.sources[s]) for s in role.sources if s in self.sources
@@ -535,7 +535,8 @@ class RoomController:
     @property
     def video_active(self) -> bool:
         src = self.sources.get(SOURCE_VIDEO)
-        return src is not None and self.source_active_raw(src)
+        # suppressed (turned off, still suspending) or idle-timed-out video does not count
+        return src is not None and self.source_active(src)
 
     @property
     def audio_playing_directly(self) -> bool:
