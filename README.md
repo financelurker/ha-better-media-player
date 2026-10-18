@@ -10,6 +10,7 @@ Better Media Player is a custom integration in the spirit of Better Thermostat. 
 - **Room off:** leaves a Music Assistant group, stops playback, turns the video player off and powers everything down.
 - **Manual override:** switch a plug by hand and the room steps back until all plugs are off again.
 - **Follow me:** music on a Music Assistant follow group moves with you from room to room, using the room's occupancy sensors.
+- **Media browser and search:** browse and search all of the room's players in one place, with their queues on top; picking a movie powers up TV and Kodi first.
 
 ## Screenshots
 
@@ -156,6 +157,23 @@ data:
 
 > Group players with **static** members are not supported: Music Assistant stops the whole group when a static member is removed. Use groups with dynamic members only.
 
+### Media browser and search
+
+The room player's media browser bundles the browsers of its players. Only what a player supports is offered.
+
+| Entry | Content |
+|---|---|
+| **Queue: \<video player\>** | the video player's queue, if it has one (e.g. [Better Kodi](https://github.com/financelurker/ha-better-kodi)) |
+| **Queue: \<music player\>** | Music Assistant: the current and the next item (that is all Home Assistant exposes) |
+| **\<video player\>** | its browser. While it is off: Home Assistant's media sources (e.g. Jellyfin) and a hint |
+| **\<music player\>** | its browser (artists, albums, playlists, radio, …) |
+
+- **Playing now** from the browser switches the room to that player: the other player is stopped and the power sequence runs first. A movie picked while Kodi sleeps turns on the TV, wakes Kodi and then plays. A music player in a group leaves it first, so only this room changes.
+- **Music items** open a small folder with **▶ Play now**, **⏭ Play next**, **➕ Add to queue** and **⟲ Replace queue** (if the player supports enqueueing). *Next* and *add* change nothing else in the room.
+- **Search** goes to the players that can search (Music Assistant). Voice commands like "play Kid Rock in the living room" go to the room player and power the room.
+- Media picked through the room player in an automation's media selector stores an id that only the room player understands.
+- Browser labels follow the server language set in Home Assistant.
+
 ### Wait for standby
 
 With power sensors, a plug is cut only after its device has drawn less than the threshold for 30 s, at most after the maximum wait. Useful for OLED TVs that run panel care in standby. A TV that never goes to standby on its own (no CEC) gains nothing from this; then only the run-down applies.
@@ -164,7 +182,7 @@ With power sensors, a plug is cut only after its device has drawn less than the 
 
 | Entity | Description |
 |---|---|
-| `media_player.<room>` | the room player |
+| `media_player.<room>` | the room player, with media browser and search |
 | `sensor.<room>_status` | see table below |
 | `binary_sensor.<room>_problem` | start failed; reason in the attributes |
 | `binary_sensor.<room>_display_needed` | display demand right now |

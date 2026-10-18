@@ -148,6 +148,30 @@ data:
 > Gruppen-Player mit **statischen** Mitgliedern werden nicht unterstützt: Music Assistant
 > stoppt die ganze Gruppe, wenn ein statisches Mitglied entfernt wird.
 
+## Media Browser und Suche
+
+Der Media Browser der Raum-Entität bündelt die Browser ihrer Player. Angeboten wird nur, was der
+jeweilige Player kann.
+
+| Eintrag | Inhalt |
+|---|---|
+| Warteschlange: \<Video-Player\> | die Warteschlange des Video-Players, falls er eine hat (z. B. Better Kodi) |
+| Warteschlange: \<Musik-Player\> | Music Assistant: aktuelles und nächstes Element (mehr gibt HA nicht her) |
+| \<Video-Player\> | sein Browser. Ist er aus: die HA-Medienquellen (z. B. Jellyfin) und ein Hinweis |
+| \<Musik-Player\> | sein Browser (Künstler, Alben, Playlists, Radio …) |
+
+- **Jetzt abspielen** aus dem Browser schaltet den Raum auf diesen Player um: Der andere Player wird
+  beendet, die Einschaltsequenz läuft zuerst. Ein Film bei schlafendem Kodi schaltet also den TV ein,
+  weckt Kodi und spielt dann ab. Ein Musik-Player in einer Gruppe verlässt sie vorher, damit sich nur
+  dieser Raum ändert.
+- **Musiktitel** öffnen einen kleinen Ordner mit *Jetzt abspielen*, *Als Nächstes abspielen*,
+  *Zur Warteschlange hinzufügen* und *Warteschlange ersetzen* (wenn der Player das unterstützt).
+  *Als Nächstes* und *Hinzufügen* ändern sonst nichts im Raum.
+- **Suche** geht an die Player, die suchen können (Music Assistant). Sprachbefehle wie „spiele Kid Rock
+  im Wohnzimmer" gehen an die Raum-Entität und schalten den Raum ein.
+- Wählst du in einer Automation über die Raum-Entität ein Medium aus, wird eine ID gespeichert, die nur
+  die Raum-Entität versteht.
+
 ## Status
 
 | Status | Bedeutung |

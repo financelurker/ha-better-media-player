@@ -50,6 +50,7 @@ from homeassistant.core import (
     State,
     callback,
 )
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import (
     async_track_state_change_event,
     async_track_time_interval,
@@ -1019,6 +1020,64 @@ class RoomController:
         """Switch to source; the other source is stopped."""
         if source not in self.sources:
             return
+        await self._stop_others(source)
+        await self.async_turn_on(source)
+
+    def source_powered(self, key: str) -> bool:
+        """The source is ready and everything it needs has power."""
+        src = self.sources[key]
+        return (
+            not src.suppressed
+            and self.source_ready(src)
+            and all(self.role_fully_on(r) for r in self.roles.values() if key in r.sources)
+        )
+
+    async def async_play_on(self, key: str, data: dict, room_mode: str | None = None) -> None:
+        """Play something on one of the room's players (from the room browser or search).
+
+        Playing now (play / replace / no enqueue) switches the room to that player:
+        the other player is stopped and the power sequence runs first, so e.g. a
+        movie picked while Kodi sleeps turns on the TV, wakes Kodi and then plays.
+        Next / add only enqueue on the player and change nothing else.
+        """
+        src = self.sources.get(key)
+        if src is None:
+            raise HomeAssistantError(f"Unknown source: {key}")
+        enqueue = room_mode or data.get("enqueue")
+        if enqueue is None or str(enqueue) in ("play", "replace"):
+            await self._stop_others(key)
+            if not self.source_powered(key):
+                await self.async_turn_on(key)
+                task = self._seq_task
+                if task is not None:
+                    # shielded: if our caller (e.g. a voice command) gives up, the
+                    # room's power sequence still finishes or rolls back properly
+                    try:
+                        await asyncio.shield(task)
+                    except asyncio.CancelledError:
+                        if not task.cancelled():
+                            raise  # the caller was cancelled, not the sequence
+                        raise HomeAssistantError(f"{self.entry.title}: start was interrupted") from None
+                if self.error:
+                    raise HomeAssistantError(f"{self.entry.title}: {self.error}")
+            elif self.data.get("last_source") != key:
+                self.data["last_source"] = key
+                self._save()
+            if (
+                key == SOURCE_AUDIO
+                and self.groups_of(src.player)
+                and self.player_supports(src, MediaPlayerEntityFeature.GROUPING)
+            ):
+                # play here, not on the whole group (independent of Music
+                # Assistant's 'play media overrides group' setting)
+                await self._player(src, "unjoin")
+        ctx = Context()
+        self._own_contexts.append(ctx.id)
+        await self.hass.services.async_call(
+            MP_DOMAIN, "play_media", {ATTR_ENTITY_ID: src.player, **data}, blocking=True, context=ctx
+        )
+
+    async def _stop_others(self, source: str) -> None:
         for other in self.sources.values():
             if other.key == source or not self.source_active_raw(other):
                 continue
@@ -1035,7 +1094,6 @@ class RoomController:
                     await self._player(other, "unjoin")
                 elif self.player_supports(other, MediaPlayerEntityFeature.PAUSE):
                     await self._player(other, "media_pause")
-        await self.async_turn_on(source)
 
     async def async_turn_off(self) -> None:
         """Explicit "room off": stop sources, then power down in order."""

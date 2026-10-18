@@ -345,5 +345,20 @@
         }
       }
     }
+  },
+  "selector": {
+    "browse": {
+      "options": {
+        "queue_of": "Queue: {name}",
+        "player_off": "{name} is off: its library appears once it is on",
+        "now_playing": "Now playing",
+        "up_next": "Up next",
+        "queue_empty": "Nothing queued",
+        "play": "▶ Play now",
+        "next": "⏭ Play next",
+        "add": "➕ Add to queue",
+        "replace": "⟲ Replace queue"
+      }
+    }
   }
 }
