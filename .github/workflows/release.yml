@@ -1,0 +1,58 @@
+name: Release
+
+# The release tag is the only place the version is set.
+# When a release (or pre-release) is published, this workflow writes the tag's
+# version into manifest.json, zips the integration and attaches the ZIP to the
+# release. HACS installs that ZIP (hacs.json: zip_release).
+#
+# Run it by hand ("Run workflow", with the tag) to rebuild the ZIP of an existing
+# release.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to (re)build, e.g. v1.2.3"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  zip:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Version from tag
+        run: |
+          VERSION="${TAG#v}"
+          if ! [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+)*([.-]?[A-Za-z0-9.]+)?$ ]]; then
+            echo "::error::Tag '$TAG' is not a version (expected e.g. v1.2.3 or 1.2.3b1)"
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Write version into manifest.json
+        working-directory: custom_components/better_media_player
+        run: |
+          jq --arg v "$VERSION" '.version = $v' manifest.json > manifest.tmp
+          mv manifest.tmp manifest.json
+          jq -r .version manifest.json
+
+      - name: Zip the integration
+        working-directory: custom_components/better_media_player
+        run: |
+          find . -name "__pycache__" -type d -prune -exec rm -rf {} +
+          zip -r "$GITHUB_WORKSPACE/better_media_player.zip" . -x "*.pyc"
+          unzip -l "$GITHUB_WORKSPACE/better_media_player.zip"
+
+      - name: Attach the ZIP to the release
+        run: gh release upload "$TAG" better_media_player.zip --clobber

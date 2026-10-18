@@ -15,6 +15,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.loader import async_get_integration
 
 from .const import (
     ATTR_FALLBACK_ROOMS,
@@ -84,6 +85,8 @@ def _room_for(hass: HomeAssistant, entity_id: str) -> RoomController | None:
 
 async def async_setup_entry(hass: HomeAssistant, entry: BetterMediaPlayerConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {}).setdefault("rooms", {})
+    if "version" not in hass.data[DOMAIN]:
+        hass.data[DOMAIN]["version"] = str((await async_get_integration(hass, DOMAIN)).version)
     if is_hub(entry):
         hub = FollowManager(hass, entry)
         hass.data[DOMAIN]["hub"] = hub
