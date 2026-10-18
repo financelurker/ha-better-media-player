@@ -251,8 +251,6 @@ The version is set only by the release tag (e.g. `v1.2.3`, or a pre-release such
 - Check via power measurement whether a device really runs.
 - Support for group players with static members (contributions welcome).
 
-German documentation: [ANLEITUNG.md](ANLEITUNG.md)
-
 ## License
 
 Eclipse Public License 2.0, see [LICENSE](LICENSE).
