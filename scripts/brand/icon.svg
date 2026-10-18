@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4DD0E1"/>
+      <stop offset="1" stop-color="#00838F"/>
+    </linearGradient>
+  </defs>
+  <!-- Better Media Player brand icon. Drawn from scratch for this project (no template
+       or third-party artwork): the room's multimedia console, a display with play/pause
+       that also sends out sound. See scripts/brand/README.md. -->
+  <!-- tile -->
+  <rect x="12" y="12" width="232" height="232" rx="56" fill="url(#g)"/>
+  <!-- display and stand -->
+  <rect x="30" y="64" width="132" height="100" rx="14" fill="none" stroke="#ffffff" stroke-width="13"/>
+  <rect x="70" y="178" width="52" height="11" rx="5.5" fill="#ffffff"/>
+  <!-- play / pause on the display -->
+  <path d="M60 97.2 L60 130.8 Q60 134 63.2 132.08 L91.6 115.6 Q94.8 114 91.6 112.4 L63.2 95.92 Q60 94 60 97.2 Z" fill="#ffffff"/>
+  <rect x="106" y="94" width="11" height="40" rx="4" fill="#ffffff"/>
+  <rect x="123" y="94" width="11" height="40" rx="4" fill="#ffffff"/>
+  <!-- sound -->
+  <g transform="translate(184 114) scale(0.95)">
+    <path d="M0 -32 A48 48 0 0 1 0 32" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <path d="M24 -52 A78 78 0 0 1 24 52" fill="none" stroke="#ffffff" stroke-opacity="0.55" stroke-width="12" stroke-linecap="round"/>
+  </g>
+</svg>
