@@ -271,6 +271,19 @@ class FollowManager:
         state = self.hass.states.get(group)
         vol = state.attributes.get("volume_level") if state else None
         members = self.group_members(group)
+        faded = self._faded_members(members)
+        if faded:
+            # a sleep timer is fading a member: the group average is not the real
+            # volume; use the others' own volumes, or what was remembered
+            vols = []
+            for room in get_rooms(self.hass).values():
+                if room.audio_player in members and room.audio_player not in faded:
+                    v = self._player_volume(room.audio_player)
+                    if v is not None and v > 0:
+                        vols.append(v * 100 - room.volume_offset)
+            if vols:
+                return max(0.0, min(100.0, statistics.fmean(vols)))
+            vol = None
         if vol is not None and float(vol) > 0 and members:
             by_player = {r.audio_player: r.volume_offset for r in get_rooms(self.hass).values()}
             offset = statistics.fmean([by_player.get(p, 0.0) for p in members])
@@ -280,11 +293,28 @@ class FollowManager:
             return float(stored)
         return float(self.opts[CONF_DEFAULT_VOLUME])
 
+    def _faded_members(self, members: list[str]) -> set[str]:
+        return {
+            r.audio_player
+            for r in get_rooms(self.hass).values()
+            if r.audio_player in members and r.sleep.fading_player(r.audio_player)
+        }
+
+    def _player_volume(self, player: str) -> float | None:
+        state = self.hass.states.get(player)
+        value = state.attributes.get("volume_level") if state else None
+        try:
+            return float(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
     def _remember_volume(self, group: str) -> None:
         state = self.hass.states.get(group)
         vol = state.attributes.get("volume_level") if state else None
         if vol is None or float(vol) <= 0 or not self.group_members(group):
             return
+        if self._faded_members(self.group_members(group)):
+            return  # the volume is being lowered by a sleep timer, not set by someone
         base = round(self.base_volume(group), 1)
         if self.data["volumes"].get(group) != base:
             self.data["volumes"][group] = base

@@ -12,10 +12,12 @@ State lives in controller.data (persisted), so the timer survives a restart:
         "fade": <seconds>,
         "fade_player": <entity id> | None,   # set when the fade begins
         "fade_from": <volume 0..1> | None,   # volume before the fade
-        "last_set": <volume 0..1> | None,    # last volume we set
+        "recent": [<volume 0..1>, ...],      # last volumes we set (late reports)
         "fade_aborted": bool,                # someone changed the volume
     }
-    data["volume_restore"] = {<entity id>: <volume>}   # restores still to do
+    data["volume_restore"] = {<entity id>: {"volume": v, "left": x}}
+        restores still to do; "left" is the volume the fade left behind; if
+        someone set another volume meanwhile, the restore is dropped
 
 A volume change from outside during the fade ends the fade only (that volume
 stays, nothing is restored); the timer still ends the room.
@@ -43,7 +45,8 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 FADE_STEP_SECONDS = 10
-VOLUME_TOLERANCE = 0.02  # players round (Music Assistant: whole percent)
+VOLUME_TOLERANCE = 0.011  # players round to whole percent
+RECENT_SETS = 4  # a report may come a few steps late (polled players)
 MAX_MINUTES = 720
 
 REASON_EXPIRED = "expired"
@@ -89,6 +92,11 @@ class SleepTimer:
             return 0
         return max(0, math.ceil((s["ends_at"] - _now()) / 60))
 
+    def fading_player(self, player: str | None) -> bool:
+        """This player's volume is being lowered right now (not its real volume)."""
+        s = self._s
+        return bool(player and self.fading and s.get("fade_player") == player)
+
     @property
     def fading(self) -> bool:
         s = self._s
@@ -99,7 +107,7 @@ class SleepTimer:
         return float(self.ctrl.opts.get(CONF_SLEEP_FADE, 0))
 
     @property
-    def _restores(self) -> dict[str, float]:
+    def _restores(self) -> dict[str, dict[str, float | None]]:
         return self.ctrl.data.setdefault("volume_restore", {})
 
     # -------------------------------------------------------------- lifecycle
@@ -137,10 +145,10 @@ class SleepTimer:
                 "fade": fade * 60,
                 "fade_player": None,
                 "fade_from": None,
-                "last_set": None,
+                "recent": [],
                 "fade_aborted": False,
             }
-            self._changed()
+            self._changed(now=True)
         self.ctrl._spawn(self._async_step())
 
     async def async_extend(self, minutes: float = 15) -> None:
@@ -157,7 +165,7 @@ class SleepTimer:
             ends = max(s["ends_at"], _now()) + minutes * 60
             s["ends_at"] = min(ends, _now() + MAX_MINUTES * 60)
             s["fade"] = min(s["fade"], s["ends_at"] - _now())
-            self._changed()
+            self._changed(now=True)
         self.ctrl._spawn(self._async_step())
 
     async def async_cancel(self, reason: str = REASON_CANCELLED) -> None:
@@ -205,9 +213,17 @@ class SleepTimer:
         self.ctrl._spawn(self._async_step())
 
     @callback
-    def _changed(self) -> None:
-        self.ctrl._save()
+    def _changed(self, now: bool = False) -> None:
+        self._save(now)
         self.ctrl._notify()
+
+    @callback
+    def _save(self, now: bool = False) -> None:
+        """Fade steps come more often than the delayed save: important points go out at once."""
+        if now:
+            self.ctrl._save_now()
+        else:
+            self.ctrl._save()
 
     # ----------------------------------------------------------------- steps
 
@@ -263,44 +279,73 @@ class SleepTimer:
         if current is None:
             return
         if s.get("fade_player") is None:
-            start = self._restores.pop(src.player, None)
+            pending = self._restores.pop(src.player, None)
+            start = pending["volume"] if pending and self._unchanged(current, pending.get("left")) else None
             s["fade_player"] = src.player
             s["fade_from"] = start if start is not None else current
-            s["last_set"] = current
-            self.ctrl._save()
-        elif s.get("last_set") is not None and abs(current - s["last_set"]) > VOLUME_TOLERANCE:
-            _LOGGER.info(
-                "%s: volume changed during the sleep fade, keeping %.2f", self.ctrl.entry.title, current
-            )
-            s["fade_aborted"] = True
-            s["fade_from"] = None
-            s["last_set"] = None
-            self._changed()
+            s["recent"] = [current]
+            self._save(now=True)
+        elif self._external(s, current):
+            self._abort_fade(s, current)
             return
         left = max(0.0, s["ends_at"] - now)
         target = round(s["fade_from"] * min(1.0, left / s["fade"]), 3)
         if target < current - 0.004:
-            s["last_set"] = target
-            self.ctrl._save()
+            s["recent"] = [*s.get("recent", []), target][-RECENT_SETS:]
+            self._save()
             await self.ctrl._player(src, "volume_set", {"volume_level": target})
         self.ctrl._notify()
+
+    @staticmethod
+    def _unchanged(current: float | None, expected: float | None) -> bool:
+        return expected is None or current is None or abs(current - expected) <= VOLUME_TOLERANCE
+
+    @staticmethod
+    def _external(s: dict[str, Any], current: float) -> bool:
+        """The volume is none of ours: someone else changed it.
+
+        Our own sets may be reported late, so any of the last few values we
+        set (plus rounding) still counts as ours.
+        """
+        recent = s.get("recent") or []
+        if not recent:
+            return False
+        return all(abs(current - v) > VOLUME_TOLERANCE for v in recent)
+
+    def _check_external(self, s: dict[str, Any]) -> None:
+        """Right before ending a fade: a change since the last step counts too."""
+        if s.get("fade_player") is None or s.get("fade_aborted"):
+            return
+        current = self._volume(s["fade_player"])
+        if current is not None and self._external(s, current):
+            self._abort_fade(s, current)
+
+    def _abort_fade(self, s: dict[str, Any], current: float) -> None:
+        _LOGGER.info("%s: volume changed during the sleep fade, keeping %.2f", self.ctrl.entry.title, current)
+        s["fade_aborted"] = True
+        s["fade_from"] = None
+        s["recent"] = []
+        self._changed(now=True)
 
     async def _finish(self) -> None:
         s = self._s
         if s is None:
             return
+        self._check_external(s)
         # clear first: nothing below may start a second shutdown
         self.ctrl.data.pop("sleep", None)
         self._unschedule()
         self._changed()
-        if any(self.ctrl.source_playing(x) for x in self.ctrl.sources.values()) or (
+        if self.ctrl.turning_off:
+            pass  # a "room off" is running already
+        elif any(self.ctrl.source_playing(x) for x in self.ctrl.sources.values()) or (
             self.ctrl.room_on and not self._expired_while_down(s)
         ):
             _LOGGER.info("%s: sleep timer expired, turning the room off", self.ctrl.entry.title)
             await self.ctrl.async_turn_off()
         if s.get("fade_from") is not None and not s.get("fade_aborted") and s.get("fade_player"):
-            self._restores[s["fade_player"]] = s["fade_from"]
-            self.ctrl._save()
+            self._restores[s["fade_player"]] = {"volume": s["fade_from"], "left": self._left(s)}
+            self._save(now=True)
         await self.async_apply_restores()
         self._fire(REASON_EXPIRED)
 
@@ -314,13 +359,19 @@ class SleepTimer:
         s = self._s
         if s is None or s.get("fade_player") is None:
             return
+        self._check_external(s)
         player, start = s["fade_player"], s.get("fade_from")
-        aborted = s.get("fade_aborted")
-        s.update(fade_player=None, fade_from=None, last_set=None, fade_aborted=False)
+        aborted, left = s.get("fade_aborted"), self._left(s)
+        s.update(fade_player=None, fade_from=None, recent=[], fade_aborted=False)
         if restore and start is not None and not aborted:
-            self._restores[player] = start
+            self._restores[player] = {"volume": start, "left": left}
             await self.async_apply_restores()
-        self.ctrl._save()
+        self._save(now=True)
+
+    @staticmethod
+    def _left(s: dict[str, Any]) -> float | None:
+        recent = s.get("recent") or []
+        return recent[-1] if recent else None
 
     # --------------------------------------------------------------- restore
 
@@ -335,7 +386,9 @@ class SleepTimer:
         pending = self.ctrl.data.get("volume_restore")
         if not pending:
             return
-        for player, volume in list(pending.items()):
+        for player, item in list(pending.items()):
+            if not isinstance(item, dict):
+                item = {"volume": item}
             src = next((x for x in self.ctrl.sources.values() if x.player == player), None)
             if src is None:
                 pending.pop(player, None)
@@ -348,8 +401,10 @@ class SleepTimer:
             if pending.pop(player, None) is None:
                 continue  # done meanwhile by a concurrent call
             self.ctrl._save()
+            if not self._unchanged(self._volume(player), item.get("left")):
+                continue  # someone set a volume meanwhile (e.g. follow me's join): it wins
             if self.ctrl.player_supports(src, MediaPlayerEntityFeature.VOLUME_SET):
-                await self.ctrl._player(src, "volume_set", {"volume_level": volume})
+                await self.ctrl._player(src, "volume_set", {"volume_level": item["volume"]})
 
     # ----------------------------------------------------------------- event
 

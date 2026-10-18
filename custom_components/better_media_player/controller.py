@@ -277,6 +277,7 @@ class RoomController:
 
         self.sleep = SleepTimer(self)
         self._sleep_off_pending = False
+        self.turning_off = False
 
     # ------------------------------------------------------------------ setup
 
@@ -377,6 +378,10 @@ class RoomController:
     @callback
     def _save(self) -> None:
         self._store.async_delay_save(lambda: self.data, 10)
+
+    @callback
+    def _save_now(self) -> None:
+        self._store.async_delay_save(lambda: self.data, 0)
 
     # ----------------------------------------------------------------- events
 
@@ -680,10 +685,17 @@ class RoomController:
                 await self._auto_off(now)
             self._update_status()
             await self.sleep.async_apply_restores()
-            if self.sleep.active and self._started and self.status == STATUS_OFF:
+            if self.sleep.active and self._started and self._fully_off():
                 # everything went off by itself: the timer has nothing left to do
                 self._spawn_sleep_cancel()
         self._notify()
+
+    def _fully_off(self) -> bool:
+        """Room off, and every device has reported (not still unknown after a start)."""
+        if self.room_on:
+            return False
+        ids = [s.player for s in self.sources.values()] + self.power_entities
+        return all(self.is_available(e) for e in ids)
 
     @callback
     def _spawn_sleep_cancel(self) -> None:
@@ -1122,6 +1134,13 @@ class RoomController:
 
     async def async_turn_off(self) -> None:
         """Explicit "room off": stop sources, then power down in order."""
+        self.turning_off = True
+        try:
+            await self._turn_off()
+        finally:
+            self.turning_off = False
+
+    async def _turn_off(self) -> None:
         self._cancel_sequence()
         self._reset_overrides()
         if (hub := _hub(self.hass)) is not None:

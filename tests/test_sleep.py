@@ -89,13 +89,13 @@ async def test_manual_volume_change_stops_fade_only(hass, home, freezer):
     await _set(hass, 4, fade=4)
     await _tick(hass, freezer, 60)
     assert _volume(hass) < 0.5
-    home.music("playing", volume_level=0.42)  # someone turns it up again
+    home.music("playing", volume_level=0.6)  # someone turns it up again
     await _tick(hass, freezer, 30)
-    assert _volume(hass) == 0.42
+    assert _volume(hass) == 0.6
     assert hass.states.get(ROOM).attributes["sleep_timer_fading"] is False
     await _tick(hass, freezer, 160)
     assert hass.states.get(MUSIC).state == "idle"  # the timer still ended the room
-    assert _volume(hass) == 0.42  # the user's volume, nothing restored
+    assert _volume(hass) == 0.6  # the user's volume, nothing restored
 
 
 async def test_plus_15_during_fade_restores_volume(hass, home, freezer):
@@ -212,7 +212,7 @@ async def test_kodi_volume_restored_when_woken(hass, home, freezer):
     await _set(hass, 1, fade=1)
     await _tick(hass, freezer, 70)
     assert hass.states.get(KODI).state == "off"
-    assert entry.runtime_data.data["volume_restore"] == {KODI: 0.8}
+    assert entry.runtime_data.data["volume_restore"][KODI]["volume"] == 0.8
     await hass.services.async_call("media_player", "turn_on", {"entity_id": ROOM}, blocking=True)
     await hass.async_block_till_done()
     assert _volume(hass, KODI) == 0.8
