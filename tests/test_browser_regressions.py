@@ -88,7 +88,7 @@ async def test_cancel_swallowed(hass, home, freezer):
     for _ in range(30):
         await asyncio.sleep(0)
     task.cancel()
-    await asyncio.gather(task, return_exceptions=True)
+    res = await asyncio.gather(task, return_exceptions=True)
     assert isinstance(res[0], asyncio.CancelledError), repr(res[0])
 
 
