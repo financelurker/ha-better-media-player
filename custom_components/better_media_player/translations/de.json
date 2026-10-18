@@ -53,13 +53,15 @@
           "start_timeout": "Start-Timeout",
           "host_on_wait": "Warten nach Player-Steckdose an",
           "display_on_wait": "Warten nach Bild an",
-          "audio_on_wait": "Warten nach Lautsprecher an"
+          "audio_on_wait": "Warten nach Lautsprecher an",
+          "sleep_fade": "Sleep-Timer Ausblenden"
         },
         "data_description": {
           "display_run_down": "Wie lange das Bild nach dem Ende des Video-Players noch Strom hat.",
           "audio_run_down": "Wie lange die Lautsprecher nach dem Ende der Wiedergabe noch Strom haben.",
           "video_idle_timeout": "Video-Player an, aber es läuft nichts (z. B. im Menü). 0 = nie.",
-          "start_timeout": "Ist der Player nach dieser Zeit nicht bereit, wird der Start abgebrochen."
+          "start_timeout": "Ist der Player nach dieser Zeit nicht bereit, wird der Start abgebrochen.",
+          "sleep_fade": "Vorgabe für den Sleep-Timer: Die Lautstärke wird in den letzten Minuten heruntergeregelt. 0 = kein Ausblenden."
         }
       },
       "standby": {
@@ -197,7 +199,11 @@
           "start_timeout": "Start-Timeout",
           "host_on_wait": "Warten nach Player-Steckdose an",
           "display_on_wait": "Warten nach Bild an",
-          "audio_on_wait": "Warten nach Lautsprecher an"
+          "audio_on_wait": "Warten nach Lautsprecher an",
+          "sleep_fade": "Sleep-Timer Ausblenden"
+        },
+        "data_description": {
+          "sleep_fade": "Vorgabe für den Sleep-Timer: Die Lautstärke wird in den letzten Minuten heruntergeregelt. 0 = kein Ausblenden."
         }
       },
       "standby": {
@@ -274,6 +280,9 @@
       },
       "follow": {
         "name": "Follow-Räume"
+      },
+      "sleep_timer_end": {
+        "name": "Sleep-Timer Ende"
       }
     },
     "binary_sensor": {
@@ -307,6 +316,9 @@
       },
       "video_idle_timeout": {
         "name": "Video-Leerlauf-Timeout"
+      },
+      "sleep_timer": {
+        "name": "Sleep-Timer"
       }
     },
     "button": {
@@ -315,6 +327,9 @@
       },
       "start_follow": {
         "name": "Follow starten"
+      },
+      "sleep_plus_15": {
+        "name": "Sleep-Timer +15 min"
       }
     }
   },
@@ -344,6 +359,24 @@
           "description": "Werden genommen, wenn niemand erkannt wird; Raum-Player oder deren Musik-Player."
         }
       }
+    },
+    "set_sleep_timer": {
+      "name": "Sleep-Timer setzen",
+      "description": "Schaltet den Raum nach der angegebenen Zeit aus; die Lautstärke wird in den letzten Minuten ausgeblendet und für die nächste Wiedergabe wiederhergestellt.",
+      "fields": {
+        "minutes": {
+          "name": "Minuten",
+          "description": "Zeit bis der Raum ausgeht (ersetzt einen laufenden Timer)."
+        },
+        "fade_minutes": {
+          "name": "Ausblenden",
+          "description": "Minuten Ausblenden vor dem Ende; Vorgabe aus den Raumeinstellungen."
+        }
+      }
+    },
+    "cancel_sleep_timer": {
+      "name": "Sleep-Timer abbrechen",
+      "description": "Beendet den Sleep-Timer; ein laufendes Ausblenden wird rückgängig gemacht."
     }
   },
   "selector": {
@@ -359,6 +392,11 @@
         "add": "➕ Zur Warteschlange hinzufügen",
         "replace": "⟲ Warteschlange ersetzen"
       }
+    }
+  },
+  "exceptions": {
+    "room_off": {
+      "message": "{room} ist aus - ein Sleep-Timer braucht einen laufenden Raum."
     }
   }
 }

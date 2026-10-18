@@ -50,7 +50,7 @@ from homeassistant.core import (
     State,
     callback,
 )
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.event import (
     async_track_state_change_event,
     async_track_time_interval,
@@ -107,6 +107,7 @@ from .const import (
     TICK_SECONDS,
 )
 from .hub import get_hub, get_rooms
+from .sleep import REASON_ROOM_OFF, SleepTimer
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -274,6 +275,10 @@ class RoomController:
         self.prewarm = False
         self.follow_state = FOLLOW_INACTIVE
 
+        self.sleep = SleepTimer(self)
+        self._sleep_off_pending = False
+        self.turning_off = False
+
     # ------------------------------------------------------------------ setup
 
     @property
@@ -318,8 +323,10 @@ class RoomController:
         def _started(_hass: HomeAssistant) -> None:
             self._started = True
             self._spawn(self.async_update("start"))
+            self.sleep.async_started()
 
         self._unsubs.append(async_at_started(self.hass, _started))
+        self.sleep.async_start()
 
         get_rooms(self.hass)[self.entry.entry_id] = self
         if (hub := _hub(self.hass)) is not None:
@@ -335,6 +342,7 @@ class RoomController:
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()
+        self.sleep.async_stop()
         seq = self._seq_task
         self._cancel_sequence()
         if seq is not None:
@@ -370,6 +378,10 @@ class RoomController:
     @callback
     def _save(self) -> None:
         self._store.async_delay_save(lambda: self.data, 10)
+
+    @callback
+    def _save_now(self) -> None:
+        self._store.async_delay_save(lambda: self.data, 0)
 
     # ----------------------------------------------------------------- events
 
@@ -672,7 +684,32 @@ class RoomController:
                     await self._auto_on(now)
                 await self._auto_off(now)
             self._update_status()
+            await self.sleep.async_apply_restores()
+            if self.sleep.active and self._started and self._fully_off():
+                # everything went off by itself: the timer has nothing left to do
+                self._spawn_sleep_cancel()
         self._notify()
+
+    def _fully_off(self) -> bool:
+        """Room off, and every device has reported (not still unknown after a start)."""
+        if self.room_on:
+            return False
+        ids = [s.player for s in self.sources.values()] + self.power_entities
+        return all(self.is_available(e) for e in ids)
+
+    @callback
+    def _spawn_sleep_cancel(self) -> None:
+        if self._sleep_off_pending:
+            return
+        self._sleep_off_pending = True
+
+        async def _cancel() -> None:
+            try:
+                await self.sleep.async_cancel(REASON_ROOM_OFF)
+            finally:
+                self._sleep_off_pending = False
+
+        self._spawn(_cancel())
 
     def _update_sources(self, now: float) -> None:
         for src in self.sources.values():
@@ -1097,6 +1134,13 @@ class RoomController:
 
     async def async_turn_off(self) -> None:
         """Explicit "room off": stop sources, then power down in order."""
+        self.turning_off = True
+        try:
+            await self._turn_off()
+        finally:
+            self.turning_off = False
+
+    async def _turn_off(self) -> None:
         self._cancel_sequence()
         self._reset_overrides()
         if (hub := _hub(self.hass)) is not None:
@@ -1112,6 +1156,8 @@ class RoomController:
                 role.force_off = True
         for src in self.sources.values():
             await self._source_off(src)
+        # after the stop: a fade's volume comes back only once the player is quiet
+        await self.sleep.async_cancel(REASON_ROOM_OFF)
         for role in self.roles.values():
             if self.role_on(role):
                 role.force_off = True
@@ -1146,6 +1192,20 @@ class RoomController:
         self.data[key] = float(value)
         self._save()
         await self.async_update(key)
+
+    async def async_set_sleep_timer(self, minutes: float, fade_minutes: float | None = None) -> None:
+        if minutes > 0 and not self.room_on:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="room_off", translation_placeholders={"room": self.entry.title}
+            )
+        await self.sleep.async_set(minutes, fade_minutes)
+
+    async def async_extend_sleep_timer(self, minutes: float = 15) -> None:
+        if not self.room_on:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="room_off", translation_placeholders={"room": self.entry.title}
+            )
+        await self.sleep.async_extend(minutes)
 
     async def async_media_call(self, service: str, data: dict | None = None) -> None:
         """Forward a media command to the active source."""

@@ -23,3 +23,31 @@ start_follow:
         entity:
           domain: media_player
           multiple: true
+
+set_sleep_timer:
+  target:
+    entity:
+      integration: better_media_player
+      domain: media_player
+  fields:
+    minutes:
+      required: true
+      example: 30
+      selector:
+        number:
+          min: 1
+          max: 720
+          unit_of_measurement: min
+    fade_minutes:
+      example: 5
+      selector:
+        number:
+          min: 0
+          max: 60
+          unit_of_measurement: min
+
+cancel_sleep_timer:
+  target:
+    entity:
+      integration: better_media_player
+      domain: media_player
