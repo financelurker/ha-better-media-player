@@ -42,7 +42,7 @@ Taken from the Home Assistant demo integration: two demo players stand in for Ko
 
 <img src="docs/images/dashboard-mobile.png" alt="Dashboard on a phone" width="320">
 
-> **Status:** early development (v0.2).
+> **Status:** early development.
 
 ## Installation
 
@@ -216,6 +216,10 @@ With power sensors, a plug is cut only after its device has drawn less than the 
 | `excluded_quiet` / `excluded_video` / `excluded_off` | left out: quiet mode / video / turned off this session |
 | `excluded_busy` | plays something else (directly or in another group) |
 | `presence_unknown` | occupancy sensors unavailable; nothing changes |
+
+## Releases
+
+The version is set only by the release tag (e.g. `v1.2.3`, or a pre-release such as `v1.3.0b1`). Publishing a release on GitHub runs a workflow that writes the tag's version into `manifest.json`, zips the integration and attaches `better_media_player.zip` to the release; HACS installs that ZIP. In the repository itself `manifest.json` carries the placeholder `0.0.0`, which is what a manual copy from the repository shows.
 
 ## Roadmap
 

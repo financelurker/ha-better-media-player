@@ -6,7 +6,6 @@ from homeassistant.const import Platform
 
 DOMAIN = "better_media_player"
 NAME = "Better Media Player"
-VERSION = "0.2.0"
 
 PLATFORMS: list[Platform] = [
     Platform.MEDIA_PLAYER,

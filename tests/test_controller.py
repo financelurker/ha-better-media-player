@@ -419,3 +419,17 @@ async def test_relative_cover_is_passed_through(hass, home):
     home.kodi("playing", entity_picture=kodi_pic)
     await hass.async_block_till_done()
     assert hass.states.get(ROOM).attributes["entity_picture"] == kodi_pic
+
+
+async def test_device_shows_manifest_version(hass, home):
+    """The version shown on the device page comes from manifest.json (set from the release tag)."""
+    import json
+    from pathlib import Path
+
+    from homeassistant.helpers import device_registry as dr
+
+    manifest = Path(__file__).parents[1] / "custom_components" / "better_media_player" / "manifest.json"
+    version = json.loads(manifest.read_text())["version"]
+    entry = await setup_room(hass)
+    device = next(iter(dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)))
+    assert device.sw_version == version

@@ -7,8 +7,13 @@ from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
 
-from .const import CONF_AREA, DOMAIN, NAME, SOURCE_AUDIO, SOURCE_VIDEO, VERSION
+from .const import CONF_AREA, DOMAIN, NAME, SOURCE_AUDIO, SOURCE_VIDEO
 from .controller import RoomController
+
+
+def integration_version(hass) -> str | None:
+    """Version from the manifest (set from the release tag when a release is built)."""
+    return hass.data.get(DOMAIN, {}).get("version")
 
 
 def _model(ctrl: RoomController) -> str:
@@ -41,7 +46,7 @@ class BetterMediaPlayerEntity(Entity):
             name=entry.title,
             manufacturer=NAME,
             model=_model(controller),
-            sw_version=VERSION,
+            sw_version=integration_version(controller.hass),
             suggested_area=area_name,
         )
 
@@ -64,7 +69,7 @@ class HubEntity(Entity):
             name=entry.title,
             manufacturer=NAME,
             model="Central settings",
-            sw_version=VERSION,
+            sw_version=integration_version(hub.hass),
         )
 
     async def async_added_to_hass(self) -> None:
