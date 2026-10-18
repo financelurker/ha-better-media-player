@@ -8,12 +8,15 @@ from urllib.parse import urlparse
 from homeassistant.components.media_player import (
     ATTR_MEDIA_ENQUEUE,
     ATTR_MEDIA_EXTRA,
+    BrowseMedia,
     MediaPlayerDeviceClass,
     MediaPlayerEntity,
     MediaPlayerEntityFeature,
     MediaPlayerState,
     MediaType,
     RepeatMode,
+    SearchMedia,
+    SearchMediaQuery,
 )
 from homeassistant.const import (
     ATTR_ENTITY_PICTURE,
@@ -25,6 +28,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from . import BetterMediaPlayerConfigEntry
+from .browser import RoomBrowser, is_own_id
 from .const import SOURCE_AUDIO, SOURCE_VIDEO
 from .entity import BetterMediaPlayerEntity
 
@@ -38,13 +42,20 @@ PASSTHROUGH = (
     | MediaPlayerEntityFeature.VOLUME_MUTE
     | MediaPlayerEntityFeature.PREVIOUS_TRACK
     | MediaPlayerEntityFeature.NEXT_TRACK
-    | MediaPlayerEntityFeature.PLAY_MEDIA
     | MediaPlayerEntityFeature.VOLUME_STEP
     | MediaPlayerEntityFeature.STOP
     | MediaPlayerEntityFeature.PLAY
     | MediaPlayerEntityFeature.SHUFFLE_SET
     | MediaPlayerEntityFeature.REPEAT_SET
+)
+
+# Offered whenever any of the room's players supports them (browser, search,
+# playing from them), not only while that player is active
+ANY_SOURCE = (
+    MediaPlayerEntityFeature.PLAY_MEDIA
     | MediaPlayerEntityFeature.MEDIA_ENQUEUE
+    | MediaPlayerEntityFeature.BROWSE_MEDIA
+    | MediaPlayerEntityFeature.SEARCH_MEDIA
 )
 
 STATE_MAP = {
@@ -73,6 +84,7 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
 
     def __init__(self, entry, controller) -> None:
         super().__init__(entry, controller, None)
+        self._browser = RoomBrowser(controller.hass, controller, self._source_name)
 
     # ----------------------------------------------------------------- helpers
 
@@ -122,6 +134,12 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
         if child is not None:
             child_features = int(child.attributes.get(ATTR_SUPPORTED_FEATURES, 0) or 0)
             features |= MediaPlayerEntityFeature(child_features) & PASSTHROUGH
+        for src in self.ctrl.sources.values():
+            state = self.hass.states.get(src.player)
+            if state is not None:
+                features |= MediaPlayerEntityFeature(
+                    int(state.attributes.get(ATTR_SUPPORTED_FEATURES, 0) or 0)
+                ) & ANY_SOURCE
         return features
 
     @property
@@ -284,9 +302,33 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
         await self.ctrl.async_media_call("repeat_set", {"repeat": repeat})
 
     async def async_play_media(self, media_type: MediaType | str, media_id: str, **kwargs: Any) -> None:
-        data: dict[str, Any] = {"media_content_type": media_type, "media_content_id": media_id}
-        if kwargs.get(ATTR_MEDIA_ENQUEUE) is not None:
-            data["enqueue"] = kwargs[ATTR_MEDIA_ENQUEUE]
+        enqueue = kwargs.get(ATTR_MEDIA_ENQUEUE)
+        if is_own_id(media_id):
+            # from the room browser or search: the id names the player
+            key, inner_type, inner_id, mode = self._browser.resolve_play(media_id)
+            data: dict[str, Any] = {
+                "media_content_type": inner_type or media_type,
+                "media_content_id": inner_id,
+            }
+            if mode is not None:
+                data["enqueue"] = mode
+            elif enqueue is not None:
+                data["enqueue"] = enqueue
+            if kwargs.get(ATTR_MEDIA_EXTRA):
+                data["extra"] = kwargs[ATTR_MEDIA_EXTRA]
+            await self.ctrl.async_play_on(key, data)
+            return
+        data = {"media_content_type": media_type, "media_content_id": media_id}
+        if enqueue is not None:
+            data["enqueue"] = enqueue
         if kwargs.get(ATTR_MEDIA_EXTRA):
             data["extra"] = kwargs[ATTR_MEDIA_EXTRA]
         await self.ctrl.async_media_call("play_media", data)
+
+    async def async_browse_media(
+        self, media_content_type: MediaType | str | None = None, media_content_id: str | None = None
+    ) -> BrowseMedia:
+        return await self._browser.async_browse(media_content_type, media_content_id)
+
+    async def async_search_media(self, query: SearchMediaQuery) -> SearchMedia:
+        return await self._browser.async_search(query)

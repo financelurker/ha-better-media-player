@@ -45,11 +45,55 @@ GROUPS = (GROUP, FOLLOW)
 
 KODI_FEATURES = int(
     F.TURN_ON | F.TURN_OFF | F.PLAY | F.PAUSE | F.STOP | F.VOLUME_SET | F.VOLUME_MUTE | F.SEEK
+    | F.PLAY_MEDIA | F.BROWSE_MEDIA | F.MEDIA_ENQUEUE
 )
 MA_FEATURES = int(
     F.PAUSE | F.SEEK | F.VOLUME_SET | F.VOLUME_MUTE | F.PREVIOUS_TRACK | F.NEXT_TRACK
     | F.PLAY_MEDIA | F.VOLUME_STEP | F.STOP | F.PLAY | F.GROUPING
+    | F.BROWSE_MEDIA | F.SEARCH_MEDIA | F.MEDIA_ENQUEUE
 )
+
+
+def _item(title, media_type, media_id, can_play=True, can_expand=False, children=None, media_class="video"):
+    return {
+        "title": title, "media_class": media_class, "media_content_type": media_type,
+        "media_content_id": media_id, "can_play": can_play, "can_expand": can_expand,
+        "can_search": False, "thumbnail": f"/thumb/{media_id}", "children_media_class": None,
+        "not_shown": 0, "children": children or [],
+    }
+
+
+# what the fake players show in their media browsers
+BROWSE_TREES = {
+    ("media_player.kodi", None, None): _item("Kodi", "library", "library", False, True, [
+        _item("Queue", "better_kodi_queue", "better_kodi://queue", False, True, media_class="playlist"),
+        _item("Movies", "library", "movies", False, True, media_class="directory"),
+    ], media_class="directory"),
+    ("media_player.kodi", "library", "movies"): _item("Movies", "library", "movies", False, True, [
+        _item("Heat", "movie", "123", media_class="movie"),
+    ], media_class="directory"),
+    ("media_player.kodi", "better_kodi_queue", "better_kodi://queue"): _item(
+        "Queue", "better_kodi_queue", "better_kodi://queue", False, True, [
+            _item("▶ Heat", "better_kodi_queue", "better_kodi://queue/0", media_class="movie"),
+        ], media_class="playlist"),
+    ("media_player.office_player", None, None): _item("Music Assistant", "music", "", False, True, [
+        _item("Playlists", "playlists", "playlists", False, True, media_class="directory"),
+    ], media_class="directory"),
+    ("media_player.office_player", "playlists", "playlists"): _item("Playlists", "playlists", "playlists", False, True, [
+        _item("Road trip", "playlist", "library://playlist/1", True, True, media_class="playlist"),
+        _item("All Summer Long", "track", "library://track/9", media_class="track"),
+    ], media_class="directory"),
+}
+SEARCH_RESULTS = {
+    "media_player.office_player": [_item("All Summer Long", "track", "library://track/9", media_class="track")],
+}
+MA_QUEUE = {
+    "queue_id": "office", "active": True, "items": 12,
+    "current_item": {"queue_item_id": "q1", "name": "Kid Rock - All Summer Long",
+                     "media_item": {"name": "All Summer Long", "image": "http://ma/img/1.jpg", "uri": "library://track/9"}},
+    "next_item": {"queue_item_id": "q2", "name": "Kid Rock - Bawitdaba",
+                  "media_item": {"name": "Bawitdaba", "image": None, "uri": "library://track/10"}},
+}
 
 
 @pytest.fixture(autouse=True)
@@ -61,6 +105,7 @@ def auto_enable_custom_integrations(enable_custom_integrations):
 class FakeHome:
     hass: HomeAssistant
     calls: list[tuple[str, str, str]] = field(default_factory=list)
+    played: list[tuple[str, str, dict]] = field(default_factory=list)
     kodi_boots: bool = False  # turn_on makes Kodi idle immediately
     kodi_suspends: bool = True  # turn_off makes Kodi off immediately
 
@@ -101,11 +146,25 @@ class FakeHome:
         return st is not None and st.state == "on"
 
     # ------------------------------------------------------------ simulation
+    def respond(self, service: str, entity_id: str, data: dict) -> dict:
+        from homeassistant.exceptions import HomeAssistantError
+
+        self.calls.append(("media_player", service, entity_id))
+        if service == "browse_media":
+            key = (entity_id, data.get("media_content_type"), data.get("media_content_id"))
+            if key not in BROWSE_TREES:
+                raise HomeAssistantError(f"unknown {key}")
+            return {entity_id: BROWSE_TREES[key]}
+        if service == "search_media":
+            return {entity_id: {"result": SEARCH_RESULTS.get(entity_id, [])}}
+        return {entity_id: dict(MA_QUEUE)}
+
     def handle(self, domain: str, service: str, entity_id: str, data: dict, context) -> bool:
         st = self.hass.states.get(entity_id)
         if st is None:
             return False
         self.calls.append((domain, service, entity_id))
+        self.played.append((service, entity_id, dict(data)))
         if entity_id.startswith(("switch.", "light.", "input_boolean.")):
             if service in ("turn_on", "turn_off"):
                 self.hass.states.async_set(
@@ -167,6 +226,8 @@ def home(hass: HomeAssistant):
             "tv_plug", "speaker_plug", "bass_plug", "kodi", "office_player", "kodi_box_plug", "wol",
             "all_players", "all_players_follow", "kitchen_player", "kitchen_speakers",
         }:
+            if service in ("browse_media", "search_media", "get_queue"):
+                return fake.respond(service, ids, service_data or {})
             if fake.handle(domain, service, ids, service_data, context):
                 return None
         return await original(self, domain, service, service_data, blocking, context, *a, **kw)

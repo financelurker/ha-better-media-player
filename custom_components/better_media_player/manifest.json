@@ -1,8 +1,14 @@
 {
   "domain": "better_media_player",
   "name": "Better Media Player",
-  "after_dependencies": ["music_assistant", "kodi"],
-  "codeowners": ["@financelurker"],
+  "after_dependencies": [
+    "kodi",
+    "media_source",
+    "music_assistant"
+  ],
+  "codeowners": [
+    "@financelurker"
+  ],
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/financelurker/ha-better-media-player",

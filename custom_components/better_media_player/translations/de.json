@@ -345,5 +345,20 @@
         }
       }
     }
+  },
+  "selector": {
+    "browse": {
+      "options": {
+        "queue_of": "Warteschlange: {name}",
+        "player_off": "{name} ist aus: die Bibliothek erscheint, sobald es läuft",
+        "now_playing": "Läuft gerade",
+        "up_next": "Als Nächstes",
+        "queue_empty": "Nichts in der Warteschlange",
+        "play": "▶ Jetzt abspielen",
+        "next": "⏭ Als Nächstes abspielen",
+        "add": "➕ Zur Warteschlange hinzufügen",
+        "replace": "⟲ Warteschlange ersetzen"
+      }
+    }
   }
 }
