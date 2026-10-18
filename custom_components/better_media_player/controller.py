@@ -1032,7 +1032,7 @@ class RoomController:
             and all(self.role_fully_on(r) for r in self.roles.values() if key in r.sources)
         )
 
-    async def async_play_on(self, key: str, data: dict) -> None:
+    async def async_play_on(self, key: str, data: dict, room_mode: str | None = None) -> None:
         """Play something on one of the room's players (from the room browser or search).
 
         Playing now (play / replace / no enqueue) switches the room to that player:
@@ -1043,22 +1043,34 @@ class RoomController:
         src = self.sources.get(key)
         if src is None:
             raise HomeAssistantError(f"Unknown source: {key}")
-        enqueue = data.get("enqueue")
+        enqueue = room_mode or data.get("enqueue")
         if enqueue is None or str(enqueue) in ("play", "replace"):
             await self._stop_others(key)
             if not self.source_powered(key):
                 await self.async_turn_on(key)
                 task = self._seq_task
                 if task is not None:
+                    # shielded: if our caller (e.g. a voice command) gives up, the
+                    # room's power sequence still finishes or rolls back properly
                     try:
-                        await task
-                    except asyncio.CancelledError as err:
-                        raise HomeAssistantError(f"{self.entry.title}: start was interrupted") from err
+                        await asyncio.shield(task)
+                    except asyncio.CancelledError:
+                        if not task.cancelled():
+                            raise  # the caller was cancelled, not the sequence
+                        raise HomeAssistantError(f"{self.entry.title}: start was interrupted") from None
                 if self.error:
                     raise HomeAssistantError(f"{self.entry.title}: {self.error}")
             elif self.data.get("last_source") != key:
                 self.data["last_source"] = key
                 self._save()
+            if (
+                key == SOURCE_AUDIO
+                and self.groups_of(src.player)
+                and self.player_supports(src, MediaPlayerEntityFeature.GROUPING)
+            ):
+                # play here, not on the whole group (independent of Music
+                # Assistant's 'play media overrides group' setting)
+                await self._player(src, "unjoin")
         ctx = Context()
         self._own_contexts.append(ctx.id)
         await self.hass.services.async_call(

@@ -33,6 +33,7 @@ from homeassistant.components.media_player import (
     BrowseMedia,
     MediaClass,
     MediaPlayerEntityFeature,
+    SearchError,
     SearchMedia,
     SearchMediaQuery,
 )
@@ -61,6 +62,9 @@ KIND_INFO = "info"  # not playable information entry
 
 CHOICES = ("play", "next", "add", "replace")
 BETTER_KODI_QUEUE_TYPE = "better_kodi_queue"
+# Better Kodi's own play now / next / add / replace entries; read only, so that
+# 'next' and 'add' do not switch the room
+BETTER_KODI_ENQUEUE_PREFIX = "better_kodi://enqueue/"
 MA_PLATFORM = "music_assistant"
 MAX_CHOICE_ITEMS = 1000
 
@@ -235,6 +239,7 @@ class RoomBrowser:
             title=self.ctrl.entry.title,
             can_play=False,
             can_expand=True,
+            can_search=self.any_supports(MediaPlayerEntityFeature.SEARCH_MEDIA),
             children=children,
             children_media_class=MediaClass.DIRECTORY,
         )
@@ -246,7 +251,17 @@ class RoomBrowser:
             if key != SOURCE_VIDEO:
                 raise
             # video player off: at least the media sources (e.g. Jellyfin)
-            result = await self._media_source(key, None, title=self._source_name(key))
+            try:
+                result = await self._media_source(key, None, title=self._source_name(key))
+            except BrowseError:
+                result = BrowseMedia(
+                    media_class=MediaClass.DIRECTORY,
+                    media_content_id=make_id(KIND_SOURCE, key),
+                    media_content_type="directory",
+                    title=self._source_name(key),
+                    can_play=False,
+                    can_expand=True,
+                )
             texts = await self._texts()
             hint = BrowseMedia(
                 media_class=MediaClass.APP,
@@ -267,8 +282,12 @@ class RoomBrowser:
     async def _child_browse(self, key: str, media_type: str | None, media_id: str | None) -> BrowseMedia:
         src = self.ctrl.sources[key]
         state = self.hass.states.get(src.player)
-        if state is None or state.state in ("off", "unavailable", "unknown"):
-            raise BrowseError(f"{src.player} is {state.state if state else 'missing'}")
+        if state is None:
+            raise BrowseError(f"{src.player} is missing")
+        if key == SOURCE_VIDEO and state.state in ("off", "unavailable", "unknown"):
+            # Kodi needs a connection to browse; other players (Music Assistant) can
+            # browse their library while the player itself is off
+            raise BrowseError(f"{src.player} is {state.state}")
         data: dict[str, Any] = {ATTR_ENTITY_ID: src.player}
         if media_type is not None:
             data["media_content_type"] = media_type
@@ -303,6 +322,7 @@ class RoomBrowser:
             raise BrowseError(str(err)) from err
         wrapped = self._wrap_media_source(key, result)
         wrapped.children = [self._wrap_media_source(key, c) for c in result.children or []] or None
+        wrapped.not_shown = result.not_shown
         if title:
             wrapped.title = title
             wrapped.media_content_id = make_id(KIND_SOURCE, key)
@@ -453,9 +473,16 @@ class RoomBrowser:
     async def async_search(self, query: SearchMediaQuery) -> SearchMedia:
         keys = [k for k in self.ctrl.sources if self.supports(k, MediaPlayerEntityFeature.SEARCH_MEDIA)]
         inner_id = query.media_content_id
-        if is_own_id(inner_id):
-            _kind, key, _t, inner_id = parse_id(inner_id)
+        if not inner_id or inner_id == ROOT_ID:
+            inner_id = None  # the whole room: all players that can search
+        elif is_own_id(inner_id):
+            try:
+                kind, key, _t, inner_id = parse_id(inner_id)
+            except BrowseError as err:
+                raise SearchError(str(err)) from err
             keys = [k for k in keys if k == key]
+            if kind == KIND_SOURCE:
+                inner_id = None
         results: list[BrowseMedia] = []
         for key in keys:
             src = self.ctrl.sources[key]
@@ -492,3 +519,12 @@ class RoomBrowser:
             if mode in CHOICES:
                 return key, inner_type, inner_id, mode
         raise HomeAssistantError(f"{media_id} cannot be played")
+
+    @staticmethod
+    def player_mode(inner_id: str | None) -> str | None:
+        """Enqueue mode a player encodes in its own ids (Better Kodi's choices)."""
+        if inner_id and inner_id.startswith(BETTER_KODI_ENQUEUE_PREFIX):
+            mode = inner_id.removeprefix(BETTER_KODI_ENQUEUE_PREFIX).split("/", 1)[0]
+            if mode in CHOICES:
+                return mode
+        return None

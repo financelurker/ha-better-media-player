@@ -268,8 +268,8 @@ async def test_plain_ids_still_go_to_the_active_player(hass, home):
     assert _plays(home, MUSIC)[0]["media_content_id"] == "library://album/5"
 
 
-async def test_grouped_music_player_is_left_to_music_assistant(hass, home):
-    """Music Assistant releases a grouped player itself when it gets play_media."""
+async def test_play_now_on_grouped_music_player_leaves_group_first(hass, home):
+    """Plays in this room only, never replaces the music of the whole group."""
     from custom_components.better_media_player.browser import make_id
 
     await setup_room(hass)
@@ -277,8 +277,25 @@ async def test_grouped_music_player_is_left_to_music_assistant(hass, home):
     await hass.async_block_till_done()
     item = {"media_content_type": "track", "media_content_id": make_id("item", "audio", "track", "library://track/9")}
     await _play(hass, item)
-    assert _plays(home, MUSIC), "played on the room player"
-    assert ("media_player", "unjoin", MUSIC) not in home.calls
+    order = [c[1] for c in home.calls if c[2] == MUSIC and c[1] in ("unjoin", "play_media")]
+    assert order == ["unjoin", "play_media"]
+
+
+async def test_better_kodi_next_choice_does_not_switch_the_room(hass, home):
+    """Better Kodi's own 'play next' entry: passed through, room stays as it is."""
+    from custom_components.better_media_player.browser import make_id
+
+    await setup_room(hass)
+    home.music("playing")
+    await hass.async_block_till_done()
+    home.calls.clear()
+    inner = "better_kodi://enqueue/next/abc"
+    item = {"media_content_type": "movie", "media_content_id": make_id("item", "video", "movie", inner)}
+    await _play(hass, item)
+    assert ("media_player", "media_pause", MUSIC) not in home.calls
+    assert not home.on(TV)
+    assert _plays(home, KODI) == [{"media_content_type": "movie", "media_content_id": inner}], \
+        "id unchanged, no extra enqueue for Better Kodi"
 
 
 # ------------------------------------------------------------------- search

@@ -162,7 +162,8 @@ jeweilige Player kann.
 
 - **Jetzt abspielen** aus dem Browser schaltet den Raum auf diesen Player um: Der andere Player wird
   beendet, die Einschaltsequenz läuft zuerst. Ein Film bei schlafendem Kodi schaltet also den TV ein,
-  weckt Kodi und spielt dann ab.
+  weckt Kodi und spielt dann ab. Ein Musik-Player in einer Gruppe verlässt sie vorher, damit sich nur
+  dieser Raum ändert.
 - **Musiktitel** öffnen einen kleinen Ordner mit *Jetzt abspielen*, *Als Nächstes abspielen*,
   *Zur Warteschlange hinzufügen* und *Warteschlange ersetzen* (wenn der Player das unterstützt).
   *Als Nächstes* und *Hinzufügen* ändern sonst nichts im Raum.
