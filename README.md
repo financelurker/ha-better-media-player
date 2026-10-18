@@ -42,7 +42,7 @@ Taken from the Home Assistant demo integration: two demo players stand in for Ko
 
 <img src="docs/images/dashboard-mobile.png" alt="Dashboard on a phone" width="320">
 
-> **Status:** early development (v0.3).
+> **Status:** early development (v0.2).
 
 ## Installation
 
