@@ -31,7 +31,7 @@ Subwoofer zu **einer** Entität zusammen.
 | Media Player | Video-Player (Kodi) und/oder Musik-Player (der Player des Raums, **keine** Gruppe). |
 | Stromgeräte | Bild (TV), Lautsprecher (auch mehrere, z. B. Boxen + AVR), Subwoofer. |
 | Player: Sonderfälle | Nur nötig, wenn ein Player sich nicht selbst schalten lässt (Ein-/Aus-Aktion) oder seine Hardware an einer Steckdose hängt. |
-| Zeiten | Nachlauf, Leerlauf-Timeout, Start-Timeout, Wartezeiten nach dem Einschalten. |
+| Zeiten | Nachlauf, Leerlauf-Timeout, Start-Timeout, Wartezeiten nach dem Einschalten, Vorgabe fürs Ausblenden des Sleep-Timers. |
 | Standby abwarten | Optional, nur mit Leistungssensoren. |
 | Follow-Me | Anwesenheitssensoren, Nachlauf der Anwesenheit, Lautstärke-Offset, Vorwärmen. Ohne Anwesenheitssensoren nimmt der Raum nicht teil. |
 
@@ -171,6 +171,38 @@ jeweilige Player kann.
   im Wohnzimmer" gehen an die Raum-Entität und schalten den Raum ein.
 - Wählst du in einer Automation über die Raum-Entität ein Medium aus, wird eine ID gespeichert, die nur
   die Raum-Entität versteht.
+
+## Sleep-Timer
+
+Der Raum schaltet sich nach einer eingestellten Zeit selbst aus, egal was läuft (Video oder Musik).
+In den letzten Minuten wird die Lautstärke des aktiven Players ausgeblendet; danach läuft das normale
+*Raum aus*, und die Lautstärke von vor dem Ausblenden wird wieder gesetzt, damit die nächste Wiedergabe
+nicht bei null beginnt. Ein Player, der am Ende schlafen geht (z. B. Kodi), bekommt seine Lautstärke,
+sobald er wieder läuft.
+
+- Setzen über die Number *Sleep-Timer* (Minuten, 0 = aus; zeigt die Restminuten), den Button
+  *Sleep-Timer +15 min* oder die Aktionen unten. Nur solange der Raum an ist.
+- Raum aus, oder der Raum geht von selbst aus: Der Timer endet. Abbrechen während des Ausblendens setzt
+  die Lautstärke zurück.
+- Lautstärke während des Ausblendens geändert: Nur das Ausblenden endet, deine Lautstärke bleibt, der
+  Timer schaltet den Raum trotzdem aus.
+- *+15 min* während des Ausblendens setzt die Lautstärke zurück; vor dem neuen Ende wird wieder
+  ausgeblendet.
+- Der Timer übersteht einen Neustart von Home Assistant. Ist er abgelaufen, während HA aus war, wird der
+  Raum beim Start nur ausgeschaltet, wenn noch etwas spielt.
+- Am Ende kommt das Event `better_media_player_sleep_timer_finished` (`entity_id`, `room`, `reason`:
+  `expired`, `cancelled` oder `room_off`).
+
+```yaml
+action: better_media_player.set_sleep_timer
+target:
+  entity_id: media_player.schlafzimmer
+data:
+  minutes: 45
+  fade_minutes: 10   # optional, Vorgabe aus den Zeiten des Raums (5 min)
+```
+
+`better_media_player.cancel_sleep_timer` beendet ihn.
 
 ## Status
 

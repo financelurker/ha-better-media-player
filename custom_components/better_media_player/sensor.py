@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
@@ -21,7 +23,7 @@ async def async_setup_entry(
         async_add_entities([FollowSensor(entry, entry.runtime_data, "follow")])
         return
     ctrl = entry.runtime_data
-    entities: list[SensorEntity] = [StatusSensor(entry, ctrl, "status")]
+    entities: list[SensorEntity] = [StatusSensor(entry, ctrl, "status"), SleepEndSensor(entry, ctrl, "sleep_timer_end")]
     if ctrl.follow_capable:
         entities.append(FollowStateSensor(entry, ctrl, "follow_state"))
     async_add_entities(entities)
@@ -46,6 +48,21 @@ class StatusSensor(BetterMediaPlayerEntity, SensorEntity):
             "error": ctrl.error,
             "suppressed_sources": [s.key for s in ctrl.sources.values() if s.suppressed],
         }
+
+
+class SleepEndSensor(BetterMediaPlayerEntity, SensorEntity):
+    """When the sleep timer turns the room off (unknown: no timer)."""
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_icon = "mdi:sleep"
+
+    @property
+    def native_value(self) -> datetime | None:
+        return self.ctrl.sleep.ends_at
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"fading": self.ctrl.sleep.fading}
 
 
 class FollowStateSensor(BetterMediaPlayerEntity, SensorEntity):

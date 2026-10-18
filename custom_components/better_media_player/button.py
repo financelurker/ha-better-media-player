@@ -18,7 +18,8 @@ async def async_setup_entry(
     if is_hub(entry):
         async_add_entities([StartFollowButton(entry, entry.runtime_data, "start_follow")])
         return
-    async_add_entities([AllOffButton(entry, entry.runtime_data, "all_off")])
+    ctrl = entry.runtime_data
+    async_add_entities([AllOffButton(entry, ctrl, "all_off"), SleepPlusButton(entry, ctrl, "sleep_plus_15")])
 
 
 class AllOffButton(BetterMediaPlayerEntity, ButtonEntity):
@@ -35,3 +36,12 @@ class StartFollowButton(HubEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         await self.hub.async_start_follow()
+
+
+class SleepPlusButton(BetterMediaPlayerEntity, ButtonEntity):
+    """Sleep timer +15 minutes (starts one if none runs)."""
+
+    _attr_icon = "mdi:timer-plus-outline"
+
+    async def async_press(self) -> None:
+        await self.ctrl.async_extend_sleep_timer(15)

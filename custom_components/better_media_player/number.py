@@ -17,6 +17,7 @@ from .const import (
     SOURCE_VIDEO,
 )
 from .entity import BetterMediaPlayerEntity
+from .sleep import MAX_MINUTES
 
 
 async def async_setup_entry(
@@ -34,6 +35,7 @@ async def async_setup_entry(
         entities.append(MinutesNumber(entry, ctrl, "host_run_down", 0, 120))
     if SOURCE_VIDEO in ctrl.sources:
         entities.append(MinutesNumber(entry, ctrl, "video_idle_timeout", 0, 480))
+    entities.append(SleepTimerNumber(entry, ctrl, "sleep_timer"))
     async_add_entities(entities)
 
 
@@ -55,3 +57,21 @@ class MinutesNumber(BetterMediaPlayerEntity, NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         await self.ctrl.async_set_number(self._key, value)
+
+
+class SleepTimerNumber(BetterMediaPlayerEntity, NumberEntity):
+    """Minutes until the room turns itself off; 0 = no timer."""
+
+    _attr_icon = "mdi:sleep"
+    _attr_mode = NumberMode.BOX
+    _attr_native_min_value = 0
+    _attr_native_max_value = MAX_MINUTES
+    _attr_native_step = 1
+    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
+
+    @property
+    def native_value(self) -> float:
+        return float(self.ctrl.sleep.remaining_minutes)
+
+    async def async_set_native_value(self, value: float) -> None:
+        await self.ctrl.async_set_sleep_timer(value)

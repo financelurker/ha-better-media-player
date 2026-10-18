@@ -112,6 +112,7 @@ CONF_START_TIMEOUT = "start_timeout"  # s
 CONF_DISPLAY_ON_WAIT = "display_on_wait"  # s
 CONF_HOST_ON_WAIT = "host_on_wait"  # s
 CONF_AUDIO_ON_WAIT = "audio_on_wait"  # s
+CONF_SLEEP_FADE = "sleep_fade"  # min, default fade of the sleep timer
 
 # --- Standby (optional, needs power sensors) ----------------------------------
 CONF_DISPLAY_POWER = "display_power"
@@ -142,7 +143,15 @@ DEFAULTS: dict = {
     CONF_PRESENCE_RUN_DOWN: 2,
     CONF_VOLUME_OFFSET: 0,
     CONF_PREWARM: True,
+    CONF_SLEEP_FADE: 5,
 }
+
+# --- Sleep timer ---------------------------------------------------------------
+SERVICE_SET_SLEEP_TIMER = "set_sleep_timer"
+SERVICE_CANCEL_SLEEP_TIMER = "cancel_sleep_timer"
+ATTR_MINUTES = "minutes"
+ATTR_FADE_MINUTES = "fade_minutes"
+EVENT_SLEEP_TIMER_FINISHED = f"{DOMAIN}_sleep_timer_finished"
 
 # --- Status ------------------------------------------------------------------
 STATUS_OFF = "off"

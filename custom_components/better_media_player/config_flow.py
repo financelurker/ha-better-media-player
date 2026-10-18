@@ -43,6 +43,7 @@ from .const import (
     CONF_OCCUPANCY,
     CONF_PRESENCE_RUN_DOWN,
     CONF_PREWARM,
+    CONF_SLEEP_FADE,
     CONF_SPEAKERS,
     CONF_START_TIMEOUT,
     CONF_VIDEO_HOST,
@@ -131,6 +132,7 @@ def schema_timing() -> vol.Schema:
             vol.Optional(CONF_HOST_ON_WAIT, default=d[CONF_HOST_ON_WAIT]): _num(0, 120, 1, "s"),
             vol.Optional(CONF_DISPLAY_ON_WAIT, default=d[CONF_DISPLAY_ON_WAIT]): _num(0, 120, 1, "s"),
             vol.Optional(CONF_AUDIO_ON_WAIT, default=d[CONF_AUDIO_ON_WAIT]): _num(0, 120, 1, "s"),
+            vol.Optional(CONF_SLEEP_FADE, default=d[CONF_SLEEP_FADE]): _num(0, 60, 1, "min"),
         }
     )
 

@@ -74,7 +74,7 @@ Settings → Devices & services → Add integration → **Better Media Player** 
 | **Media players** | Video player (e.g. Kodi) and/or music player (the room's own player, not a group). |
 | **Power devices** | Display (TV, projector), speakers (one or more: active speakers, amplifier, AVR), subwoofer. |
 | **Players: special cases** | Only if a player cannot turn itself on/off (on/off action) or its hardware hangs on a plug. |
-| **Times** | Run-down times, video idle timeout, start timeout, waits after switching on. |
+| **Times** | Run-down times, video idle timeout, start timeout, waits after switching on, default sleep timer fade-out. |
 | **Wait for standby** | Optional, needs power sensors. |
 | **Follow me** | Occupancy sensors, presence run-down, volume offset, prewarm. Rooms without occupancy sensors do not take part. |
 
@@ -174,6 +174,28 @@ The room player's media browser bundles the browsers of its players. Only what a
 - Media picked through the room player in an automation's media selector stores an id that only the room player understands.
 - Browser labels follow the server language set in Home Assistant.
 
+### Sleep timer
+
+The room turns itself off after a set time, whatever plays (video or music). Over the last minutes the volume of the active player fades out; then the normal *room off* runs and the volume from before the fade is set again, so the next playback does not start at zero. A player that is suspended at the end (e.g. Kodi) gets its volume when it is up again.
+
+- Set it with the number `Sleep timer` (minutes, 0 = off; shows the minutes left), the button `Sleep timer +15 min` or the actions below. Only while the room is on.
+- Turning the room off, or the room going off by itself, ends the timer. Cancelling during the fade sets the volume back.
+- Changing the volume during the fade stops the fade only: your volume stays, and the timer still ends the room.
+- *+15 min* during the fade sets the volume back; the fade starts again before the new end.
+- The timer survives a restart of Home Assistant. If it ran out while Home Assistant was down, the room is turned off at the start only if something still plays.
+- The event `better_media_player_sleep_timer_finished` (`entity_id`, `room`, `reason`: `expired`, `cancelled` or `room_off`) is fired when the timer ends.
+
+```yaml
+action: better_media_player.set_sleep_timer
+target:
+  entity_id: media_player.bedroom
+data:
+  minutes: 45
+  fade_minutes: 10   # optional, default from the room's times (5 min)
+```
+
+`better_media_player.cancel_sleep_timer` stops it.
+
 ### Wait for standby
 
 With power sensors, a plug is cut only after its device has drawn less than the threshold for 30 s, at most after the maximum wait. Useful for OLED TVs that run panel care in standby. A TV that never goes to standby on its own (no CEC) gains nothing from this; then only the run-down applies.
@@ -190,6 +212,9 @@ With power sensors, a plug is cut only after its device has drawn less than the 
 | `switch.<room>_automatic_power` | off: no automatic switching; commands to the room player still work |
 | `number.<room>_display_run_down`, `_speaker_run_down`, `_player_hardware_run_down`, `_video_idle_timeout` | times in minutes |
 | `button.<room>_all_off` | same as turning the room player off |
+| `number.<room>_sleep_timer` | sleep timer: minutes left, 0 = off |
+| `button.<room>_sleep_timer_15_min` | sleep timer +15 min (starts one if none runs) |
+| `sensor.<room>_sleep_timer_end` | when the sleep timer turns the room off |
 | `switch.<room>_quiet` | quiet mode: the room takes no part in follow me |
 | `sensor.<room>_follow` | follow state of the room (with occupancy sensors only) |
 | `sensor.better_media_player_follow_rooms` | central: rooms in the playing follow group |

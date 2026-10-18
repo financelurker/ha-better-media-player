@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import urlparse
 
+import voluptuous as vol
 from homeassistant.components.media_player import (
     ATTR_MEDIA_ENQUEUE,
     ATTR_MEDIA_EXTRA,
@@ -24,13 +25,22 @@ from homeassistant.const import (
     ATTR_SUPPORTED_FEATURES,
 )
 from homeassistant.core import HomeAssistant, State
+from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from . import BetterMediaPlayerConfigEntry
 from .browser import RoomBrowser, is_own_id
-from .const import SOURCE_AUDIO, SOURCE_VIDEO
+from .const import (
+    ATTR_FADE_MINUTES,
+    ATTR_MINUTES,
+    SERVICE_CANCEL_SLEEP_TIMER,
+    SERVICE_SET_SLEEP_TIMER,
+    SOURCE_AUDIO,
+    SOURCE_VIDEO,
+)
 from .entity import BetterMediaPlayerEntity
+from .sleep import MAX_MINUTES
 
 BASE_FEATURES = MediaPlayerEntityFeature.TURN_ON | MediaPlayerEntityFeature.TURN_OFF
 
@@ -74,6 +84,16 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     async_add_entities([RoomMediaPlayer(entry, entry.runtime_data)])
+    platform = entity_platform.async_get_current_platform()
+    platform.async_register_entity_service(
+        SERVICE_SET_SLEEP_TIMER,
+        {
+            vol.Required(ATTR_MINUTES): vol.All(vol.Coerce(float), vol.Range(min=1, max=MAX_MINUTES)),
+            vol.Optional(ATTR_FADE_MINUTES): vol.All(vol.Coerce(float), vol.Range(min=0, max=60)),
+        },
+        "async_set_sleep_timer",
+    )
+    platform.async_register_entity_service(SERVICE_CANCEL_SLEEP_TIMER, None, "async_cancel_sleep_timer")
 
 
 class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
@@ -156,9 +176,12 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         src = self.ctrl.active_source
+        ends = self.ctrl.sleep.ends_at
         return {
             "active_player": src.player if src else None,
             "room_status": self.ctrl.status,
+            "sleep_timer_ends_at": ends.isoformat() if ends else None,
+            "sleep_timer_fading": self.ctrl.sleep.fading,
         }
 
     # -------------------------------------------------------------- media info
@@ -328,6 +351,12 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
         if kwargs.get(ATTR_MEDIA_EXTRA):
             data["extra"] = kwargs[ATTR_MEDIA_EXTRA]
         await self.ctrl.async_media_call("play_media", data)
+
+    async def async_set_sleep_timer(self, minutes: float, fade_minutes: float | None = None) -> None:
+        await self.ctrl.async_set_sleep_timer(minutes, fade_minutes)
+
+    async def async_cancel_sleep_timer(self) -> None:
+        await self.ctrl.sleep.async_cancel()
 
     async def async_browse_media(
         self, media_content_type: MediaType | str | None = None, media_content_id: str | None = None

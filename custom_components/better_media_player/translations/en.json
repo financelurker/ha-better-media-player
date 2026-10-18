@@ -53,13 +53,15 @@
           "start_timeout": "Start timeout",
           "host_on_wait": "Wait after player plug on",
           "display_on_wait": "Wait after display on",
-          "audio_on_wait": "Wait after speakers on"
+          "audio_on_wait": "Wait after speakers on",
+          "sleep_fade": "Sleep timer fade-out"
         },
         "data_description": {
           "display_run_down": "How long the display stays powered after the video player stopped.",
           "audio_run_down": "How long the speakers stay powered after playback stopped.",
           "video_idle_timeout": "Video player on but nothing playing (e.g. in the menu). 0 = never.",
-          "start_timeout": "If the player is not ready after this time, the start is aborted."
+          "start_timeout": "If the player is not ready after this time, the start is aborted.",
+          "sleep_fade": "Default for the sleep timer: the volume goes down over the last minutes. 0 = no fade."
         }
       },
       "standby": {
@@ -197,7 +199,11 @@
           "start_timeout": "Start timeout",
           "host_on_wait": "Wait after player plug on",
           "display_on_wait": "Wait after display on",
-          "audio_on_wait": "Wait after speakers on"
+          "audio_on_wait": "Wait after speakers on",
+          "sleep_fade": "Sleep timer fade-out"
+        },
+        "data_description": {
+          "sleep_fade": "Default for the sleep timer: the volume goes down over the last minutes. 0 = no fade."
         }
       },
       "standby": {
@@ -274,6 +280,9 @@
       },
       "follow": {
         "name": "Follow rooms"
+      },
+      "sleep_timer_end": {
+        "name": "Sleep timer end"
       }
     },
     "binary_sensor": {
@@ -307,6 +316,9 @@
       },
       "video_idle_timeout": {
         "name": "Video idle timeout"
+      },
+      "sleep_timer": {
+        "name": "Sleep timer"
       }
     },
     "button": {
@@ -315,6 +327,9 @@
       },
       "start_follow": {
         "name": "Start follow"
+      },
+      "sleep_plus_15": {
+        "name": "Sleep timer +15 min"
       }
     }
   },
@@ -344,6 +359,24 @@
           "description": "Used when nobody is detected; room players or their music players."
         }
       }
+    },
+    "set_sleep_timer": {
+      "name": "Set sleep timer",
+      "description": "Turn the room off after the given time; the volume fades out over the last minutes and is restored for the next playback.",
+      "fields": {
+        "minutes": {
+          "name": "Minutes",
+          "description": "Time until the room turns off (replaces a running timer)."
+        },
+        "fade_minutes": {
+          "name": "Fade-out",
+          "description": "Minutes of fade-out before the end; default from the room's settings."
+        }
+      }
+    },
+    "cancel_sleep_timer": {
+      "name": "Cancel sleep timer",
+      "description": "Stop the sleep timer; a running fade-out is undone."
     }
   },
   "selector": {
@@ -359,6 +392,11 @@
         "add": "➕ Add to queue",
         "replace": "⟲ Replace queue"
       }
+    }
+  },
+  "exceptions": {
+    "room_off": {
+      "message": "{room} is off - a sleep timer needs a running room."
     }
   }
 }
