@@ -26,6 +26,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant, State
 from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
@@ -33,6 +34,9 @@ from homeassistant.util import dt as dt_util
 from . import BetterMediaPlayerConfigEntry
 from .browser import RoomBrowser, is_own_id
 from .const import (
+    SERVICE_SNOOZE,
+    SERVICE_STOP_WAKE,
+    SERVICE_WAKE,
     ATTR_FADE_MINUTES,
     ATTR_NIGHT_MODE,
     DOMAIN,
@@ -97,6 +101,27 @@ async def async_setup_entry(
         "async_set_sleep_timer",
     )
     platform.async_register_entity_service(SERVICE_CANCEL_SLEEP_TIMER, None, "async_cancel_sleep_timer")
+    volume = vol.All(vol.Coerce(float), vol.Range(min=0, max=1))
+    platform.async_register_entity_service(
+        SERVICE_WAKE,
+        {
+            vol.Required("media_content_id"): cv.string,
+            vol.Required("media_content_type"): cv.string,
+            vol.Optional("start_volume"): volume,
+            vol.Optional("target_volume"): volume,
+            vol.Optional("fade_minutes"): vol.All(vol.Coerce(float), vol.Range(min=0, max=120)),
+            vol.Optional("max_duration_minutes"): vol.All(vol.Coerce(float), vol.Range(min=1, max=720)),
+            vol.Optional(ATTR_NIGHT_MODE): cv.boolean,
+            vol.Optional("source"): vol.In([SOURCE_AUDIO, SOURCE_VIDEO]),
+        },
+        "async_wake",
+    )
+    platform.async_register_entity_service(
+        SERVICE_SNOOZE,
+        {vol.Optional("minutes"): vol.All(vol.Coerce(float), vol.Range(min=1, max=120))},
+        "async_snooze",
+    )
+    platform.async_register_entity_service(SERVICE_STOP_WAKE, None, "async_stop_wake")
 
 
 class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
@@ -187,6 +212,7 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
             "sleep_timer_fading": self.ctrl.sleep.fading,
             "room_volume": self.ctrl.volume.value,
             "night_mode": self.ctrl.night.active,
+            "wake": self.ctrl.wake.phase,
         }
 
     # -------------------------------------------------------------- media info
@@ -375,6 +401,41 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
 
     async def async_cancel_sleep_timer(self) -> None:
         await self.ctrl.sleep.async_cancel()
+
+    async def async_wake(
+        self,
+        media_content_id: str,
+        media_content_type: str,
+        start_volume: float | None = None,
+        target_volume: float | None = None,
+        fade_minutes: float | None = None,
+        max_duration_minutes: float | None = None,
+        night_mode: bool | None = None,
+        source: str | None = None,
+    ) -> None:
+        """Wake up in this room; the player comes from the media id (room browser),
+        from source, or is the music player (else the video player)."""
+        room_mode = None
+        if is_own_id(media_content_id):
+            key, inner_type, inner_id, _mode = self._browser.resolve_play(media_content_id)
+            data = {"media_content_type": inner_type or media_content_type, "media_content_id": inner_id}
+            room_mode = self._browser.player_mode(inner_id)
+        else:
+            key = source or (SOURCE_AUDIO if SOURCE_AUDIO in self.ctrl.sources else SOURCE_VIDEO)
+            data = {"media_content_type": media_content_type, "media_content_id": media_content_id}
+        if key not in self.ctrl.sources:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="no_source", translation_placeholders={"source": key}
+            )
+        await self.ctrl.wake.async_wake(
+            key, data, room_mode, start_volume, target_volume, fade_minutes, max_duration_minutes, night_mode
+        )
+
+    async def async_snooze(self, minutes: float | None = None) -> None:
+        await self.ctrl.wake.async_snooze(minutes)
+
+    async def async_stop_wake(self) -> None:
+        await self.ctrl.wake.async_finish("stopped")
 
     async def async_browse_media(
         self, media_content_type: MediaType | str | None = None, media_content_id: str | None = None

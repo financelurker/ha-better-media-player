@@ -48,6 +48,7 @@ class VolumeRamp:
         self._duration = 0.0
         self._recent: list[float] = []
         self.running = False
+        self.aborted = False  # stopped because the volume was changed from outside
 
     def _volume(self) -> float | None:
         state = self.hass.states.get(self.entity_id)
@@ -73,6 +74,7 @@ class VolumeRamp:
         self._start, self._target = current, target
         self._t0, self._duration = _now(), float(seconds)
         self._recent = [current]
+        self.aborted = False
         self.running = True
         self._schedule()
         return True
@@ -115,6 +117,7 @@ class VolumeRamp:
             return
         if all(abs(current - v) > TOLERANCE for v in self._recent):
             _LOGGER.info("%s: volume changed during the ramp, keeping %.2f", self.entity_id, current)
+            self.aborted = True
             self.cancel()
             return
         progress = min(1.0, (_now() - self._t0) / self._duration)

@@ -121,6 +121,15 @@ CONF_NIGHT_MAX_VOLUME = "night_max_volume"  # %, 0 = no limit
 CONF_NIGHT_FADE_IN = "night_fade_in"  # min, back to the room volume afterwards
 ATTR_NIGHT_MODE = "night_mode"
 
+# --- Wake up ---------------------------------------------------------------------
+CONF_SNOOZE_MINUTES = "snooze_minutes"
+SERVICE_WAKE = "wake"
+SERVICE_SNOOZE = "snooze"
+SERVICE_STOP_WAKE = "stop_wake"
+EVENT_WAKE_STARTED = f"{DOMAIN}_wake_started"
+EVENT_WAKE_FAILED = f"{DOMAIN}_wake_failed"
+EVENT_WAKE_FINISHED = f"{DOMAIN}_wake_finished"
+
 # --- Standby (optional, needs power sensors) ----------------------------------
 CONF_DISPLAY_POWER = "display_power"
 CONF_DISPLAY_STANDBY = "display_standby"
@@ -155,6 +164,7 @@ DEFAULTS: dict = {
     CONF_NIGHT_DISPLAY_RUN_DOWN: 1,
     CONF_NIGHT_MAX_VOLUME: 30,
     CONF_NIGHT_FADE_IN: 2,
+    CONF_SNOOZE_MINUTES: 9,
 }
 
 # --- Sleep timer ---------------------------------------------------------------

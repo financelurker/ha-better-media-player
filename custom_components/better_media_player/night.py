@@ -109,6 +109,7 @@ class NightMode:
                 await self._clamp(src)
         else:
             await self._fade_back()
+        ctrl.wake.async_night_changed()
         if (hub := ctrl.hub) is not None:
             hub.async_schedule("night_mode")
         await ctrl.async_update("night_mode")
@@ -172,6 +173,7 @@ class NightMode:
                 or not ctrl.player_supports(src, MediaPlayerEntityFeature.VOLUME_SET)
                 or self._hub_group(src)
                 or ctrl.sleep.fading_player(src.player)  # the sleep timer is going down
+                or ctrl.wake.owns(src.player)  # the wake fades in itself
             ):
                 continue
             ramp = self._ramps.get(src.player)
@@ -206,6 +208,11 @@ class NightMode:
             await self.ctrl._player(src, "volume_set", {"volume_level": volume})
 
         return _set
+
+    @callback
+    def async_cancel_ramp(self, player: str) -> None:
+        if (ramp := self._ramps.get(player)) is not None:
+            ramp.cancel()
 
     @callback
     def _cancel_ramps(self) -> None:

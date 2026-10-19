@@ -12,6 +12,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from . import BetterMediaPlayerConfigEntry, is_hub
 from .const import FOLLOW_STATES, STATUSES
 from .entity import BetterMediaPlayerEntity, HubEntity
+from .wake import PHASES
 
 
 async def async_setup_entry(
@@ -23,7 +24,11 @@ async def async_setup_entry(
         async_add_entities([FollowSensor(entry, entry.runtime_data, "follow")])
         return
     ctrl = entry.runtime_data
-    entities: list[SensorEntity] = [StatusSensor(entry, ctrl, "status"), SleepEndSensor(entry, ctrl, "sleep_timer_end")]
+    entities: list[SensorEntity] = [
+        StatusSensor(entry, ctrl, "status"),
+        SleepEndSensor(entry, ctrl, "sleep_timer_end"),
+        WakeSensor(entry, ctrl, "wake"),
+    ]
     if ctrl.follow_capable:
         entities.append(FollowStateSensor(entry, ctrl, "follow_state"))
     async_add_entities(entities)
@@ -63,6 +68,22 @@ class SleepEndSensor(BetterMediaPlayerEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict:
         return {"fading": self.ctrl.sleep.fading}
+
+
+class WakeSensor(BetterMediaPlayerEntity, SensorEntity):
+    """Where the room's wake stands (idle: none)."""
+
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = PHASES
+    _attr_icon = "mdi:alarm"
+
+    @property
+    def native_value(self) -> str:
+        return self.ctrl.wake.phase
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return self.ctrl.wake.attributes
 
 
 class FollowStateSensor(BetterMediaPlayerEntity, SensorEntity):
