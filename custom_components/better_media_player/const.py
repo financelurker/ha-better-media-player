@@ -14,6 +14,7 @@ PLATFORMS: list[Platform] = [
     Platform.SWITCH,
     Platform.NUMBER,
     Platform.BUTTON,
+    Platform.SELECT,
 ]
 
 STORAGE_VERSION = 1
@@ -45,6 +46,15 @@ CONF_VOLUME_ENTITY = "volume_entity"
 VOLUME_PLAYERS = "players"
 VOLUME_DEVICE = "device"
 VOLUME_ENTITY_DOMAINS = ["media_player", "number", "input_number"]
+# volume presets: fixed names, a volume (%) per room; an empty value: not offered
+PRESETS = ["quiet", "normal", "loud", "party"]
+PRESET_MANUAL = "manual"  # the volume was changed after the preset
+PRESET_NONE = "none"
+CONF_PRESET = "preset_{}"  # .format(name)
+CONF_POWER_ON_PRESET = "power_on_preset"
+PRESET_DEFAULTS = {"quiet": 15, "normal": 30, "loud": 50, "party": 70}
+SERVICE_SET_VOLUME_PRESET = "set_volume_preset"
+ATTR_PRESET = "preset"
 CONF_PREWARM = "prewarm"
 CONF_WAKE_DETECT_LEFT = "wake_detect_left"  # follow wake: leaving the wake room ends the wake
 WAKE_ARRIVAL_WINDOW = 120  # s: an arrival elsewhere may come this much before the wake room went empty
@@ -165,6 +175,8 @@ DEFAULTS: dict = {
     CONF_PRESENCE_RUN_DOWN: 2,
     CONF_VOLUME_OFFSET: 0,
     CONF_VOLUME_CONTROL: VOLUME_PLAYERS,
+    **{CONF_PRESET.format(name): value for name, value in PRESET_DEFAULTS.items()},
+    CONF_POWER_ON_PRESET: PRESET_NONE,
     CONF_PREWARM: True,
     CONF_WAKE_DETECT_LEFT: True,
     CONF_SLEEP_FADE: 5,

@@ -110,3 +110,20 @@ stop_wake:
     entity:
       integration: better_media_player
       domain: media_player
+
+set_volume_preset:
+  target:
+    entity:
+      integration: better_media_player
+      domain: media_player
+  fields:
+    preset:
+      required: true
+      selector:
+        select:
+          translation_key: preset
+          options:
+            - quiet
+            - normal
+            - loud
+            - party

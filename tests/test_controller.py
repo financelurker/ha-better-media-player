@@ -397,6 +397,7 @@ async def test_entity_ids_match_readme(hass, home):
         "button.wohnzimmer_snooze",
         "button.wohnzimmer_stop_wake",
         "button.wohnzimmer_stop_follow_me",
+        "select.wohnzimmer_volume_preset",
     }
 
 

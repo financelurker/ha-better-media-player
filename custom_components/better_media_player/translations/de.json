@@ -146,6 +146,20 @@
           "night_max_volume": "Grenze für beide Player des Raums, solange der Nachtmodus an ist. 0 = keine Grenze.",
           "night_fade_in": "Endet der Nachtmodus, wird die Lautstärke über diese Zeit auf die Raumlautstärke zurückgeblendet."
         }
+      },
+      "volume": {
+        "title": "Lautstärke-Presets",
+        "description": "Raumlautstärken mit Namen, gewählt über das Select „Lautstärke-Preset“ oder die Aktion set_volume_preset. 0 = in diesem Raum nicht angeboten.",
+        "data": {
+          "preset_quiet": "Leise",
+          "preset_normal": "Normal",
+          "preset_loud": "Laut",
+          "preset_party": "Party",
+          "power_on_preset": "Einschalt-Preset"
+        },
+        "data_description": {
+          "power_on_preset": "Die Raumlautstärke, wann immer der Raum angeht (z. B. nicht mit der Party-Lautstärke von gestern)."
+        }
       }
     },
     "error": {
@@ -160,7 +174,8 @@
       "needs_volume_entity": "Bitte das Lautstärke-Gerät wählen.",
       "volume_is_player": "Das Lautstärke-Gerät darf keiner der Player des Raums sein.",
       "no_volume": "Dieser Media Player kann keine Lautstärke setzen.",
-      "volume_is_room": "Ein Better-Media-Player-Raum kann nicht das Lautstärke-Gerät sein."
+      "volume_is_room": "Ein Better-Media-Player-Raum kann nicht das Lautstärke-Gerät sein.",
+      "preset_not_offered": "Bitte ein Preset wählen, das dieser Raum anbietet (Lautstärke über 0)."
     },
     "abort": {
       "hub_exists": "Zentrale Einstellungen gibt es schon. Ändern über Konfigurieren.",
@@ -174,6 +189,7 @@
         "menu_options": {
           "room": "Raum",
           "sources": "Media Player",
+          "volume": "Lautstärke-Presets",
           "devices": "Stromgeräte",
           "advanced": "Player: Sonderfälle",
           "timing": "Zeiten",
@@ -294,6 +310,20 @@
           "night_max_volume": "Grenze für beide Player des Raums, solange der Nachtmodus an ist. 0 = keine Grenze.",
           "night_fade_in": "Endet der Nachtmodus, wird die Lautstärke über diese Zeit auf die Raumlautstärke zurückgeblendet."
         }
+      },
+      "volume": {
+        "title": "Lautstärke-Presets",
+        "description": "Raumlautstärken mit Namen, gewählt über das Select „Lautstärke-Preset“ oder die Aktion set_volume_preset. 0 = in diesem Raum nicht angeboten.",
+        "data": {
+          "preset_quiet": "Leise",
+          "preset_normal": "Normal",
+          "preset_loud": "Laut",
+          "preset_party": "Party",
+          "power_on_preset": "Einschalt-Preset"
+        },
+        "data_description": {
+          "power_on_preset": "Die Raumlautstärke, wann immer der Raum angeht (z. B. nicht mit der Party-Lautstärke von gestern)."
+        }
       }
     },
     "error": {
@@ -308,7 +338,8 @@
       "needs_volume_entity": "Bitte das Lautstärke-Gerät wählen.",
       "volume_is_player": "Das Lautstärke-Gerät darf keiner der Player des Raums sein.",
       "no_volume": "Dieser Media Player kann keine Lautstärke setzen.",
-      "volume_is_room": "Ein Better-Media-Player-Raum kann nicht das Lautstärke-Gerät sein."
+      "volume_is_room": "Ein Better-Media-Player-Raum kann nicht das Lautstärke-Gerät sein.",
+      "preset_not_offered": "Bitte ein Preset wählen, das dieser Raum anbietet (Lautstärke über 0)."
     },
     "abort": {
       "invalid_config": "Die Einstellungen passen nicht zusammen. Bitte Media Player und Stromgeräte prüfen."
@@ -431,6 +462,18 @@
       "follow_stop": {
         "name": "Follow-Me beenden"
       }
+    },
+    "select": {
+      "volume_preset": {
+        "name": "Lautstärke-Preset",
+        "state": {
+          "quiet": "Leise",
+          "normal": "Normal",
+          "loud": "Laut",
+          "party": "Party",
+          "manual": "Manuell"
+        }
+      }
     }
   },
   "services": {
@@ -466,11 +509,11 @@
         },
         "start_volume": {
           "name": "Startlautstärke",
-          "description": "0-1; Vorgabe 0,05."
+          "description": "0-1; Vorgabe 0,05. Oder ein Preset des Raums (quiet, normal, loud, party)."
         },
         "target_volume": {
           "name": "Ziellautstärke",
-          "description": "0-1; Vorgabe die Raumlautstärke."
+          "description": "0-1; Vorgabe die Raumlautstärke. Oder ein Preset des Raums (quiet, normal, loud, party)."
         },
         "fade_minutes": {
           "name": "Einblenden",
@@ -515,6 +558,16 @@
     "stop_follow": {
       "name": "Follow-Me beenden",
       "description": "Beendet Follow-Me: Die Musik bleibt in diesem Raum, wenn er mitspielt, sonst geht sie zurück in den Start-Raum; die anderen Räume hören auf."
+    },
+    "set_volume_preset": {
+      "name": "Lautstärke-Preset setzen",
+      "description": "Setzt die Raumlautstärke auf eines seiner Presets.",
+      "fields": {
+        "preset": {
+          "name": "Preset",
+          "description": "Leise, Normal, Laut oder Party."
+        }
+      }
     }
   },
   "selector": {
@@ -542,6 +595,23 @@
         "players": "Player",
         "device": "Eigenes Gerät"
       }
+    },
+    "power_on_preset": {
+      "options": {
+        "none": "Keins",
+        "quiet": "Leise",
+        "normal": "Normal",
+        "loud": "Laut",
+        "party": "Party"
+      }
+    },
+    "preset": {
+      "options": {
+        "quiet": "Leise",
+        "normal": "Normal",
+        "loud": "Laut",
+        "party": "Party"
+      }
     }
   },
   "exceptions": {
@@ -568,6 +638,9 @@
     },
     "follow_not_running": {
       "message": "Follow-Me läuft nicht."
+    },
+    "preset_not_offered": {
+      "message": "Das Preset {preset} wird in {room} nicht angeboten."
     }
   }
 }

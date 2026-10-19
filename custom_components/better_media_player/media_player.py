@@ -34,6 +34,9 @@ from homeassistant.util import dt as dt_util
 from . import BetterMediaPlayerConfigEntry
 from .browser import RoomBrowser, is_own_id
 from .const import (
+    ATTR_PRESET,
+    PRESETS,
+    SERVICE_SET_VOLUME_PRESET,
     SERVICE_FOLLOW_START,
     SERVICE_FOLLOW_STOP,
     SERVICE_SNOOZE,
@@ -110,7 +113,8 @@ async def async_setup_entry(
     platform.async_register_entity_service(SERVICE_CANCEL_SLEEP_TIMER, None, "async_cancel_sleep_timer")
     platform.async_register_entity_service(SERVICE_FOLLOW_START, None, "async_start_follow")
     platform.async_register_entity_service(SERVICE_FOLLOW_STOP, None, "async_stop_follow")
-    volume = vol.All(vol.Coerce(float), vol.Range(min=0, max=1))
+    # a volume 0..1, or a preset by name
+    volume = vol.Any(vol.All(vol.Coerce(float), vol.Range(min=0, max=1)), vol.In(PRESETS))
     platform.async_register_entity_service(
         SERVICE_WAKE,
         {
@@ -132,6 +136,9 @@ async def async_setup_entry(
         "async_snooze",
     )
     platform.async_register_entity_service(SERVICE_STOP_WAKE, None, "async_stop_wake")
+    platform.async_register_entity_service(
+        SERVICE_SET_VOLUME_PRESET, {vol.Required(ATTR_PRESET): vol.In(PRESETS)}, "async_set_volume_preset"
+    )
 
 
 class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
@@ -227,6 +234,7 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
             "sleep_timer_ends_at": ends.isoformat() if ends else None,
             "sleep_timer_fading": self.ctrl.sleep.fading,
             "room_volume": self.ctrl.volume.value,
+            "volume_preset": self.ctrl.volume.preset,
             "night_mode": self.ctrl.night.active,
             "wake": self.ctrl.wake.phase,
         }
@@ -427,8 +435,8 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
         self,
         media_content_id: str,
         media_content_type: str,
-        start_volume: float | None = None,
-        target_volume: float | None = None,
+        start_volume: float | str | None = None,
+        target_volume: float | str | None = None,
         fade_minutes: float | None = None,
         max_duration_minutes: float | None = None,
         night_mode: bool | None = None,
@@ -436,7 +444,13 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
         follow: bool = False,
     ) -> None:
         """Wake up in this room; the player comes from the media id (room browser),
-        from source, or is the music player (else the video player)."""
+        from source, or is the music player (else the video player). Volumes may
+        be given as a preset of the room."""
+        room = self.ctrl.volume
+        if isinstance(start_volume, str):
+            start_volume = room.preset_value(start_volume)
+        if isinstance(target_volume, str):
+            target_volume = room.preset_value(target_volume)
         room_mode = None
         if is_own_id(media_content_id):
             key, inner_type, inner_id, _mode = self._browser.resolve_play(media_content_id)
@@ -475,6 +489,9 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
         if hub is None:
             raise ServiceValidationError(translation_domain=DOMAIN, translation_key="follow_not_running")
         await hub.async_follow_stop(self.ctrl)
+
+    async def async_set_volume_preset(self, preset: str) -> None:
+        await self.ctrl.async_set_volume_preset(preset)
 
     async def async_snooze(self, minutes: float | None = None) -> None:
         await self.ctrl.wake.async_snooze(minutes)

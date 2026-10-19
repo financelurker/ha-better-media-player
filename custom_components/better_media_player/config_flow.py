@@ -57,6 +57,8 @@ from .const import (
     CONF_VIDEO_OFF_ACTION,
     CONF_VIDEO_ON_ACTION,
     CONF_VIDEO_PLAYER,
+    CONF_POWER_ON_PRESET,
+    CONF_PRESET,
     CONF_VOLUME_CONTROL,
     CONF_VOLUME_ENTITY,
     CONF_VOLUME_OFFSET,
@@ -67,6 +69,8 @@ from .const import (
     HUB_DEFAULTS,
     MASS_TYPE_GROUP,
     SWITCH_DOMAINS,
+    PRESET_NONE,
+    PRESETS,
     VOLUME_DEVICE,
     VOLUME_ENTITY_DOMAINS,
     VOLUME_PLAYERS,
@@ -137,6 +141,18 @@ def schema_advanced() -> vol.Schema:
             vol.Optional(CONF_AUDIO_HOST): _entity(SWITCH_DOMAINS),
         }
     )
+
+
+def schema_volume() -> vol.Schema:
+    d = DEFAULTS
+    fields: dict = {
+        vol.Optional(CONF_PRESET.format(name), default=d[CONF_PRESET.format(name)]): _num(0, 100, 1, "%")
+        for name in PRESETS
+    }
+    fields[vol.Optional(CONF_POWER_ON_PRESET, default=d[CONF_POWER_ON_PRESET])] = sel.SelectSelector(
+        sel.SelectSelectorConfig(options=[PRESET_NONE, *PRESETS], translation_key=CONF_POWER_ON_PRESET)
+    )
+    return vol.Schema(fields)
 
 
 def schema_night() -> vol.Schema:
@@ -219,6 +235,7 @@ def _validate_hub(hass: HomeAssistant, options: dict) -> dict[str, str]:
 STEPS = {
     "room": lambda: schema_room(False),
     "sources": schema_sources,
+    "volume": schema_volume,
     "devices": schema_devices,
     "advanced": schema_advanced,
     "timing": schema_timing,
@@ -288,6 +305,11 @@ def _validate(hass: HomeAssistant, options: dict) -> dict[str, str]:
         errors[CONF_DISPLAY_STANDBY] = "needs_power"
     if options.get(CONF_AUDIO_STANDBY) and not options.get(CONF_AUDIO_POWER):
         errors[CONF_AUDIO_STANDBY] = "needs_power"
+    power_on = options.get(CONF_POWER_ON_PRESET)
+    if power_on and power_on != PRESET_NONE:
+        value = options.get(CONF_PRESET.format(power_on), DEFAULTS.get(CONF_PRESET.format(power_on)))
+        if not value or float(value) <= 0:
+            errors[CONF_POWER_ON_PRESET] = "preset_not_offered"
     return errors
 
 
@@ -378,10 +400,13 @@ class BetterMediaPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
         """Only a note: a chosen player cannot set a volume."""
         players = _without_volume(self.hass, self._options)
         if user_input is not None or not players:
-            return await self.async_step_devices()
+            return await self.async_step_volume()
         return self.async_show_form(
             step_id="volume_note", data_schema=vol.Schema({}), description_placeholders={"players": ", ".join(players)}
         )
+
+    async def async_step_volume(self, user_input: dict | None = None) -> ConfigFlowResult:
+        return await self._step("volume", user_input, self.async_step_devices)
 
     async def async_step_devices(self, user_input: dict | None = None) -> ConfigFlowResult:
         return await self._step("devices", user_input, self.async_step_advanced)
@@ -482,6 +507,9 @@ class BetterMediaPlayerOptionsFlow(OptionsFlow):
         return self.async_show_form(
             step_id="volume_note", data_schema=vol.Schema({}), description_placeholders={"players": ", ".join(players)}
         )
+
+    async def async_step_volume(self, user_input=None) -> ConfigFlowResult:
+        return await self._section("volume", user_input)
 
     async def async_step_devices(self, user_input=None) -> ConfigFlowResult:
         return await self._section("devices", user_input)

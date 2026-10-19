@@ -291,6 +291,7 @@ class RoomController:
         self.wake = WakeAlarm(self)
         self._sleep_off_pending = False
         self.turning_off = False
+        self._was_on: bool | None = None  # None: not looked yet (no power-on after a restart)
 
     # ------------------------------------------------------------------ setup
 
@@ -760,6 +761,10 @@ class RoomController:
                     await self._auto_on(now)
                 await self._auto_off(now)
             self._update_status()
+            on = self.room_on
+            if on and self._was_on is False:
+                self.volume.async_power_on()  # the power-on preset
+            self._was_on = on
             await self.sleep.async_apply_restores()
             if self.sleep.active and self._started and self._fully_off():
                 # everything went off by itself: the timer has nothing left to do
@@ -1311,6 +1316,9 @@ class RoomController:
                 translation_domain=DOMAIN, translation_key="room_off", translation_placeholders={"room": self.entry.title}
             )
         await self.sleep.async_extend(minutes)
+
+    async def async_set_volume_preset(self, preset: str | None) -> None:
+        await self.volume.async_set_preset(preset)
 
     async def async_media_call(self, service: str, data: dict | None = None) -> None:
         """Forward a media command to the active source."""
