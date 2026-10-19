@@ -102,6 +102,13 @@ wake:
           options:
             - audio
             - video
+    follow:
+      selector:
+        boolean:
+    group:
+      selector:
+        entity:
+          domain: media_player
 
 snooze:
   target:

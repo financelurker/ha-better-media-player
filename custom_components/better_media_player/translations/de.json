@@ -316,7 +316,10 @@
           "excluded_video": "Ausgenommen: Video",
           "excluded_off": "Ausgenommen: Raum aus",
           "excluded_busy": "Ausgenommen: spielt anderswo",
-          "presence_unknown": "Anwesenheit unbekannt"
+          "presence_unknown": "Anwesenheit unbekannt",
+          "waking": "Weckt",
+          "snoozed": "Schlummert",
+          "held_out": "Wartet (Wecken gestartet)"
         }
       },
       "follow": {
@@ -482,6 +485,14 @@
         "source": {
           "name": "Player",
           "description": "Für Medien, die nicht über den Raum-Player ausgewählt wurden; Vorgabe: der Musik-Player."
+        },
+        "follow": {
+          "name": "Follow-Me",
+          "description": "Die Musik folgt dir aus diesem Raum (braucht die Zentrale und Anwesenheitssensoren hier)."
+        },
+        "group": {
+          "name": "Follow-Gruppe",
+          "description": "Vorgabe: die spielende Follow-Gruppe, sonst die erste."
         }
       }
     },
@@ -530,6 +541,12 @@
     },
     "no_source": {
       "message": "Dieser Raum hat keinen {source}-Player."
+    },
+    "follow_wake": {
+      "message": "{room} kann nicht mit Follow-Me wecken: Dafür braucht es die Zentrale, einen Musik-Player und Anwesenheitssensoren."
+    },
+    "not_follow_group": {
+      "message": "{group} ist keine Follow-Gruppe."
     }
   }
 }
