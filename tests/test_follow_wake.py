@@ -243,3 +243,66 @@ async def test_needs_follow_capable_room(hass, home):
 async def test_video_media_cannot_follow(hass, house):
     with pytest.raises(ServiceValidationError):
         await _wake(hass, media_content_id=make_id(KIND_ITEM, "video", "movie", "1"), media_content_type="movie")
+
+
+# ------------------------------------------------- left vs sensor gap (mmWave)
+
+
+async def test_sensor_gap_in_bed_is_no_left(hass, house, freezer):
+    finished = async_capture_events(hass, EVENT_WAKE_FINISHED)
+    hass.states.async_set(LIVING_OCC, "on")  # mmWave sees the sleeper
+    await hass.async_block_till_done()
+    await _wake(hass)
+    await _tick(hass, freezer, 30)
+    hass.states.async_set(LIVING_OCC, "off")  # loses the very still sleeper for a while
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 5 * 60, step=10)
+    assert finished == []
+    assert MUSIC in house.members(FOLLOW)
+
+
+async def test_arrival_long_before_does_not_count(hass, house, freezer):
+    finished = async_capture_events(hass, EVENT_WAKE_FINISHED)
+    hass.states.async_set(LIVING_OCC, "on")
+    await hass.async_block_till_done()
+    await _wake(hass)
+    await _tick(hass, freezer, 30)
+    hass.states.async_set(KITCHEN_OCC, "on")  # the partner gets up first
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 10 * 60, step=10)
+    hass.states.async_set(LIVING_OCC, "off")  # sensor gap much later
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 5 * 60, step=10)
+    assert finished == []
+
+
+async def test_other_sensor_first_then_bedroom_empty_is_left(hass, house, freezer):
+    finished = async_capture_events(hass, EVENT_WAKE_FINISHED)
+    hass.states.async_set(LIVING_OCC, "on")
+    await hass.async_block_till_done()
+    await _wake(hass)
+    await _tick(hass, freezer, 5 * 60, step=10)
+    hass.states.async_set(KITCHEN_OCC, "on")  # the bathroom sensor is faster ...
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 60, step=10)
+    hass.states.async_set(LIVING_OCC, "off")  # ... than the bedroom's going empty
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 3 * 60, step=10)
+    assert [e.data["reason"] for e in finished] == ["left"]
+
+
+async def test_left_detection_can_be_switched_off(hass, house, freezer):
+    entry = next(e for e in hass.config_entries.async_entries(DOMAIN) if e.title == "Wohnzimmer")
+    hass.config_entries.async_update_entry(entry, options={**entry.options, "wake_detect_left": False})
+    await hass.async_block_till_done()
+    finished = async_capture_events(hass, EVENT_WAKE_FINISHED)
+    hass.states.async_set(LIVING_OCC, "on")
+    await hass.async_block_till_done()
+    await _wake(hass)
+    await _tick(hass, freezer, 30)
+    hass.states.async_set(KITCHEN_OCC, "on")
+    hass.states.async_set(LIVING_OCC, "off")
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 5 * 60, step=10)
+    assert finished == []
+    assert MUSIC in house.members(FOLLOW)

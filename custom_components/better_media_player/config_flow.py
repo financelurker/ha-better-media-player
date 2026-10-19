@@ -44,6 +44,7 @@ from .const import (
     CONF_OCCUPANCY,
     CONF_PRESENCE_RUN_DOWN,
     CONF_PREWARM,
+    CONF_WAKE_DETECT_LEFT,
     CONF_NIGHT_DISPLAY_RUN_DOWN,
     CONF_NIGHT_FADE_IN,
     CONF_NIGHT_MAX_VOLUME,
@@ -180,6 +181,7 @@ def schema_follow() -> vol.Schema:
             vol.Optional(CONF_PRESENCE_RUN_DOWN, default=d[CONF_PRESENCE_RUN_DOWN]): _num(0, 60, 0.5, "min"),
             vol.Optional(CONF_VOLUME_OFFSET, default=d[CONF_VOLUME_OFFSET]): _num(-50, 50, 1, "%"),
             vol.Optional(CONF_PREWARM, default=d[CONF_PREWARM]): sel.BooleanSelector(),
+            vol.Optional(CONF_WAKE_DETECT_LEFT, default=d[CONF_WAKE_DETECT_LEFT]): sel.BooleanSelector(),
         }
     )
 
