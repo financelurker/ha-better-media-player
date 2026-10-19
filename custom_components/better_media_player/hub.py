@@ -48,6 +48,8 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_NIGHT_FADE_IN,
+    CONF_WAKE_DETECT_LEFT,
+    WAKE_ARRIVAL_WINDOW,
     CONF_ALWAYS_GROUPS,
     CONF_DEFAULT_VOLUME,
     CONF_FOLLOW_GROUPS,
@@ -162,6 +164,9 @@ class FollowManager:
         self._night_capped: set[str] = set()
         self._group_ramps: dict[str, VolumeRamp] = {}
         self._night_limited: dict[str, set[str]] = {}
+        # follow wake: when presence newly appeared per room (to tell "left" from a sensor gap)
+        self._presence_before: dict[str, str] = {}
+        self._arrivals: dict[str, float] = {}
 
     # ------------------------------------------------------------------ setup
 
@@ -422,6 +427,7 @@ class FollowManager:
 
     async def _evaluate(self) -> None:
         now = _now()
+        self._track_arrivals(now)
         s = self.session
         rooms = self.follow_rooms()
         playing = [g for g in self.follow_groups if self.group_state(g) in PLAYING]
@@ -709,15 +715,37 @@ class FollowManager:
             return
         s.member_since.setdefault(rid, now)
         s.leaving.discard(rid)
-        if room.wake.seen and presence == EMPTY:
+        if room.wake.seen and presence == EMPTY and room.opts.get(CONF_WAKE_DETECT_LEFT, True):
             since = max(s.empty_since.setdefault(rid, now), s.member_since[rid])
-            if now - since >= room.presence_run_down:
+            if now - since >= room.presence_run_down and self._arrived_elsewhere(room):
                 _LOGGER.info("Follow wake: %s was left, the wake is done", room.entry.title)
                 await room.wake.async_finish("left")
                 await self._leave(room, "left after waking up")
                 room.set_follow_state(FOLLOW_WAITING)
                 return
         room.set_follow_state(FOLLOW_WAKING)
+
+    def _arrived_elsewhere(self, room: RoomController) -> bool:
+        """Someone turned up in another follow room around the time the wake room
+        went empty (a sensor there may switch on before the wake room's goes off).
+        A gap of the wake room's sensor alone (a sleeper missed) is no "left"."""
+        last = room.wake.last_present
+        if last is None:
+            return False
+        rid = room.entry.entry_id
+        return any(ts >= last - WAKE_ARRIVAL_WINDOW for other, ts in self._arrivals.items() if other != rid)
+
+    @callback
+    def _track_arrivals(self, now: float) -> None:
+        """Remember when presence newly appeared in a follow room."""
+        for room in self.follow_rooms():
+            rid = room.entry.entry_id
+            presence = room.presence()
+            before = self._presence_before.get(rid)
+            if presence == PRESENT and before is not None and before != PRESENT:
+                self._arrivals[rid] = now
+            if presence != UNKNOWN:
+                self._presence_before[rid] = presence
 
     def _running(self, group: str) -> bool:
         """Plays, or was just started by us (Music Assistant may report it late)."""

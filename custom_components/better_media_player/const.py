@@ -48,6 +48,8 @@ CONF_OCCUPANCY = "occupancy"
 CONF_PRESENCE_RUN_DOWN = "presence_run_down"  # min
 CONF_VOLUME_OFFSET = "volume_offset"  # percentage points
 CONF_PREWARM = "prewarm"
+CONF_WAKE_DETECT_LEFT = "wake_detect_left"  # follow wake: leaving the wake room ends the wake
+WAKE_ARRIVAL_WINDOW = 120  # s: an arrival elsewhere may come this much before the wake room went empty
 
 FOLLOW_INACTIVE = "inactive"  # no follow group playing
 FOLLOW_ACTIVE = "following"  # member of the playing follow group
@@ -165,6 +167,7 @@ DEFAULTS: dict = {
     CONF_PRESENCE_RUN_DOWN: 2,
     CONF_VOLUME_OFFSET: 0,
     CONF_PREWARM: True,
+    CONF_WAKE_DETECT_LEFT: True,
     CONF_SLEEP_FADE: 5,
     CONF_NIGHT_VIDEO_IDLE_TIMEOUT: 5,
     CONF_NIGHT_DISPLAY_RUN_DOWN: 1,

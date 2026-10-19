@@ -115,12 +115,14 @@
           "occupancy": "Occupancy sensors",
           "presence_run_down": "Leave after nobody is there for",
           "volume_offset": "Volume offset",
-          "prewarm": "Prewarm speakers"
+          "prewarm": "Prewarm speakers",
+          "wake_detect_left": "Wake: detect leaving the room"
         },
         "data_description": {
           "occupancy": "Any of them on = someone is there. All unavailable = unknown, nothing changes.",
           "volume_offset": "Percentage points relative to the group volume when the room joins, e.g. -10.",
-          "prewarm": "Speakers on as soon as follow music plays anywhere, so sound is there instantly when you come in."
+          "prewarm": "Speakers on as soon as follow music plays anywhere, so sound is there instantly when you come in.",
+          "wake_detect_left": "Follow wake: once you left this room (and turned up in another follow room), the wake is done. Off: it ends only by stop, maximum duration, room off or sleep timer."
         }
       },
       "volume_note": {
@@ -248,12 +250,14 @@
           "occupancy": "Occupancy sensors",
           "presence_run_down": "Leave after nobody is there for",
           "volume_offset": "Volume offset",
-          "prewarm": "Prewarm speakers"
+          "prewarm": "Prewarm speakers",
+          "wake_detect_left": "Wake: detect leaving the room"
         },
         "data_description": {
           "occupancy": "Any of them on = someone is there. All unavailable = unknown, nothing changes.",
           "volume_offset": "Percentage points relative to the group volume when the room joins, e.g. -10.",
-          "prewarm": "Speakers on as soon as follow music plays anywhere, so sound is there instantly when you come in."
+          "prewarm": "Speakers on as soon as follow music plays anywhere, so sound is there instantly when you come in.",
+          "wake_detect_left": "Follow wake: once you left this room (and turned up in another follow room), the wake is done. Off: it ends only by stop, maximum duration, room off or sleep timer."
         }
       },
       "volume_note": {

@@ -178,11 +178,19 @@ class WakeAlarm:
 
     @callback
     def mark_seen(self) -> None:
-        """Someone moved in the wake room after the wake started."""
+        """Someone is in the wake room (after the wake started)."""
         w = self._w
-        if w is not None and not w.get("seen"):
+        if w is None:
+            return
+        w["last_present"] = _now()
+        if not w.get("seen"):
             w["seen"] = True
             self.ctrl._save()
+
+    @property
+    def last_present(self) -> float | None:
+        w = self._w
+        return w.get("last_present") if w else None
 
     def fading_player(self, player: str) -> bool:
         """Its volume is the wake's (not follow me's) right now."""

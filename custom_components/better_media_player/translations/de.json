@@ -115,12 +115,14 @@
           "occupancy": "Anwesenheitssensoren",
           "presence_run_down": "Verlassen, wenn niemand da ist seit",
           "volume_offset": "Lautstärke-Offset",
-          "prewarm": "Lautsprecher vorwärmen"
+          "prewarm": "Lautsprecher vorwärmen",
+          "wake_detect_left": "Wecken: Verlassen des Raums erkennen"
         },
         "data_description": {
           "occupancy": "Einer an = jemand ist da. Alle nicht verfügbar = unbekannt, dann ändert sich nichts.",
           "volume_offset": "Prozentpunkte gegenüber der Gruppenlautstärke beim Beitritt, z. B. -10.",
-          "prewarm": "Lautsprecher an, sobald irgendwo Follow-Musik spielt, damit der Ton beim Betreten sofort da ist."
+          "prewarm": "Lautsprecher an, sobald irgendwo Follow-Musik spielt, damit der Ton beim Betreten sofort da ist.",
+          "wake_detect_left": "Follow-Wecker: Hast du diesen Raum verlassen (und bist in einem anderen Follow-Raum aufgetaucht), ist das Wecken erledigt. Aus: Es endet nur durch Beenden, maximale Dauer, Raum aus oder Sleep-Timer."
         }
       },
       "volume_note": {
@@ -248,12 +250,14 @@
           "occupancy": "Anwesenheitssensoren",
           "presence_run_down": "Verlassen, wenn niemand da ist seit",
           "volume_offset": "Lautstärke-Offset",
-          "prewarm": "Lautsprecher vorwärmen"
+          "prewarm": "Lautsprecher vorwärmen",
+          "wake_detect_left": "Wecken: Verlassen des Raums erkennen"
         },
         "data_description": {
           "occupancy": "Einer an = jemand ist da. Alle nicht verfügbar = unbekannt, dann ändert sich nichts.",
           "volume_offset": "Prozentpunkte gegenüber der Gruppenlautstärke beim Beitritt, z. B. -10.",
-          "prewarm": "Lautsprecher an, sobald irgendwo Follow-Musik spielt, damit der Ton beim Betreten sofort da ist."
+          "prewarm": "Lautsprecher an, sobald irgendwo Follow-Musik spielt, damit der Ton beim Betreten sofort da ist.",
+          "wake_detect_left": "Follow-Wecker: Hast du diesen Raum verlassen (und bist in einem anderen Follow-Raum aufgetaucht), ist das Wecken erledigt. Aus: Es endet nur durch Beenden, maximale Dauer, Raum aus oder Sleep-Timer."
         }
       },
       "volume_note": {
