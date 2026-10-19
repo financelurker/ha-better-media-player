@@ -151,9 +151,10 @@ class WakeAlarm:
     # follow wake ---------------------------------------------------------
 
     @property
-    def follow_group(self) -> str | None:
+    def follows(self) -> bool:
+        """A follow wake (the music follows out of the wake room)."""
         w = self._w
-        return w.get("follow") if w else None
+        return bool(w and w.get("follow") is not None)
 
     @property
     def follow_holding(self) -> bool:
@@ -463,10 +464,10 @@ class WakeAlarm:
                 return
             hub = self.ctrl.hub
             if w.get("follow") and hub is not None:
-                if src.player not in hub.group_members(w["follow"]):
+                if src.player not in hub.group_members(hub.follow_player):
                     hub.async_schedule("wake_dropped")
                     return  # dropped from its group: follow me takes it back in
-                if hub.group_state(w["follow"]) in _PLAYING:
+                if hub.group_state(hub.follow_player) in _PLAYING:
                     return
             self.ctrl._spawn(self.async_finish(REASON_STOPPED))
 
@@ -620,7 +621,7 @@ class WakeAlarm:
             w.get("follow")
             and not self.ctrl.groups_of(src.player)
             and self.ctrl.hub is not None
-            and self.ctrl.hub.group_state(w["follow"]) not in (None, "unavailable", "unknown")
+            and self.ctrl.hub.group_state(self.ctrl.hub.follow_player) not in (None, "unavailable", "unknown")
         ):
             # a follow wake whose group stopped while HA was down: join again
             self._spawn_start()

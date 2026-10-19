@@ -261,8 +261,9 @@ async def test_stop_elsewhere_goes_back_to_the_start_room(hass, house, freezer):
     assert hass.states.get(MUSIC).state == "playing"
 
 
-async def test_stop_without_follow_me_does_nothing(hass, house):
-    await stop_follow(hass)
+async def test_stop_without_follow_me_is_an_error(hass, house):
+    with pytest.raises(ServiceValidationError):
+        await stop_follow(hass)
     assert house.transferred == []
 
 

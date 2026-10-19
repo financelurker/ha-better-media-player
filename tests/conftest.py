@@ -172,18 +172,17 @@ class FakeHome:
                 )
             return True
         if domain == "music_assistant" and service == "transfer_queue":
-            # the queue moves: the target plays it, the source stops
+            # the queue moves: the target plays it (or holds it paused), the source stops
             source = data.get("source_player")
             self.transferred.append((source, entity_id))
-            if source in GROUPS:
+            if source:
                 self.set(source, "idle")
-            elif source:
-                self.set(source, "idle")
+            state = "playing" if data.get("auto_play", True) else "paused"
             if entity_id in GROUPS:
                 if self.members(entity_id):
-                    self.group("playing", self.members(entity_id), entity_id)
+                    self.group(state, self.members(entity_id), entity_id)
             else:
-                self.set(entity_id, "playing")
+                self.set(entity_id, state)
             return True
         if domain == "media_player":
             if entity_id == KODI and service == "turn_on" and self.kodi_boots:

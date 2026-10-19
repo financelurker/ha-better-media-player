@@ -99,6 +99,6 @@ class FollowStopButton(ControlEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         hub = get_hub(self.hass)
-        if hub is None or not hub.active:
+        if hub is None:
             raise ServiceValidationError(translation_domain=DOMAIN, translation_key="follow_not_running")
         await hub.async_follow_stop(self.ctrl)

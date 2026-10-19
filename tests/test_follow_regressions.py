@@ -363,3 +363,140 @@ async def test_short_pause_keeps_room_off(hass, house, freezer):
     house.group("playing", [KITCHEN], FOLLOW)  # resume in the MA app
     await _tick(hass, freezer, 20)
     assert MUSIC not in house.members(FOLLOW), "short pause ended the session: turned-off room rejoined"
+
+
+# ------------------------------------------------- review of follow me 2
+
+
+def _hub_entry(hass):
+    return next(e for e in hass.config_entries.async_entries(DOMAIN) if e.title == "Better Media Player")
+
+
+async def test_stop_while_paused_stays_paused(hass, house):
+    hass.states.async_set(LIVING_OCC, "on")
+    await follow_from(hass, house)
+    house.group("paused", [MUSIC], FOLLOW)  # paused by the user: follow me goes on
+    await hass.async_block_till_done()
+    assert get_hub(hass).active
+    await hass.services.async_call(DOMAIN, "stop_follow", {"entity_id": LIVING}, blocking=True)
+    await hass.async_block_till_done()
+    assert house.transferred[-1] == (FOLLOW, MUSIC)
+    assert hass.states.get(MUSIC).state == "paused", "stopping a paused follow me started the music"
+
+
+async def test_failed_queue_move_leaves_the_room_out(hass, house):
+    from homeassistant.exceptions import HomeAssistantError
+
+    original = house.handle
+
+    def handle(domain, service, entity_id, data, context):
+        if domain == "music_assistant" and service == "transfer_queue":
+            raise HomeAssistantError("MA down")
+        return original(domain, service, entity_id, data, context)
+
+    house.handle = handle
+    hass.states.async_set(LIVING_OCC, "on")
+    with pytest.raises(HomeAssistantError):
+        await follow_from(hass, house)
+    await hass.async_block_till_done()
+    assert not get_hub(hass).active
+    assert MUSIC not in house.members(FOLLOW), "failed start left the room in the follow-me player"
+
+
+async def test_failed_join_does_not_move_the_queue(hass, house):
+    from homeassistant.exceptions import HomeAssistantError
+
+    original = house.handle
+
+    def handle(domain, service, entity_id, data, context):
+        if service == "join":
+            raise HomeAssistantError("MA down")
+        return original(domain, service, entity_id, data, context)
+
+    house.handle = handle
+    hass.states.async_set(LIVING_OCC, "on")
+    with pytest.raises(HomeAssistantError):
+        await follow_from(hass, house)
+    assert house.transferred == [], "queue moved into an empty follow-me player"
+    assert not get_hub(hass).active
+
+
+async def test_start_with_a_member_left_in_the_idle_follow_player(hass, house, freezer):
+    hass.states.async_set(LIVING_OCC, "on")
+    await follow_from(hass, house)
+    house.group("idle", [MUSIC], FOLLOW)  # stopped in the MA app: the member stays listed
+    await _tick(hass, freezer, 40)
+    assert not get_hub(hass).active
+    house.transferred.clear()
+    await follow_from(hass, house)  # music again directly on the room player
+    assert house.transferred == [(MUSIC, FOLLOW)]
+    assert hass.states.get(FOLLOW).state == "playing"
+    await _tick(hass, freezer, 60)
+    assert get_hub(hass).active
+
+
+async def test_two_stops_at_once_run_once(hass, house, caplog):
+    import asyncio
+
+    from custom_components.better_media_player.hub import get_rooms
+
+    hass.states.async_set(LIVING_OCC, "on")
+    hass.states.async_set(KITCHEN_OCC, "on")
+    await follow_from(hass, house)
+    assert KITCHEN in house.members(FOLLOW)
+    house.transferred.clear()
+    hub = get_hub(hass)
+    rooms = {r.entry.title: r for r in get_rooms(hass).values()}
+    results = await asyncio.gather(
+        hub.async_follow_stop(rooms["Wohnzimmer"]), hub.async_follow_stop(rooms["Kitchen"]), return_exceptions=True
+    )
+    await hass.async_block_till_done()
+    assert caplog.text.count("Follow me ended") == 1
+    assert len(house.transferred) == 1
+    assert sum(isinstance(r, ServiceValidationError) for r in results) == 1
+
+
+async def test_other_follow_player_in_the_options_ends_follow_me(hass, house):
+    from custom_components.better_media_player.const import CONF_FOLLOW_PLAYER
+
+    from .conftest import GROUP
+
+    hass.states.async_set(LIVING_OCC, "on")
+    await follow_from(hass, house)
+    house.group("playing", [KITCHEN], GROUP)  # another group plays in the kitchen
+    await hass.async_block_till_done()
+    entry = _hub_entry(hass)
+    hass.config_entries.async_update_entry(entry, options={**entry.options, CONF_FOLLOW_PLAYER: GROUP})
+    await hass.async_block_till_done()
+    hub = get_hub(hass)
+    assert hub.follow_player == GROUP
+    assert not hub.active, "a group that just plays was taken over as follow me"
+    assert house.members(GROUP) == [KITCHEN]
+
+
+async def test_reload_with_the_same_player_keeps_follow_me(hass, house):
+    hass.states.async_set(LIVING_OCC, "on")
+    await follow_from(hass, house)
+    entry = _hub_entry(hass)
+    hass.config_entries.async_update_entry(entry, options={**entry.options, "default_volume": 20})
+    await hass.async_block_till_done()
+    assert get_hub(hass).active
+
+
+async def test_stop_reports_a_failed_queue_move(hass, house):
+    from homeassistant.exceptions import HomeAssistantError
+
+    hass.states.async_set(LIVING_OCC, "on")
+    await follow_from(hass, house)
+    original = house.handle
+
+    def handle(domain, service, entity_id, data, context):
+        if domain == "music_assistant" and service == "transfer_queue":
+            raise HomeAssistantError("MA down")
+        return original(domain, service, entity_id, data, context)
+
+    house.handle = handle
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(DOMAIN, "stop_follow", {"entity_id": LIVING}, blocking=True)
+    assert not get_hub(hass).active
+

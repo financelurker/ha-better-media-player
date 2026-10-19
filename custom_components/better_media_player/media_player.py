@@ -457,8 +457,9 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
         """Follow me off: the music stays in this room if it plays along, else
         goes back where follow me was started."""
         hub = get_hub(self.hass)
-        if hub is not None:
-            await hub.async_follow_stop(self.ctrl)
+        if hub is None:
+            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="follow_not_running")
+        await hub.async_follow_stop(self.ctrl)
 
     async def async_snooze(self, minutes: float | None = None) -> None:
         await self.ctrl.wake.async_snooze(minutes)
