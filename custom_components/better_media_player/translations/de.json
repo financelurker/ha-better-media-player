@@ -654,5 +654,13 @@
     "preset_not_offered": {
       "message": "Das Preset {preset} wird in {room} nicht angeboten."
     }
+  },
+  "device_automation": {
+    "trigger_type": {
+      "source_changed": "Quelle gewechselt",
+      "source_video": "Auf Video gewechselt",
+      "source_audio": "Auf Musik gewechselt",
+      "source_off": "Quelle aus (kein Player aktiv)"
+    }
   }
 }

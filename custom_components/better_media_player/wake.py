@@ -288,6 +288,7 @@ class WakeAlarm:
         meantime makes it stop."""
         ctrl = self.ctrl
         src = ctrl.sources[w["source"]]
+        ctrl.source_watch.note_request(w["source"])  # a wake is a wish for its source
         w["phase"] = PHASE_STARTING
         w["started_at"] = _now()
         w["seen_new"] = False
