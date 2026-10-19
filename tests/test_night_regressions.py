@@ -10,7 +10,7 @@ import pytest
 from custom_components.better_media_player.const import DOMAIN
 from custom_components.better_media_player.hub import get_hub
 
-from .conftest import BASS, FOLLOW, GROUP, GROUPS, KITCHEN, KITCHEN_OCC, LIVING_OCC, MUSIC, setup_room
+from .conftest import BASS, FOLLOW, GROUP, GROUPS, KITCHEN, KITCHEN_OCC, LIVING_OCC, MUSIC, setup_room, start_follow
 from .test_night import NIGHT, ROOM, _music_at, _night, _sent, _tick, _vol
 
 KNIGHT = "switch.kitchen_night_mode"
@@ -22,25 +22,26 @@ async def _sw(hass, entity, on):
 
 
 async def _follow_at_night(hass, house, freezer, kitchen_night=True):
-    await _sw(hass, NIGHT, True)
-    if kitchen_night:
-        await _sw(hass, KNIGHT, True)
     hass.states.async_set(LIVING_OCC, "on")
     hass.states.async_set(KITCHEN_OCC, "on")
     await hass.async_block_till_done()
-    await hass.services.async_call(DOMAIN, "start_follow", {"volume": 0.6}, blocking=True)
+    await start_follow(hass, house)
     await hass.async_block_till_done()
+    await _tick(hass, freezer, 3)
+    await _sw(hass, NIGHT, True)
+    if kitchen_night:
+        await _sw(hass, KNIGHT, True)
     await _tick(hass, freezer, 3)
 
 
 # the room leaves the night mode: its member gets follow me's volume back
 async def test_single_room_member_fades_back(hass, house, freezer):
-    await _sw(hass, NIGHT, True)
     hass.states.async_set(LIVING_OCC, "on")
     await hass.async_block_till_done()
-    await hass.services.async_call(DOMAIN, "start_follow", {"volume": 0.6}, blocking=True)
+    await start_follow(hass, house)
     await hass.async_block_till_done()
     await _tick(hass, freezer, 3)
+    await _sw(hass, NIGHT, True)
     assert house.members(FOLLOW) == [MUSIC]
     assert _vol(hass) == 0.3
     n = len(_sent(house, MUSIC))
@@ -76,7 +77,7 @@ async def test_paused_group_member_back_at_once(hass, house, freezer):
     assert _vol(hass, MUSIC) == 0.3  # still in night mode
 
 
-async def test_always_group_member_back(hass, house, freezer):
+async def test_other_group_member_back(hass, house, freezer):
     house.group("playing", [MUSIC, KITCHEN], GROUP, volume_level=0.6)
     house.music("playing", volume_level=0.6)
     house.kitchen("playing", volume_level=0.6)
@@ -123,12 +124,14 @@ def _ma_like(house):
 
 async def test_mixed_group_no_ping_pong(hass, house, freezer):
     _ma_like(house)
-    await hass.services.async_call("switch", "turn_on", {"entity_id": NIGHT}, blocking=True)
-    await hass.services.async_call("switch", "turn_on", {"entity_id": KNIGHT}, blocking=True)
     hass.states.async_set(LIVING_OCC, "on")
     hass.states.async_set(KITCHEN_OCC, "on")
     await hass.async_block_till_done()
-    await hass.services.async_call(DOMAIN, "start_follow", {"volume": 0.6}, blocking=True)
+    await start_follow(hass, house)
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 3)
+    await hass.services.async_call("switch", "turn_on", {"entity_id": NIGHT}, blocking=True)
+    await hass.services.async_call("switch", "turn_on", {"entity_id": KNIGHT}, blocking=True)
     await hass.async_block_till_done()
     await _tick(hass, freezer, 3)
     ms = house.members(FOLLOW)

@@ -70,9 +70,6 @@ REASON_LEFT = "left"  # follow wake: the wake room was left
 FAILED_START = "start_failed"
 FAILED_NOT_PLAYING = "not_playing"
 
-# entities shown only while a wake runs
-CONTROL_KEYS = ("wake_snooze", "wake_stop")
-
 _PLAYING = {"playing", "buffering"}
 _POWERED = {"on", "idle", "playing", "paused", "buffering"}
 
@@ -214,7 +211,6 @@ class WakeAlarm:
         max_minutes: float | None,
         night_mode: bool | None,
         follow: bool = False,
-        group: str | None = None,
     ) -> None:
         ctrl = self.ctrl
         if key not in ctrl.sources:
@@ -226,10 +222,6 @@ class WakeAlarm:
                     translation_domain=DOMAIN,
                     translation_key="follow_wake",
                     translation_placeholders={"room": ctrl.entry.title},
-                )
-            if group is not None and group not in hub.follow_groups:
-                raise ServiceValidationError(
-                    translation_domain=DOMAIN, translation_key="not_follow_group", translation_placeholders={"group": group}
                 )
         if self.active:
             await self.async_finish(REASON_REPLACED)
@@ -257,7 +249,7 @@ class WakeAlarm:
             "fade_t0": None,
             "snooze_until": None,
             "user_volume": False,
-            "follow": (group or "") if follow else None,
+            "follow": "" if follow else None,  # the follow-me player once joined
             "seen": False,
         }
         if ctrl.data.get("volume_restore", {}).pop(player, None) is not None:
@@ -266,7 +258,6 @@ class WakeAlarm:
             await ctrl.night.async_set(night_mode)
         ctrl.night.async_cancel_ramp(player)
         self._changed(now=True)
-        self._show_controls(True)
         _LOGGER.info("%s: wake up on %s", ctrl.entry.title, player)
         self._spawn_start()
 
@@ -310,7 +301,7 @@ class WakeAlarm:
         self._before = self._snapshot(src)
         try:
             if w.get("follow") is not None:
-                await self._start_follow(w, src)
+                await self._join_follow(w, src)
             elif resume:
                 await self._set_volume(src, ctrl.night.limit(w["start_volume"]))
                 await ctrl._player(src, "media_play")
@@ -330,19 +321,19 @@ class WakeAlarm:
         if w.get("seen_new") or (ctrl.source_playing(src) and self._before[0] not in _PLAYING):
             await self._playing(w)
 
-    async def _start_follow(self, w: dict[str, Any], src: Source) -> None:
-        """Follow wake: the room joins the follow group at its start volume."""
+    async def _join_follow(self, w: dict[str, Any], src: Source) -> None:
+        """Follow wake: the room joins the follow-me player at its start volume."""
         hub = self.ctrl.hub
         if hub is None:
             raise HomeAssistantError("central settings are gone")
         start = self.ctrl.night.limit(w["start_volume"])
         if w.get("follow") and w.get("started_once") and w.get("playing_since"):
             # snooze over (or a restart): back into the group
-            w["follow"] = await hub.async_wake_resume(self.ctrl, w["follow"], start)
+            w["follow"] = await hub.async_wake_resume(self.ctrl, start)
         else:
             data = w.get("data") or {}
             media = {k: data[k] for k in ("media_content_id", "media_content_type") if data.get(k)}
-            w["follow"] = await hub.async_wake_start(self.ctrl, w["follow"] or None, media, start)
+            w["follow"] = await hub.async_wake_start(self.ctrl, media, start)
             w["started_once"] = True
         self.ctrl.data.setdefault("last_source", "audio")
 
@@ -542,7 +533,6 @@ class WakeAlarm:
             self._ramp.stop()
         self.ctrl.data.pop("wake", None)
         self._changed(now=True)
-        self._show_controls(False)
 
     # ------------------------------------------------------------ scheduling
 
@@ -610,9 +600,7 @@ class WakeAlarm:
         """HA is up: go on where the wake was."""
         w = self._w
         if w is None:
-            self._show_controls(False)
-            return
-        self._show_controls(True)
+                return
         now = _now()
         phase = w["phase"]
         src = self._src()
@@ -669,34 +657,3 @@ class WakeAlarm:
         entry = self.ctrl.entry
         entity_id = er.async_get(self.hass).async_get_entity_id("media_player", DOMAIN, f"{entry.entry_id}_player")
         self.hass.bus.async_fire(event, {"entity_id": entity_id, "entry_id": entry.entry_id, "room": entry.title, **data})
-
-    @callback
-    def refresh_controls(self) -> None:
-        self._show_controls(self.active)
-
-    @callback
-    def _show_controls(self, show: bool) -> None:
-        """Snooze / stop buttons: hidden while no wake runs.
-
-        Never against the user: a button they hid stays hidden, one they showed
-        again while no wake ran is not hidden any more.
-        """
-        reg = er.async_get(self.hass)
-        marks: dict[str, str] = self.ctrl.data.setdefault("wake_controls", {})
-        for key in CONTROL_KEYS:
-            entity_id = reg.async_get_entity_id("button", DOMAIN, f"{self.ctrl.entry.entry_id}_{key}")
-            entry = reg.async_get(entity_id) if entity_id else None
-            if entry is None:
-                continue
-            mark = marks.get(entry.unique_id)
-            if show:
-                if entry.hidden_by == er.RegistryEntryHider.INTEGRATION:
-                    reg.async_update_entity(entity_id, hidden_by=None)
-                    marks[entry.unique_id] = "shown"
-            elif mark != "user" and entry.hidden_by is None:
-                if mark == "hidden":
-                    marks[entry.unique_id] = "user"  # shown again by the user
-                else:
-                    reg.async_update_entity(entity_id, hidden_by=er.RegistryEntryHider.INTEGRATION)
-                    marks[entry.unique_id] = "hidden"
-        self.ctrl._save()

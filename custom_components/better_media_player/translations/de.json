@@ -93,19 +93,19 @@
         "description": "Was möchtest du hinzufügen?",
         "menu_options": {
           "room": "Einen Raum",
-          "hub": "Zentrale Einstellungen (Gruppen-Richtlinien, Follow-Me)"
+          "hub": "Zentrale Einstellungen (Follow-Me)"
         }
       },
       "hub": {
         "title": "Zentrale Einstellungen",
-        "description": "Richtlinien für Music-Assistant-Gruppen-Player. Folgt Anwesenheit: Solange die Gruppe spielt, werden alle Follow-Räume vorgewärmt und Räume treten nach Anwesenheit bei oder aus. Immer: Wiedergabe in der Gruppe schaltet die Lautsprecher ihrer Mitglieder ein. Nicht aufgeführte Gruppen werden ignoriert.",
+        "description": "Follow-Me: Die Musik folgt den Personen von Raum zu Raum. Wähle den Follow-Me-Player: einen Music-Assistant-Gruppen-Player mit dynamischen Mitgliedern. Gestartet wird Follow-Me in einem Raum, in dem Musik läuft (Button oder Aktion); jede andere Gruppe spielt einfach.",
         "data": {
-          "follow_groups": "Follow-Me-Gruppen",
-          "always_groups": "Gruppen „immer\"",
-          "default_volume": "Standard-Lautstärke Follow"
+          "follow_player": "Follow-Me-Player",
+          "default_volume": "Standard-Lautstärke"
         },
         "data_description": {
-          "default_volume": "Gilt, wenn die Gruppe noch keine Lautstärke hat (z. B. nachdem sie leer war)."
+          "follow_player": "Ein Music-Assistant-Gruppen-Player mit dynamischen Mitgliedern (keine statischen Mitglieder).",
+          "default_volume": "Solange Follow-Me noch keine Lautstärke kennt (es übernimmt die des Raums, in dem es gestartet wird)."
         }
       },
       "follow": {
@@ -152,7 +152,7 @@
       "duplicate_device": "Ein Gerät darf nur einmal verwendet werden.",
       "needs_player": "Braucht den zugehörigen Player.",
       "needs_power": "Braucht einen Leistungssensor.",
-      "group_twice": "Eine Gruppe kann nur eine Richtlinie haben."
+      "not_a_group": "Das ist kein Music-Assistant-Gruppen-Player."
     },
     "abort": {
       "hub_exists": "Zentrale Einstellungen gibt es schon. Ändern über Konfigurieren.",
@@ -175,9 +175,12 @@
           "night": "Nachtmodus"
         },
         "data": {
-          "follow_groups": "Follow-Me-Gruppen",
-          "always_groups": "Gruppen „immer\"",
-          "default_volume": "Standard-Lautstärke Follow"
+          "follow_player": "Follow-Me-Player",
+          "default_volume": "Standard-Lautstärke"
+        },
+        "data_description": {
+          "follow_player": "Ein Music-Assistant-Gruppen-Player mit dynamischen Mitgliedern (keine statischen Mitglieder).",
+          "default_volume": "Solange Follow-Me noch keine Lautstärke kennt (es übernimmt die des Raums, in dem es gestartet wird)."
         }
       },
       "room": {
@@ -287,7 +290,7 @@
       "duplicate_device": "Ein Gerät darf nur einmal verwendet werden.",
       "needs_player": "Braucht den zugehörigen Player.",
       "needs_power": "Braucht einen Leistungssensor.",
-      "group_twice": "Eine Gruppe kann nur eine Richtlinie haben."
+      "not_a_group": "Das ist kein Music-Assistant-Gruppen-Player."
     },
     "abort": {
       "invalid_config": "Die Einstellungen passen nicht zusammen. Bitte Media Player und Stromgeräte prüfen."
@@ -395,9 +398,6 @@
       "all_off": {
         "name": "Alles aus"
       },
-      "start_follow": {
-        "name": "Follow starten"
-      },
       "sleep_plus_15": {
         "name": "Sleep-Timer +15 min"
       },
@@ -406,36 +406,16 @@
       },
       "wake_stop": {
         "name": "Wecken beenden"
+      },
+      "follow_start": {
+        "name": "Follow-Me"
+      },
+      "follow_stop": {
+        "name": "Follow-Me beenden"
       }
     }
   },
   "services": {
-    "start_follow": {
-      "name": "Follow starten",
-      "description": "Startet oder erweitert eine Follow-Me-Sitzung: Räume, in denen jemand ist, treten der Follow-Gruppe bei, dann startet die Wiedergabe.",
-      "fields": {
-        "group": {
-          "name": "Gruppe",
-          "description": "Follow-Gruppe; Standard: die erste konfigurierte."
-        },
-        "volume": {
-          "name": "Lautstärke",
-          "description": "Gruppenlautstärke 0-1; Raum-Offsets gelten weiter."
-        },
-        "media_content_id": {
-          "name": "Medium",
-          "description": "Was gespielt werden soll; leer: letzte Queue fortsetzen."
-        },
-        "media_content_type": {
-          "name": "Medientyp",
-          "description": "z. B. music."
-        },
-        "fallback_rooms": {
-          "name": "Ersatzräume",
-          "description": "Werden genommen, wenn niemand erkannt wird; Raum-Player oder deren Musik-Player."
-        }
-      }
-    },
     "set_sleep_timer": {
       "name": "Sleep-Timer setzen",
       "description": "Schaltet den Raum nach der angegebenen Zeit aus; die Lautstärke wird in den letzten Minuten ausgeblendet und für die nächste Wiedergabe wiederhergestellt.",
@@ -493,10 +473,6 @@
         "follow": {
           "name": "Follow-Me",
           "description": "Die Musik folgt dir aus diesem Raum (braucht die Zentrale und Anwesenheitssensoren hier)."
-        },
-        "group": {
-          "name": "Follow-Gruppe",
-          "description": "Vorgabe: die spielende Follow-Gruppe, sonst die erste."
         }
       }
     },
@@ -513,6 +489,14 @@
     "stop_wake": {
       "name": "Wecken beenden",
       "description": "Beendet das Wecken; die Wiedergabe läuft weiter."
+    },
+    "start_follow": {
+      "name": "Follow-Me",
+      "description": "Startet Follow-Me in diesem Raum: Seine Musik zieht auf den Follow-Me-Player um und folgt ab dann den Personen."
+    },
+    "stop_follow": {
+      "name": "Follow-Me beenden",
+      "description": "Beendet Follow-Me: Die Musik bleibt in diesem Raum, wenn er mitspielt, sonst geht sie zurück in den Start-Raum; die anderen Räume hören auf."
     }
   },
   "selector": {
@@ -549,8 +533,17 @@
     "follow_wake": {
       "message": "{room} kann nicht mit Follow-Me wecken: Dafür braucht es die Zentrale, einen Musik-Player und Anwesenheitssensoren."
     },
-    "not_follow_group": {
-      "message": "{group} ist keine Follow-Gruppe."
+    "no_follow_player": {
+      "message": "Es ist kein Follow-Me-Player eingerichtet (zentrale Einstellungen)."
+    },
+    "follow_running": {
+      "message": "Follow-Me läuft bereits."
+    },
+    "follow_cannot_start": {
+      "message": "{room} kann Follow-Me gerade nicht starten: Auf dem eigenen Player muss Musik laufen (kein Video, kein Ruhe-Modus)."
+    },
+    "follow_not_running": {
+      "message": "Follow-Me läuft nicht."
     }
   }
 }

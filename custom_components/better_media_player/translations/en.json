@@ -93,19 +93,19 @@
         "description": "What do you want to add?",
         "menu_options": {
           "room": "A room",
-          "hub": "Central settings (group policies, follow me)"
+          "hub": "Central settings (follow me)"
         }
       },
       "hub": {
         "title": "Central settings",
-        "description": "Policies for Music Assistant group players. Follow: while the group plays, all follow rooms are prewarmed and rooms join or leave by occupancy. Always: playback in the group powers the speakers of its members. Groups not listed are ignored.",
+        "description": "Follow me: the music follows the people from room to room. Choose the follow-me player: a Music Assistant group player with dynamic members. Follow me is started in a room where music plays (button or action); every other group simply plays.",
         "data": {
-          "follow_groups": "Follow-me groups",
-          "always_groups": "Always-on groups",
-          "default_volume": "Default follow volume"
+          "follow_player": "Follow-me player",
+          "default_volume": "Default volume"
         },
         "data_description": {
-          "default_volume": "Used when the group has no volume yet (e.g. after it was empty)."
+          "follow_player": "A Music Assistant group player with dynamic members (no static members).",
+          "default_volume": "Until follow me knows a volume (it takes the one of the room it is started in)."
         }
       },
       "follow": {
@@ -152,7 +152,7 @@
       "duplicate_device": "A device may only be used once.",
       "needs_player": "Needs the corresponding player.",
       "needs_power": "Needs a power sensor.",
-      "group_twice": "A group can only have one policy."
+      "not_a_group": "That is no Music Assistant group player."
     },
     "abort": {
       "hub_exists": "Central settings already exist. Change them via Configure.",
@@ -175,9 +175,12 @@
           "night": "Night mode"
         },
         "data": {
-          "follow_groups": "Follow-me groups",
-          "always_groups": "Always-on groups",
-          "default_volume": "Default follow volume"
+          "follow_player": "Follow-me player",
+          "default_volume": "Default volume"
+        },
+        "data_description": {
+          "follow_player": "A Music Assistant group player with dynamic members (no static members).",
+          "default_volume": "Until follow me knows a volume (it takes the one of the room it is started in)."
         }
       },
       "room": {
@@ -287,7 +290,7 @@
       "duplicate_device": "A device may only be used once.",
       "needs_player": "Needs the corresponding player.",
       "needs_power": "Needs a power sensor.",
-      "group_twice": "A group can only have one policy."
+      "not_a_group": "That is no Music Assistant group player."
     },
     "abort": {
       "invalid_config": "The settings are not consistent. Check media players and power devices."
@@ -395,9 +398,6 @@
       "all_off": {
         "name": "All off"
       },
-      "start_follow": {
-        "name": "Start follow"
-      },
       "sleep_plus_15": {
         "name": "Sleep timer +15 min"
       },
@@ -406,36 +406,16 @@
       },
       "wake_stop": {
         "name": "Stop wake"
+      },
+      "follow_start": {
+        "name": "Follow me"
+      },
+      "follow_stop": {
+        "name": "Stop follow me"
       }
     }
   },
   "services": {
-    "start_follow": {
-      "name": "Start follow",
-      "description": "Start or extend a follow-me session: rooms where someone is join the follow group, then playback starts.",
-      "fields": {
-        "group": {
-          "name": "Group",
-          "description": "Follow group; default: the first configured one."
-        },
-        "volume": {
-          "name": "Volume",
-          "description": "Group volume 0-1; room offsets still apply."
-        },
-        "media_content_id": {
-          "name": "Media",
-          "description": "What to play; empty: continue the last queue."
-        },
-        "media_content_type": {
-          "name": "Media type",
-          "description": "e.g. music."
-        },
-        "fallback_rooms": {
-          "name": "Fallback rooms",
-          "description": "Used when nobody is detected; room players or their music players."
-        }
-      }
-    },
     "set_sleep_timer": {
       "name": "Set sleep timer",
       "description": "Turn the room off after the given time; the volume fades out over the last minutes and is restored for the next playback.",
@@ -493,10 +473,6 @@
         "follow": {
           "name": "Follow me",
           "description": "The music follows you from this room (needs central settings and occupancy sensors here)."
-        },
-        "group": {
-          "name": "Follow group",
-          "description": "Default: the playing follow group, else the first one."
         }
       }
     },
@@ -513,6 +489,14 @@
     "stop_wake": {
       "name": "Stop wake",
       "description": "End the wake; the playback goes on."
+    },
+    "start_follow": {
+      "name": "Follow me",
+      "description": "Start follow me in this room: its music moves to the follow-me player and follows the people from now on."
+    },
+    "stop_follow": {
+      "name": "Stop follow me",
+      "description": "End follow me: the music stays in this room if it plays along, else goes back to the room it was started in; the other rooms stop."
     }
   },
   "selector": {
@@ -549,8 +533,17 @@
     "follow_wake": {
       "message": "{room} cannot wake with follow me: it needs central settings, a music player and occupancy sensors."
     },
-    "not_follow_group": {
-      "message": "{group} is not a follow group."
+    "no_follow_player": {
+      "message": "No follow-me player is set up (central settings)."
+    },
+    "follow_running": {
+      "message": "Follow me is on already."
+    },
+    "follow_cannot_start": {
+      "message": "{room} cannot start follow me now: music has to play on its own player (no video, not in quiet mode)."
+    },
+    "follow_not_running": {
+      "message": "Follow me is not on."
     }
   }
 }

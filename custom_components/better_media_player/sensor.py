@@ -103,7 +103,7 @@ class FollowStateSensor(BetterMediaPlayerEntity, SensorEntity):
 
 
 class FollowSensor(HubEntity, SensorEntity):
-    """Rooms that are in the playing follow group right now."""
+    """Rooms that play along with follow me right now."""
 
     _attr_native_unit_of_measurement = "rooms"
 
@@ -114,8 +114,8 @@ class FollowSensor(HubEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict:
         return {
-            "active_group": self.hub.active_group,
             "rooms": self.hub.follow_members,
-            "follow_groups": self.hub.follow_groups,
-            "always_groups": self.hub.always_groups,
+            "follow_player": self.hub.follow_player,
+            "active": self.hub.active,
+            "started_in": self.hub.origin.entry.title if self.hub.origin else None,
         }

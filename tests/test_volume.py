@@ -13,7 +13,7 @@ from homeassistant.util import dt as dt_util
 
 from custom_components.better_media_player.const import DOMAIN
 
-from .conftest import FOLLOW, GROUP, KODI, LIVING_OCC, MUSIC, setup_room
+from .conftest import FOLLOW, GROUP, KODI, LIVING_OCC, MUSIC, setup_room, start_follow
 
 ROOM = "media_player.wohnzimmer"
 
@@ -146,7 +146,7 @@ async def test_follow_join_volume_is_not_learned(hass, house, freezer):
     assert _room_volume(hass) == 0.3
     hass.states.async_set(LIVING_OCC, "on")
     await hass.async_block_till_done()
-    await hass.services.async_call(DOMAIN, "start_follow", {"volume": 0.6}, blocking=True)
+    await start_follow(hass, house)
     await hass.async_block_till_done()
     await _tick(hass, freezer, 3)
     assert MUSIC in house.members(FOLLOW)

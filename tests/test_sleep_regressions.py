@@ -14,7 +14,7 @@ from homeassistant.util import dt as dt_util
 from custom_components.better_media_player.const import DOMAIN, EVENT_SLEEP_TIMER_FINISHED
 from custom_components.better_media_player.hub import get_hub
 
-from .conftest import BASS, FOLLOW, KODI, LIVING_OCC, MUSIC, SPEAKERS, setup_room
+from .conftest import BASS, FOLLOW, KODI, LIVING_OCC, MUSIC, SPEAKERS, setup_room, start_follow
 
 ROOM = "media_player.wohnzimmer"
 NUMBER = "number.wohnzimmer_sleep_timer"
@@ -128,7 +128,7 @@ async def test_fade_pollutes_follow_base_volume(hass, house, freezer):
     house.handle = avg
     hass.states.async_set(LIVING_OCC, "on")
     await hass.async_block_till_done()
-    await hass.services.async_call(DOMAIN, "start_follow", {"volume": 0.6}, blocking=True)
+    await start_follow(hass, house)
     await hass.async_block_till_done()
     assert house.members(FOLLOW) == [MUSIC]
     assert _vol(hass) == pytest.approx(0.5)

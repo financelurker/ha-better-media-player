@@ -9,7 +9,7 @@ Better Media Player is a custom integration in the spirit of Better Thermostat. 
 - **Auto-on:** music that starts on the room player, also as part of a Music Assistant group, powers the speakers by itself.
 - **Room off:** leaves a Music Assistant group, stops playback, turns the video player off and powers everything down.
 - **Manual override:** switch a plug by hand and the room steps back until all plugs are off again.
-- **Follow me:** music on a Music Assistant follow group moves with you from room to room, using the room's occupancy sensors.
+- **Follow me:** start it in a room and the music moves with you from room to room, using the rooms' occupancy sensors and one Music Assistant group player.
 - **Media browser and search:** browse and search all of the room's players in one place, with their queues on top; picking a movie powers up TV and Kodi first.
 
 ## Screenshots
@@ -123,38 +123,30 @@ Paused music is not demand: the speakers switch off after the run-down and on ag
 
 ### Follow me
 
-Needs the **Central settings** entry. There you assign each Music Assistant group player a policy:
+Needs the **Central settings** entry with one **follow-me player**: a Music Assistant group player with dynamic members (e.g. *All players*). There is one follow me per Home Assistant installation. Every other Music Assistant group simply plays: it powers the speakers of its members like direct playback.
 
-| Policy | Behaviour |
-|---|---|
-| **Follow** | The music follows the people (see below). |
-| **Always** | Playback in the group powers the speakers of its members, like direct playback. |
-| *(not listed)* | Ignored: playback in the group powers nothing. Without central settings every group counts. |
-
-While a follow group plays:
-
-- **Prewarm:** the speakers of all follow rooms are switched on, so the sound is there as soon as you walk in.
-- **Join:** a room with presence joins the group. Its volume is set first: group volume plus the room's offset (e.g. bedroom −10 percentage points).
-- **Leave:** a room without presence leaves after its presence run-down (2 min). When the last room leaves, Music Assistant pauses the group, and the speakers switch off after their run-down.
-- **Never steals:** a room that plays something else (directly or in another group) is left alone.
-- **Left out:** rooms with video playing (Kodi; when the video ends the room comes back, and if it was the last room the group resumes, within 3 h), rooms in **quiet** mode (switch per room; leaves at once and cuts the speakers) and rooms turned **off** during the session (until the session ends).
-- **Unknown presence** (all sensors unavailable) changes nothing, so music does not stop because a sensor integration is down.
-- **Manual and fallback rooms** without presence stay as long as nobody is detected in any follow room; then the normal rules apply, including the run-down.
-- **Paused by you:** the session goes on, rooms stay as they are, the prewarmed speakers run down. On resume the rules apply again.
-- One follow group plays at a time; starting another one empties the older group (it pauses).
-
-An empty group cannot start, so start follow in Music Assistant with at least one room, with the **Start follow** button, or from scripts and automations:
+**Start** follow me in a room where music plays directly on its music player (not video, not in quiet mode), with the room's **Follow me** button or the action:
 
 ```yaml
 action: better_media_player.start_follow
-data:
-  group: media_player.all_players_follow   # optional, default: first follow group
-  media_content_id: "library://radio/42"   # optional, default: continue the last queue
-  media_content_type: music                # optional
-  volume: 0.15                             # optional, group volume 0-1; offsets still apply
-  fallback_rooms:                          # optional, when nobody is detected (rooms with occupancy sensors)
-    - media_player.bedroom
+target:
+  entity_id: media_player.living_room
 ```
+
+The room joins the follow-me player and its queue moves there (`music_assistant.transfer_queue`). The room's volume becomes follow me's volume (its offset taken out). While follow me runs, the **Follow me** buttons are hidden in every room and the **Stop follow me** buttons are shown; pressing a hidden button gives an error.
+
+While it plays:
+
+- **Prewarm:** the speakers of all follow rooms are switched on, so the sound is there as soon as you walk in.
+- **Join:** a room with presence joins. Its volume is set first: follow me's volume plus the room's offset (e.g. bedroom −10 percentage points).
+- **Leave:** a room without presence leaves after its presence run-down (2 min). When the last room leaves, Music Assistant pauses the group and follow me ends.
+- **Never steals:** a room that plays something else (directly or in another group) is left alone.
+- **Left out:** rooms with video playing (Kodi; when the video ends the room comes back, and if it was the last room the group resumes, within 3 h), rooms in **quiet** mode (switch per room; leaves at once and cuts the speakers) and rooms turned **off** during the session (until follow me ends).
+- **Unknown presence** (all sensors unavailable) changes nothing, so music does not stop because a sensor integration is down.
+- **Nobody detected** at the start: the start room stays as long as nobody is detected in any follow room; then the normal rules apply, including the run-down. The same goes for a room you add to the group by hand.
+- **Paused by you:** follow me goes on, rooms stay as they are, the prewarmed speakers run down. On resume the rules apply again.
+
+**Stop** follow me with any room's **Stop follow me** button or `better_media_player.stop_follow` (target: a room player). The music goes back to one room: the room you stop it in if it plays along, else the room it was started in. All other rooms stop. Follow me also ends by itself when the follow-me player is stopped in Music Assistant.
 
 > Group players with **static** members are not supported: Music Assistant stops the whole group when a static member is removed. Use groups with dynamic members only.
 
@@ -226,7 +218,7 @@ data:
 - **Ends** (`better_media_player_wake_finished`, `reason`): `stopped` (button / `better_media_player.stop_wake` / a stop on the player; the playback goes on unless stopped), `max_duration`, `room_off`, `sleep_timer` (a sleep timer set during the wake; the playback goes on), `replaced` (a new wake). A wake ends a running sleep timer.
 - What the wake sets is not taken as the room volume; the night mode's limit holds.
 - It survives a restart: the fade and the snooze go on, a start cut by the restart is tried again (within 5 min).
-- The sensor `Wake` shows `idle`, `starting`, `fading`, `playing` or `snoozed`. The buttons *Snooze* and *Stop wake* are hidden and unavailable while no wake runs (a button you hid stays hidden; one you show again stays shown). Cards that list them explicitly still show them; to show them only during a wake:
+- The sensor `Wake` shows `idle`, `starting`, `fading`, `playing` or `snoozed`. The buttons *Snooze* and *Stop wake* are hidden while no wake runs (pressing them then does nothing; a button you hid stays hidden, one you show again stays shown). Cards that list them explicitly still show them; to show them only during a wake:
 
 ```yaml
 type: conditional
@@ -245,10 +237,10 @@ Waking several rooms with one call wakes each on its own (not in sync).
 
 #### With follow me
 
-With `follow: true` (and optionally `group`) the music follows you out of the wake room. It needs the central settings, a music player and occupancy sensors in the wake room.
+With `follow: true` the music follows you out of the wake room: the wake starts follow me (or joins it). It needs the central settings, a music player and occupancy sensors in the wake room.
 
-- **The wake room** joins the follow group at its start volume and fades in its own player. Only it fades: rooms that join later get follow me's normal volume. Its quiet mode does not keep it out while it wakes.
-- **New session or running group:** if no follow group plays, a session starts with the wake's media; players left in the group from before (e.g. paused last night) leave it. Rooms that are occupied at that moment (someone already in the kitchen) stay out until their presence went and came again. If a follow group already plays (or was just started by another wake), the wake room joins it and the group's media goes on.
+- **The wake room** joins the follow-me player at its start volume and fades in its own player. Only it fades: rooms that join later get follow me's normal volume. Its quiet mode does not keep it out while it wakes.
+- **Follow me off or running:** if follow me is off, the wake starts it with the wake's media; players left in the group from before (e.g. paused last night) leave it. Rooms that are occupied at that moment (someone already in the kitchen) stay out until their presence went and came again. If follow me already runs (or was just started by another wake), the wake room joins it and its media goes on.
 - If Music Assistant drops the wake room from the group, it is taken back in; a group stopped in the app ends the wake. After a restart with the group stopped, the wake room joins again.
 - **Left = woken up:** the wake is done (`wake_finished`, reason `left`) when presence was seen in the wake room after the wake started, the room then ran empty (presence run-down), **and** someone turned up in another follow room — from 2 min before the wake room was last occupied on (the sensor there may switch on first). The room leaves the group like any follow room; the music plays on where you are. A sensor that loses a sleeper for a while (mmWave) is no "left", nor is someone who got up much earlier. As long as no presence was seen, the wake room stays until the wake ends otherwise. The room option *Wake: detect leaving the room* switches this off; then a follow wake there ends only by stop, maximum duration, room off or a sleep timer.
 - **Snooze** only snoozes the wake room: it leaves the group meanwhile (the others play on; as the only member the group pauses) and comes back at the start volume. Follow me does not take it back in during the snooze.
@@ -302,8 +294,8 @@ With power sensors, a plug is cut only after its device has drawn less than the 
 | `button.<room>_snooze`, `button.<room>_stop_wake` | wake controls (hidden while no wake runs) |
 | `number.<room>_night_maximum_volume`, `_night_video_idle_timeout`, `_night_display_run_down` | night mode limit (%) and times (min) |
 | `sensor.<room>_follow` | follow state of the room (with occupancy sensors only) |
-| `sensor.better_media_player_follow_rooms` | central: rooms in the playing follow group |
-| `button.better_media_player_start_follow` | central: continue the last follow queue where someone is |
+| `button.<room>_follow_me`, `button.<room>_stop_follow_me` | start / stop follow me (only the usable one is shown) |
+| `sensor.better_media_player_follow_rooms` | central: rooms in follow me; follow-me player, start room in the attributes |
 
 | Status | Meaning |
 |---|---|
@@ -319,10 +311,10 @@ With power sensors, a plug is cut only after its device has drawn less than the 
 
 | Follow state | Meaning |
 |---|---|
-| `inactive` | no follow group plays |
-| `following` | the room is in the playing follow group |
+| `inactive` | follow me is off |
+| `following` | the room plays along |
 | `waiting` | prewarmed, waiting for presence |
-| `override` | kept without presence (manual or fallback start) |
+| `override` | kept while nobody is detected (start or manual join without presence) |
 | `excluded_quiet` / `excluded_video` / `excluded_off` | left out: quiet mode / video / turned off this session |
 | `excluded_busy` | plays something else (directly or in another group) |
 | `presence_unknown` | occupancy sensors unavailable; nothing changes |

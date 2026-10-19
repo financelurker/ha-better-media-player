@@ -1,13 +1,16 @@
-"""'All off' (room) and 'Start follow' (central) buttons."""
+"""Room buttons: all off, sleep timer, wake and follow me controls."""
 
 from __future__ import annotations
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from . import BetterMediaPlayerConfigEntry, is_hub
-from .entity import BetterMediaPlayerEntity, HubEntity
+from . import BetterMediaPlayerConfigEntry
+from .const import DOMAIN
+from .entity import BetterMediaPlayerEntity, ControlEntity
+from .hub import get_hub
 
 
 async def async_setup_entry(
@@ -15,18 +18,18 @@ async def async_setup_entry(
     entry: BetterMediaPlayerConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    if is_hub(entry):
-        async_add_entities([StartFollowButton(entry, entry.runtime_data, "start_follow")])
-        return
     ctrl = entry.runtime_data
-    async_add_entities(
-        [
-            AllOffButton(entry, ctrl, "all_off"),
-            SleepPlusButton(entry, ctrl, "sleep_plus_15"),
-            WakeSnoozeButton(entry, ctrl, "wake_snooze"),
-            WakeStopButton(entry, ctrl, "wake_stop"),
-        ]
-    )
+    entities: list[ButtonEntity] = [
+        AllOffButton(entry, ctrl, "all_off"),
+        SleepPlusButton(entry, ctrl, "sleep_plus_15"),
+        WakeSnoozeButton(entry, ctrl, "wake_snooze"),
+        WakeStopButton(entry, ctrl, "wake_stop"),
+    ]
+    if ctrl.follow_capable:
+        entities.append(FollowStartButton(entry, ctrl, "follow_start"))
+    if ctrl.audio_player is not None:
+        entities.append(FollowStopButton(entry, ctrl, "follow_stop"))
+    async_add_entities(entities)
 
 
 class AllOffButton(BetterMediaPlayerEntity, ButtonEntity):
@@ -34,15 +37,6 @@ class AllOffButton(BetterMediaPlayerEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         await self.ctrl.async_turn_off()
-
-
-class StartFollowButton(HubEntity, ButtonEntity):
-    """Continue the last follow queue in the rooms where someone is."""
-
-    _attr_icon = "mdi:account-music"
-
-    async def async_press(self) -> None:
-        await self.hub.async_start_follow()
 
 
 class SleepPlusButton(BetterMediaPlayerEntity, ButtonEntity):
@@ -54,27 +48,57 @@ class SleepPlusButton(BetterMediaPlayerEntity, ButtonEntity):
         await self.ctrl.async_extend_sleep_timer(15)
 
 
-class _WakeButton(BetterMediaPlayerEntity, ButtonEntity):
-    """Only usable while a wake runs; hidden otherwise (see wake.py)."""
+class WakeSnoozeButton(ControlEntity, ButtonEntity):
+    _attr_icon = "mdi:alarm-snooze"
 
     @property
-    def available(self) -> bool:
+    def usable(self) -> bool:
         return self.ctrl.wake.active
-
-    async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
-        self.ctrl.wake.refresh_controls()
-
-
-class WakeSnoozeButton(_WakeButton):
-    _attr_icon = "mdi:alarm-snooze"
 
     async def async_press(self) -> None:
         await self.ctrl.wake.async_snooze(None)
 
 
-class WakeStopButton(_WakeButton):
+class WakeStopButton(ControlEntity, ButtonEntity):
     _attr_icon = "mdi:alarm-off"
+
+    @property
+    def usable(self) -> bool:
+        return self.ctrl.wake.active
 
     async def async_press(self) -> None:
         await self.ctrl.wake.async_finish("stopped")
+
+
+class FollowStartButton(ControlEntity, ButtonEntity):
+    """Follow me from here: only while music plays on this room's own player."""
+
+    _attr_icon = "mdi:account-music"
+
+    @property
+    def usable(self) -> bool:
+        hub = get_hub(self.hass)
+        return hub is not None and hub.can_start(self.ctrl)
+
+    async def async_press(self) -> None:
+        hub = get_hub(self.hass)
+        if hub is None:
+            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="no_follow_player")
+        await hub.async_follow_start(self.ctrl)  # refuses if it cannot start here
+
+
+class FollowStopButton(ControlEntity, ButtonEntity):
+    """Follow me off: the music stays here (or goes back where it was started)."""
+
+    _attr_icon = "mdi:account-music-outline"
+
+    @property
+    def usable(self) -> bool:
+        hub = get_hub(self.hass)
+        return hub is not None and hub.active
+
+    async def async_press(self) -> None:
+        hub = get_hub(self.hass)
+        if hub is None or not hub.active:
+            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="follow_not_running")
+        await hub.async_follow_stop(self.ctrl)

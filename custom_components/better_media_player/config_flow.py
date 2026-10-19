@@ -16,7 +16,6 @@ from homeassistant.helpers import selector as sel
 from .const import (
     ACTION_DOMAINS,
     ATTR_MASS_PLAYER_TYPE,
-    CONF_ALWAYS_GROUPS,
     CONF_AREA,
     CONF_AUDIO_HOST,
     CONF_AUDIO_OFF_ACTION,
@@ -38,7 +37,7 @@ from .const import (
     CONF_DISPLAY_STANDBY_MAX,
     CONF_DISPLAY_STANDBY_W,
     CONF_ENTRY_TYPE,
-    CONF_FOLLOW_GROUPS,
+    CONF_FOLLOW_PLAYER,
     CONF_HOST_ON_WAIT,
     CONF_HOST_RUN_DOWN,
     CONF_OCCUPANCY,
@@ -189,8 +188,7 @@ def schema_follow() -> vol.Schema:
 def schema_hub() -> vol.Schema:
     return vol.Schema(
         {
-            vol.Optional(CONF_FOLLOW_GROUPS): _entity("media_player", multiple=True),
-            vol.Optional(CONF_ALWAYS_GROUPS): _entity("media_player", multiple=True),
+            vol.Required(CONF_FOLLOW_PLAYER): _entity("media_player"),
             vol.Optional(
                 CONF_DEFAULT_VOLUME, default=HUB_DEFAULTS[CONF_DEFAULT_VOLUME]
             ): _num(1, 100, 1, "%"),
@@ -198,9 +196,10 @@ def schema_hub() -> vol.Schema:
     )
 
 
-def _validate_hub(options: dict) -> dict[str, str]:
-    if set(options.get(CONF_FOLLOW_GROUPS) or []) & set(options.get(CONF_ALWAYS_GROUPS) or []):
-        return {CONF_ALWAYS_GROUPS: "group_twice"}
+def _validate_hub(hass: HomeAssistant, options: dict) -> dict[str, str]:
+    state = hass.states.get(options.get(CONF_FOLLOW_PLAYER) or "")
+    if state is not None and state.attributes.get(ATTR_MASS_PLAYER_TYPE) != MASS_TYPE_GROUP:
+        return {CONF_FOLLOW_PLAYER: "not_a_group"}
     return {}
 
 
@@ -302,7 +301,7 @@ def _area_suggestions(hass: HomeAssistant, area_id: str | None) -> dict[str, str
 
 
 class BetterMediaPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
-    VERSION = 1
+    VERSION = 2
 
     def __init__(self) -> None:
         self._options: dict[str, Any] = {}
@@ -330,7 +329,7 @@ class BetterMediaPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
         schema = schema_hub()
         errors: dict[str, str] = {}
         if user_input is not None:
-            errors = _validate_hub(user_input)
+            errors = _validate_hub(self.hass, user_input)
             if not errors:
                 options = {**HUB_DEFAULTS, **{k: v for k, v in user_input.items() if v not in (None, "", [])}}
                 return self.async_create_entry(
@@ -478,7 +477,7 @@ class HubOptionsFlow(OptionsFlow):
         schema = schema_hub()
         errors: dict[str, str] = {}
         if user_input is not None:
-            errors = _validate_hub(user_input)
+            errors = _validate_hub(self.hass, user_input)
             if not errors:
                 return self.async_create_entry(
                     data={**HUB_DEFAULTS, **{k: v for k, v in user_input.items() if v not in (None, "", [])}}

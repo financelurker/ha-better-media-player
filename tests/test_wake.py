@@ -21,7 +21,7 @@ from custom_components.better_media_player.const import (
     EVENT_WAKE_STARTED,
 )
 
-from .conftest import KODI, MUSIC, SPEAKERS, TV, setup_room
+from .conftest import KODI, MUSIC, SPEAKERS, TV, setup_room, start_follow
 
 ROOM = "media_player.wohnzimmer"
 WAKE = "sensor.wohnzimmer_wake"
@@ -320,7 +320,6 @@ async def test_controls_hidden_while_no_wake(hass, home, freezer):
     await _room(hass, home)
     reg = er.async_get(hass)
     assert reg.async_get(SNOOZE).hidden_by == er.RegistryEntryHider.INTEGRATION
-    assert hass.states.get(SNOOZE).state == "unavailable"
     await _wake_playing(hass, home, freezer)
     assert reg.async_get(SNOOZE).hidden_by is None
     assert reg.async_get(STOP).hidden_by is None
@@ -385,7 +384,7 @@ async def test_follow_room_leaves_group_for_wake(hass, house, freezer):
 
     hass.states.async_set(LIVING_OCC, "on")
     await hass.async_block_till_done()
-    await hass.services.async_call(DOMAIN, "start_follow", {"volume": 0.6}, blocking=True)
+    await start_follow(hass, house)
     await hass.async_block_till_done()
     assert MUSIC in house.members(FOLLOW)
     await _wake(hass, start_volume=0.05)

@@ -19,29 +19,21 @@ PLATFORMS: list[Platform] = [
 STORAGE_VERSION = 1
 TICK_SECONDS = 10
 
-# Entry types. v0.1 only knows rooms; v0.2 adds a central "hub" entry in the
-# same domain, so existing rooms never need to be migrated.
+# Entry types: one per room, and one central entry (follow me).
 CONF_ENTRY_TYPE = "entry_type"
 ENTRY_TYPE_ROOM = "room"
 ENTRY_TYPE_HUB = "hub"
 
-HUB_PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BUTTON]
+HUB_PLATFORMS: list[Platform] = [Platform.SENSOR]
 
 # --- Hub (central settings) ----------------------------------------------------
-CONF_FOLLOW_GROUPS = "follow_groups"
-CONF_ALWAYS_GROUPS = "always_groups"
+CONF_FOLLOW_PLAYER = "follow_player"  # the follow-me player: an MA group with dynamic members
 CONF_DEFAULT_VOLUME = "default_volume"  # %
-
-POLICY_ALWAYS = "always"
-POLICY_FOLLOW = "follow"
-POLICY_IGNORE = "ignore"
 
 HUB_DEFAULTS: dict = {CONF_DEFAULT_VOLUME: 25}
 
-SERVICE_START_FOLLOW = "start_follow"
-ATTR_GROUP = "group"
-ATTR_VOLUME = "volume"
-ATTR_FALLBACK_ROOMS = "fallback_rooms"
+SERVICE_FOLLOW_START = "start_follow"
+SERVICE_FOLLOW_STOP = "stop_follow"
 
 # --- Room: follow me ----------------------------------------------------------
 CONF_OCCUPANCY = "occupancy"
@@ -54,7 +46,7 @@ WAKE_ARRIVAL_WINDOW = 120  # s: an arrival elsewhere may come this much before t
 FOLLOW_INACTIVE = "inactive"  # no follow group playing
 FOLLOW_ACTIVE = "following"  # member of the playing follow group
 FOLLOW_WAITING = "waiting"  # prewarmed, waiting for presence
-FOLLOW_OVERRIDE = "override"  # member without presence (manual / fallback start)
+FOLLOW_OVERRIDE = "override"  # member without presence (start or manual join while nobody is detected)
 FOLLOW_EXCLUDED_QUIET = "excluded_quiet"
 FOLLOW_EXCLUDED_VIDEO = "excluded_video"
 FOLLOW_EXCLUDED_OFF = "excluded_off"  # room was turned off during this session

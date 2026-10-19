@@ -34,6 +34,8 @@ from homeassistant.util import dt as dt_util
 from . import BetterMediaPlayerConfigEntry
 from .browser import RoomBrowser, is_own_id
 from .const import (
+    SERVICE_FOLLOW_START,
+    SERVICE_FOLLOW_STOP,
     SERVICE_SNOOZE,
     SERVICE_STOP_WAKE,
     SERVICE_WAKE,
@@ -47,6 +49,7 @@ from .const import (
     SOURCE_VIDEO,
 )
 from .entity import BetterMediaPlayerEntity
+from .hub import get_hub
 from .sleep import MAX_MINUTES
 
 BASE_FEATURES = MediaPlayerEntityFeature.TURN_ON | MediaPlayerEntityFeature.TURN_OFF
@@ -101,6 +104,8 @@ async def async_setup_entry(
         "async_set_sleep_timer",
     )
     platform.async_register_entity_service(SERVICE_CANCEL_SLEEP_TIMER, None, "async_cancel_sleep_timer")
+    platform.async_register_entity_service(SERVICE_FOLLOW_START, None, "async_start_follow")
+    platform.async_register_entity_service(SERVICE_FOLLOW_STOP, None, "async_stop_follow")
     volume = vol.All(vol.Coerce(float), vol.Range(min=0, max=1))
     platform.async_register_entity_service(
         SERVICE_WAKE,
@@ -114,7 +119,6 @@ async def async_setup_entry(
             vol.Optional(ATTR_NIGHT_MODE): cv.boolean,
             vol.Optional("source"): vol.In([SOURCE_AUDIO, SOURCE_VIDEO]),
             vol.Optional("follow"): cv.boolean,
-            vol.Optional("group"): cv.entity_id,
         },
         "async_wake",
     )
@@ -415,7 +419,6 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
         night_mode: bool | None = None,
         source: str | None = None,
         follow: bool = False,
-        group: str | None = None,
     ) -> None:
         """Wake up in this room; the player comes from the media id (room browser),
         from source, or is the music player (else the video player)."""
@@ -441,8 +444,21 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
             max_duration_minutes,
             night_mode,
             follow=bool(follow),
-            group=group,
         )
+
+    async def async_start_follow(self) -> None:
+        """Follow me from this room (its music moves to the follow-me player)."""
+        hub = get_hub(self.hass)
+        if hub is None:
+            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="no_follow_player")
+        await hub.async_follow_start(self.ctrl)
+
+    async def async_stop_follow(self) -> None:
+        """Follow me off: the music stays in this room if it plays along, else
+        goes back where follow me was started."""
+        hub = get_hub(self.hass)
+        if hub is not None:
+            await hub.async_follow_stop(self.ctrl)
 
     async def async_snooze(self, minutes: float | None = None) -> None:
         await self.ctrl.wake.async_snooze(minutes)

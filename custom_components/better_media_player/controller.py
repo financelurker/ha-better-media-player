@@ -82,8 +82,6 @@ from .const import (
     DEFAULTS,
     DOMAIN,
     FOLLOW_INACTIVE,
-    POLICY_FOLLOW,
-    POLICY_IGNORE,
     ROLE_AUDIO,
     ROLE_AUDIO_HOST,
     ROLE_BASS,
@@ -273,7 +271,7 @@ class RoomController:
         self.manual = False
         self.error: str | None = None
 
-        # follow me (v0.2)
+        # follow me
         self.occupancy: list[str] = list(o.get(CONF_OCCUPANCY) or [])
         self.prewarm = False
         self.follow_state = FOLLOW_INACTIVE
@@ -305,6 +303,8 @@ class RoomController:
             "last_source": default_source,
             **stored,
         }
+        if "wake_controls" in self.data:  # stored under the old name (wake controls only)
+            self.data["controls"] = self.data.pop("wake_controls")
         if self.data.get("last_source") not in self.sources:
             self.data["last_source"] = default_source
         # run-down values: option changes win, otherwise keep the number entity value
@@ -388,6 +388,11 @@ class RoomController:
     def async_add_listener(self, cb: Callable[[], None]) -> Callable[[], None]:
         self._listeners.append(cb)
         return lambda: self._listeners.remove(cb)
+
+    @callback
+    def notify(self) -> None:
+        """Entities update (e.g. the central entry changed something they show)."""
+        self._notify()
 
     @callback
     def _notify(self) -> None:
@@ -493,21 +498,16 @@ class RoomController:
         if not self.source_active_raw(src) or src.suppressed:
             return False
         if src.key == SOURCE_AUDIO:
-            return self._group_policy_allows(src.player)
+            return self._group_counts(src.player)
         return True
 
-    def _group_policy_allows(self, player: str) -> bool:
-        """Playback via a group counts only if the hub's policy for it is not 'ignore'."""
+    def _group_counts(self, player: str) -> bool:
+        """Group playback counts, except follow me in a quiet room (unless it wakes there)."""
         hub = _hub(self.hass)
-        if hub is None:
-            return True  # no central settings: every group counts (v0.1 behaviour)
         groups = self.groups_of(player)
-        if not groups:
-            return True  # direct playback
-        policies = {hub.policy(g) for g in groups}
-        if self.quiet and not self.wake.follow_holding:
-            policies.discard(POLICY_FOLLOW)  # quiet room: follow music does not count (unless it wakes)
-        return bool(policies - {POLICY_IGNORE})
+        if hub is None or not groups or not self.quiet or self.wake.follow_holding:
+            return True
+        return any(not hub.follows(g) for g in groups)
 
     def source_ready(self, src: Source) -> bool:
         """Started far enough to be used."""
