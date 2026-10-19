@@ -330,10 +330,12 @@ class RoomController:
             "night_max_volume",
             *(CONF_PRESET.format(name) for name in PRESETS),
         ):
-            configured = float(self.opts[key])
+            configured = float(self.opts.get(key) or 0)  # (an empty preset: not offered)
             if self.data.get(f"cfg_{key}") != configured or key not in self.data:
                 self.data[key] = configured
                 self.data[f"cfg_{key}"] = configured
+        if self.data.get("volume_preset") is not None and self.data["volume_preset"] not in self.volume.presets:
+            self.data.pop("volume_preset")  # no longer offered (options): it does not come back by itself
         # another volume output (players <-> device, another device): the room's
         # volume was learned in another scale, it is learned again
         volume_cfg = self.volume_device.id if self.volume_device is not None else "players"

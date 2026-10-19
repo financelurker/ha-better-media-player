@@ -155,6 +155,24 @@ async def test_preset_set_to_zero_is_no_longer_offered(hass, home, freezer):
     assert hass.states.get(SELECT).state == "manual", "a preset dropped once is not chosen again by itself"
 
 
+async def test_a_preset_dropped_in_the_options_does_not_come_back(hass, home, freezer):
+    entry = await _music_at(hass, home, freezer)
+    await _select(hass, "party")
+    hass.config_entries.async_update_entry(entry, options={**entry.options, "preset_party": 0})
+    await hass.async_block_till_done()
+    await _number(hass, "party", 90)
+    assert hass.states.get(SELECT).state == "manual"
+    assert _vol(hass) == 0.7
+
+
+async def test_another_preset_set_to_zero_leaves_the_select(hass, home, freezer):
+    await _music_at(hass, home, freezer)
+    await _select(hass, "normal")
+    await _number(hass, "party", 0)
+    assert hass.states.get(SELECT).attributes["options"] == ["quiet", "normal", "loud", "manual"]
+    assert hass.states.get(SELECT).state == "normal"
+
+
 async def test_number_value_survives_a_reload_and_options_win(hass, home, freezer):
     entry = await _music_at(hass, home, freezer)
     await _number(hass, "quiet", 10)

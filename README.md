@@ -221,7 +221,7 @@ data:
 - The preset becomes the room volume and is set right away on what plays. In a group (Music Assistant groups, follow me) it is only remembered: there the group decides; the room gets it with its next playback on its own (with a volume device: right away on the device).
 - It stays chosen until the volume is changed otherwise; then the select shows **manual** (choosing *manual* keeps the volume as it is). The room player shows it in the attribute `volume_preset`.
 - **Night mode:** a preset above the limit is limited, stays chosen and comes back when the night ends.
-- **Power-on preset** (option, default none): the room volume whenever the room comes on (one of its players is used again after everything was off), e.g. not at last night's party volume. Not after a restart of Home Assistant with the room already on, not when a player drops out for a moment, and not for follow me's prewarm.
+- **Power-on preset** (option, default none; skipped while its volume is 0): the room volume whenever the room comes on (one of its players is used again after everything was off), e.g. not at last night's party volume. Not after a restart of Home Assistant with the room already on, not when a player drops out for a moment, and not for follow me's prewarm.
 
 ### Night mode
 

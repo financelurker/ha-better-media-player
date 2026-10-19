@@ -46,7 +46,7 @@ CONF_VOLUME_ENTITY = "volume_entity"
 VOLUME_PLAYERS = "players"
 VOLUME_DEVICE = "device"
 VOLUME_ENTITY_DOMAINS = ["media_player", "number", "input_number"]
-# volume presets: fixed names, a volume (%) per room; an empty value: not offered
+# volume presets: fixed names, a volume (%) per room (number entities); 0: not offered
 PRESETS = ["quiet", "normal", "loud", "party"]
 PRESET_MANUAL = "manual"  # the volume was changed after the preset
 PRESET_NONE = "none"

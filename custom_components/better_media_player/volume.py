@@ -147,14 +147,17 @@ class RoomVolume:
         """The room came on: the power-on preset is its volume (players get it
         when they start)."""
         name = self.ctrl.opts.get(CONF_POWER_ON_PRESET)
-        if name and name != PRESET_NONE and name in self.presets:
-            self._choose(name, self.presets[name])
+        if not name or name == PRESET_NONE:
+            return
+        if name not in self.presets:
+            _LOGGER.info("%s: power-on preset %s is not offered (0): skipped", self.ctrl.entry.title, name)
+            return
+        self._choose(name, self.presets[name])
 
     async def async_preset_changed(self, name: str) -> None:
         """A preset's value was changed (number entity): the chosen one goes along."""
         if self.ctrl.data.get("volume_preset") != name:
-            self.ctrl._notify()
-            return
+            return  # (the select is updated with the room)
         if name in self.presets:
             await self.async_set_preset(name)
         else:
