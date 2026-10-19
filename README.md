@@ -81,7 +81,7 @@ Without the button: HACS → ⋮ → **Custom repositories** → add `https://gi
 
 [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=better_media_player)
 
-Settings → Devices & services → Add integration → **Better Media Player** → **A room**, once per room. For follow me, add **Central settings** once as well.
+Settings → Devices & services → Add integration → **Better Media Player** → **A room**, once per room. For follow me, or to change the [dynamic controls](#dynamic-controls), add **Central settings** once as well.
 
 | Step | What you enter |
 |---|---|
@@ -169,7 +169,7 @@ action:
 
 ### Follow me
 
-Needs the **Central settings** entry with one **follow-me player**: a Music Assistant group player with dynamic members (e.g. *All players*). There is one follow me per Home Assistant installation. Every other Music Assistant group simply plays: it powers the speakers of its members like direct playback.
+Needs the **Central settings** entry with the **follow-me player**: a Music Assistant group player with dynamic members (e.g. *All players*). There is one follow me per Home Assistant installation. Every other Music Assistant group simply plays: it powers the speakers of its members like direct playback.
 
 **Start** follow me in a room where music plays directly on its music player (not video, not in quiet mode), with the room's **Follow me** button or the action:
 
@@ -293,7 +293,7 @@ data:
 - **Ends** (`better_media_player_wake_finished`, `reason`): `stopped` (button / `better_media_player.stop_wake` / a stop on the player; the playback goes on unless stopped), `max_duration`, `room_off`, `sleep_timer` (a sleep timer set during the wake; the playback goes on), `replaced` (a new wake). A wake ends a running sleep timer.
 - What the wake sets is not taken as the room volume; the night mode's limit holds.
 - It survives a restart: the fade and the snooze go on, a start cut by the restart is tried again (within 5 min).
-- The sensor `Wake` shows `idle`, `starting`, `fading`, `playing` or `snoozed`. The buttons *Snooze* and *Stop wake* are hidden while no wake runs (pressing them then does nothing; a button you hid stays hidden, one you show again stays shown). Cards that list them explicitly still show them; to show them only during a wake:
+- The sensor `Wake` shows `idle`, `starting`, `fading`, `playing` or `snoozed`. It and the buttons *Snooze* and *Stop wake* are hidden while no wake runs ([dynamic controls](#dynamic-controls); pressing the buttons then does nothing). Cards that list them explicitly still show them; to show them only during a wake:
 
 ```yaml
 type: conditional
@@ -348,6 +348,27 @@ data:
 
 With power sensors, a plug is cut only after its device has drawn less than the threshold for 30 s, at most after the maximum wait. Useful for OLED TVs that run panel care in standby. A TV that never goes to standby on its own (no CEC) gains nothing from this; then only the run-down applies.
 
+## Dynamic controls
+
+A room's controls that make no sense right now are hidden (`hidden_by: integration`), so the automatic dashboards only show what can be used. A control is shown at once when it makes sense again and hidden only after the hide delay (default 3 s), so a short stop between two items changes nothing. The room player itself is always shown; settings and diagnostic entities are left alone.
+
+| Control | Shown while |
+|---|---|
+| All off | the room plays or is on, or a device still has power (run-down, manual mode) |
+| Sleep timer, Sleep timer +15 min | the room plays or is on, or a sleep timer runs |
+| Sleep timer end | a sleep timer runs |
+| Night mode | the room plays or is on, it is on, or follow me runs (music may come in: it joins limited) |
+| Quiet | follow me runs, or it is on (it only matters for follow me, also while nothing plays here) |
+| Wake, Snooze, Stop wake | a wake runs |
+| Follow me / Stop follow me | it can be started here / follow me runs |
+| Volume preset | the room plays or is on |
+| central: Follow rooms | follow me runs |
+
+- "Plays or is on": one of its players is used (video player on, music playing or paused, or turned on with a source), or the room is being turned on.
+- A hidden control still works through actions and automations; a hidden button gives an error or does nothing.
+- A control you hid stays hidden; one you show again stays shown.
+- **Central settings:** *Dynamic controls* (default on; off: nothing is hidden, in every room) and *Hide delay* (default 3 s). The follow-me player is optional there.
+
 ## Entities
 
 | Entity | Description |
@@ -366,12 +387,12 @@ With power sensors, a plug is cut only after its device has drawn less than the 
 | `switch.<room>_quiet` | quiet mode: the room takes no part in follow me |
 | `switch.<room>_night_mode` | night mode (see above) |
 | `sensor.<room>_wake` | wake state; snooze end, end time and volumes in the attributes |
-| `button.<room>_snooze`, `button.<room>_stop_wake` | wake controls (hidden while no wake runs) |
+| `button.<room>_snooze`, `button.<room>_stop_wake` | wake controls |
 | `number.<room>_night_maximum_volume`, `_night_video_idle_timeout`, `_night_display_run_down` | night mode limit (%) and times (min) |
 | `select.<room>_volume_preset` | volume preset (the offered presets and manual) |
 | `number.<room>_preset_quiet`, `_preset_normal`, `_preset_loud`, `_preset_party` | volume of each preset (%), 0 = not offered |
 | `sensor.<room>_follow` | follow state of the room (with occupancy sensors only) |
-| `button.<room>_follow_me`, `button.<room>_stop_follow_me` | start / stop follow me (only the usable one is shown) |
+| `button.<room>_follow_me`, `button.<room>_stop_follow_me` | start / stop follow me |
 | `sensor.better_media_player_follow_rooms` | central: rooms in follow me; follow-me player, start room in the attributes |
 
 | Status | Meaning |

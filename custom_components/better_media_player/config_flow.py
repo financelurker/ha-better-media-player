@@ -29,6 +29,8 @@ from .const import (
     CONF_AUDIO_STANDBY_W,
     CONF_BASS,
     CONF_DEFAULT_VOLUME,
+    CONF_DYNAMIC_CONTROLS,
+    CONF_HIDE_DELAY,
     CONF_DISPLAY,
     CONF_DISPLAY_ON_WAIT,
     CONF_DISPLAY_POWER,
@@ -217,10 +219,12 @@ def schema_follow() -> vol.Schema:
 def schema_hub() -> vol.Schema:
     return vol.Schema(
         {
-            vol.Required(CONF_FOLLOW_PLAYER): _entity("media_player"),
+            vol.Optional(CONF_FOLLOW_PLAYER): _entity("media_player"),
             vol.Optional(
                 CONF_DEFAULT_VOLUME, default=HUB_DEFAULTS[CONF_DEFAULT_VOLUME]
             ): _num(1, 100, 1, "%"),
+            vol.Optional(CONF_DYNAMIC_CONTROLS, default=HUB_DEFAULTS[CONF_DYNAMIC_CONTROLS]): sel.BooleanSelector(),
+            vol.Optional(CONF_HIDE_DELAY, default=HUB_DEFAULTS[CONF_HIDE_DELAY]): _num(0, 300, 1, "s"),
         }
     )
 

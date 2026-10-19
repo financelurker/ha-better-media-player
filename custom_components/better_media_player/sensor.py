@@ -11,7 +11,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import BetterMediaPlayerConfigEntry, is_hub
 from .const import FOLLOW_STATES, STATUSES
-from .entity import BetterMediaPlayerEntity, HubEntity
+from .entity import BetterMediaPlayerEntity, ControlEntity, HubEntity, Visibility
 from .wake import PHASES
 
 
@@ -55,8 +55,12 @@ class StatusSensor(BetterMediaPlayerEntity, SensorEntity):
         }
 
 
-class SleepEndSensor(BetterMediaPlayerEntity, SensorEntity):
+class SleepEndSensor(ControlEntity, SensorEntity):
     """When the sleep timer turns the room off (unknown: no timer)."""
+
+    @property
+    def usable(self) -> bool:
+        return self.ctrl.sleep.active
 
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_icon = "mdi:sleep"
@@ -70,8 +74,12 @@ class SleepEndSensor(BetterMediaPlayerEntity, SensorEntity):
         return {"fading": self.ctrl.sleep.fading}
 
 
-class WakeSensor(BetterMediaPlayerEntity, SensorEntity):
+class WakeSensor(ControlEntity, SensorEntity):
     """Where the room's wake stands (idle: none)."""
+
+    @property
+    def usable(self) -> bool:
+        return self.ctrl.wake.active
 
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = PHASES
@@ -102,8 +110,19 @@ class FollowStateSensor(BetterMediaPlayerEntity, SensorEntity):
         return {"presence": self.ctrl.presence(), "prewarm": self.ctrl.prewarm}
 
 
-class FollowSensor(HubEntity, SensorEntity):
+class FollowSensor(Visibility, HubEntity, SensorEntity):
     """Rooms that play along with follow me right now."""
+
+    @property
+    def usable(self) -> bool:
+        return self.hub.active
+
+    def _visibility_owner(self):
+        return self.hub
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._start_visibility()
 
     _attr_native_unit_of_measurement = "rooms"
 

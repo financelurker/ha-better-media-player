@@ -325,6 +325,7 @@ async def test_controls_hidden_while_no_wake(hass, home, freezer):
     assert reg.async_get(STOP).hidden_by is None
     await hass.services.async_call(DOMAIN, "stop_wake", {"entity_id": ROOM}, blocking=True)
     await hass.async_block_till_done()
+    await _tick(hass, freezer, 5)  # hidden after the hide delay (3 s)
     assert reg.async_get(SNOOZE).hidden_by == er.RegistryEntryHider.INTEGRATION
 
 

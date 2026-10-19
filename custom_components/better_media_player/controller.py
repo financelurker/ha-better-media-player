@@ -521,6 +521,22 @@ class RoomController:
             return False
         return bool(int(state.attributes.get(ATTR_SUPPORTED_FEATURES, 0) or 0) & feature)
 
+    @property
+    def room_active(self) -> bool:
+        """A player of the room is used (or the room is being turned on): its
+        controls make sense (see source_event.py for the room's source)."""
+        return self.sequence_running or self.source_watch.active
+
+    @property
+    def has_power(self) -> bool:
+        return any(self.is_on(e) for e in self.power_entities)
+
+    @property
+    def follow_running(self) -> bool:
+        """Follow me runs and this room takes part in it."""
+        hub = self.hub
+        return self.follow_capable and hub is not None and hub.active
+
     def vol(self, src: Source) -> PlayerOutput | DeviceOutput:
         """Where this source's volume is heard (room features act there)."""
         return self.volume_device or self._outputs[src.key]

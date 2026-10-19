@@ -137,7 +137,7 @@ async def test_follow_player_playing_without_follow_me_can_be_started(hass, hous
 # --------------------------------------------------------------- buttons
 
 
-async def test_buttons_shown_only_when_usable(hass, house):
+async def test_buttons_shown_only_when_usable(hass, house, freezer):
     reg = er.async_get(hass)
     hidden = er.RegistryEntryHider.INTEGRATION
     assert reg.async_get(START).hidden_by == hidden  # nothing plays
@@ -151,6 +151,7 @@ async def test_buttons_shown_only_when_usable(hass, house):
     await hass.services.async_call("button", "press", {"entity_id": START}, blocking=True)
     await hass.async_block_till_done()
     assert get_hub(hass).active
+    await _tick(hass, freezer, 4)  # hidden after the hide delay (3 s)
     assert reg.async_get(START).hidden_by == hidden  # follow me runs: no start anywhere
     assert reg.async_get(STOP).hidden_by is None
     assert reg.async_get(KSTOP).hidden_by is None
@@ -158,6 +159,7 @@ async def test_buttons_shown_only_when_usable(hass, house):
     await hass.services.async_call("button", "press", {"entity_id": STOP}, blocking=True)
     await hass.async_block_till_done()
     assert not get_hub(hass).active
+    await _tick(hass, freezer, 4)
     assert reg.async_get(STOP).hidden_by == hidden
 
 
@@ -432,7 +434,7 @@ async def test_hub_flow_and_single_instance(hass, home):
         result["flow_id"], {CONF_FOLLOW_PLAYER: FOLLOW, CONF_DEFAULT_VOLUME: 30}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["options"] == {CONF_FOLLOW_PLAYER: FOLLOW, CONF_DEFAULT_VOLUME: 30}
+    assert result["options"] == {CONF_FOLLOW_PLAYER: FOLLOW, CONF_DEFAULT_VOLUME: 30, "dynamic_controls": True, "hide_delay": 3}
     await hass.async_block_till_done()
 
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})

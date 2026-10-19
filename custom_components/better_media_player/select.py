@@ -8,7 +8,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import BetterMediaPlayerConfigEntry
 from .const import PRESET_MANUAL
-from .entity import BetterMediaPlayerEntity
+from .entity import ControlEntity
 
 
 async def async_setup_entry(
@@ -21,8 +21,12 @@ async def async_setup_entry(
     async_add_entities([VolumePresetSelect(entry, ctrl, "volume_preset")])
 
 
-class VolumePresetSelect(BetterMediaPlayerEntity, SelectEntity):
+class VolumePresetSelect(ControlEntity, SelectEntity):
     """The room's volume by name; "manual" once it was changed otherwise."""
+
+    @property
+    def usable(self) -> bool:
+        return self.ctrl.room_active
 
     _attr_icon = "mdi:volume-equal"
 

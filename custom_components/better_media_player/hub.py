@@ -918,6 +918,9 @@ class FollowManager:
         task.add_done_callback(self._tasks.discard)
 
     @callback
+    def _save(self) -> None:
+        self._save_later()
+
     def _save_later(self) -> None:
         self._store.async_delay_save(lambda: self.data, 10)
 

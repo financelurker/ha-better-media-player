@@ -76,6 +76,11 @@ class SourceWatch:
         """The room was asked for this source (turn on, source, play, wake)."""
         self._requested = (key, time.monotonic())
 
+    @property
+    def active(self) -> bool:
+        """The room has a source: one plays, or the announced one (stable)."""
+        return bool(self._playing()) or self._announced not in (None, _UNSET)
+
     def _playing(self) -> list[str]:
         ctrl = self.ctrl
         on = []
@@ -202,6 +207,7 @@ class SourceWatch:
         entity_id = er.async_get(ctrl.hass).async_get_entity_id("media_player", DOMAIN, f"{entry.entry_id}_player")
         player = ctrl.sources[source].player if source is not None else None
         _LOGGER.info("%s: source %s -> %s (%s)", entry.title, previous, source, reason)
+        ctrl._notify()  # controls that depend on it
         ctrl.hass.bus.async_fire(
             EVENT_SOURCE_CHANGED,
             {

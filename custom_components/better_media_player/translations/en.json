@@ -102,14 +102,18 @@
       },
       "hub": {
         "title": "Central settings",
-        "description": "Follow me: the music follows the people from room to room. Choose the follow-me player: a Music Assistant group player with dynamic members. Follow me is started in a room where music plays (button or action); every other group simply plays.",
+        "description": "Follow me: the music follows the people from room to room. Choose the follow-me player: a Music Assistant group player with dynamic members (empty: no follow me). Follow me is started in a room where music plays (button or action); every other group simply plays. Dynamic controls: a room's controls that make no sense right now are hidden (e.g. the sleep timer while nothing plays), in every room.",
         "data": {
           "follow_player": "Follow-me player",
-          "default_volume": "Default volume"
+          "default_volume": "Default volume",
+          "dynamic_controls": "Dynamic controls",
+          "hide_delay": "Hide delay"
         },
         "data_description": {
-          "follow_player": "A Music Assistant group player with dynamic members (no static members).",
-          "default_volume": "Until follow me knows a volume (it takes the one of the room it is started in)."
+          "follow_player": "A Music Assistant group player with dynamic members; empty: no follow me.",
+          "default_volume": "Until follow me knows a volume (it takes the one of the room it is started in).",
+          "dynamic_controls": "Hide the controls that make no sense right now (all rooms). Off: everything stays visible.",
+          "hide_delay": "How long a control stays after it no longer makes sense (shown again at once)."
         }
       },
       "follow": {
@@ -200,11 +204,15 @@
         },
         "data": {
           "follow_player": "Follow-me player",
-          "default_volume": "Default volume"
+          "default_volume": "Default volume",
+          "dynamic_controls": "Dynamic controls",
+          "hide_delay": "Hide delay"
         },
         "data_description": {
-          "follow_player": "A Music Assistant group player with dynamic members (no static members).",
-          "default_volume": "Until follow me knows a volume (it takes the one of the room it is started in)."
+          "follow_player": "A Music Assistant group player with dynamic members; empty: no follow me.",
+          "default_volume": "Until follow me knows a volume (it takes the one of the room it is started in).",
+          "dynamic_controls": "Hide the controls that make no sense right now (all rooms). Off: everything stays visible.",
+          "hide_delay": "How long a control stays after it no longer makes sense (shown again at once)."
         }
       },
       "room": {
