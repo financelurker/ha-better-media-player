@@ -13,7 +13,7 @@ from homeassistant.util import dt as dt_util
 from custom_components.better_media_player.const import DOMAIN
 from custom_components.better_media_player.hub import get_hub
 
-from .conftest import BASS, FOLLOW, GROUP, KITCHEN, KITCHEN_OCC, KODI, LIVING_OCC, MUSIC, SPEAKERS, TV, setup_room
+from .conftest import BASS, FOLLOW, GROUP, KITCHEN, KITCHEN_OCC, KODI, LIVING_OCC, MUSIC, SPEAKERS, TV, setup_room, start_follow
 
 ROOM = "media_player.wohnzimmer"
 NIGHT = "switch.wohnzimmer_night_mode"
@@ -116,7 +116,7 @@ async def test_follow_prewarm_without_bass(hass, house, freezer):
     await hass.services.async_call("switch", "turn_on", {"entity_id": NIGHT}, blocking=True)
     hass.states.async_set(LIVING_OCC, "on")
     await hass.async_block_till_done()
-    await hass.services.async_call(DOMAIN, "start_follow", {"volume": 0.6}, blocking=True)
+    await start_follow(hass, house)
     await hass.async_block_till_done()
     await _tick(hass, freezer, 3)
     assert house.on(SPEAKERS)
@@ -305,14 +305,16 @@ async def _follow(hass, house, freezer, volume=0.6):
     hass.states.async_set(LIVING_OCC, "on")
     hass.states.async_set(KITCHEN_OCC, "on")
     await hass.async_block_till_done()
-    await hass.services.async_call(DOMAIN, "start_follow", {"volume": volume}, blocking=True)
+    await start_follow(hass, house)
     await hass.async_block_till_done()
     await _tick(hass, freezer, 3)
 
 
 async def test_follow_join_volume_limited_and_not_remembered(hass, house, freezer):
-    await hass.services.async_call("switch", "turn_on", {"entity_id": NIGHT}, blocking=True)
     await _follow(hass, house, freezer, 0.6)
+    await hass.services.async_call("switch", "turn_on", {"entity_id": NIGHT}, blocking=True)
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 3)
     assert MUSIC in house.members(FOLLOW)
     assert _vol(hass) == 0.3  # 60 % - 10 offset, limited to 30 %
     assert max(_sent(house, MUSIC)) <= 0.3
@@ -320,8 +322,10 @@ async def test_follow_join_volume_limited_and_not_remembered(hass, house, freeze
 
 
 async def test_group_limited_only_when_all_rooms_at_night(hass, house, freezer):
-    await hass.services.async_call("switch", "turn_on", {"entity_id": NIGHT}, blocking=True)
     await _follow(hass, house, freezer, 0.6)
+    await hass.services.async_call("switch", "turn_on", {"entity_id": NIGHT}, blocking=True)
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 3)
     assert set(house.members(FOLLOW)) == {MUSIC, KITCHEN}
     house.set(FOLLOW, "playing", volume_level=0.55)
     await hass.async_block_till_done()

@@ -2,15 +2,13 @@
 
 Combines the room's media players (e.g. Kodi, Music Assistant) with the power
 plugs of TV, speakers and subwoofer into a single media_player entity.
-A central entry adds group policies and "follow me" for Music Assistant groups.
+A central entry adds "follow me" with a Music Assistant group player.
 """
 
 from __future__ import annotations
 
-import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.storage import Store
@@ -18,33 +16,20 @@ from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
 
 from .const import (
-    ATTR_FALLBACK_ROOMS,
-    ATTR_GROUP,
-    ATTR_VOLUME,
     CONF_ENTRY_TYPE,
+    CONF_FOLLOW_PLAYER,
     DOMAIN,
     ENTRY_TYPE_HUB,
     HUB_PLATFORMS,
     PLATFORMS,
-    SERVICE_START_FOLLOW,
     STORAGE_VERSION,
 )
 from .controller import RoomController
-from .hub import FollowManager, get_hub, get_rooms
+from .hub import FollowManager, get_rooms
 
 type BetterMediaPlayerConfigEntry = ConfigEntry[RoomController | FollowManager]
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
-
-START_FOLLOW_SCHEMA = vol.Schema(
-    {
-        vol.Optional(ATTR_GROUP): cv.entity_id,
-        vol.Optional(ATTR_VOLUME): vol.All(vol.Coerce(float), vol.Range(min=0, max=1)),
-        vol.Optional("media_content_id"): cv.string,
-        vol.Optional("media_content_type"): cv.string,
-        vol.Optional(ATTR_FALLBACK_ROOMS): cv.entity_ids,
-    }
-)
 
 
 def is_hub(entry: ConfigEntry) -> bool:
@@ -53,34 +38,26 @@ def is_hub(entry: ConfigEntry) -> bool:
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.data.setdefault(DOMAIN, {}).setdefault("rooms", {})
-
-    async def _start_follow(call: ServiceCall) -> None:
-        hub = get_hub(hass)
-        if hub is None:
-            raise HomeAssistantError("Better Media Player: central settings are not set up")
-        rooms = [_room_for(hass, e) for e in call.data.get(ATTR_FALLBACK_ROOMS, [])]
-        await hub.async_start_follow(
-            group=call.data.get(ATTR_GROUP),
-            volume=call.data.get(ATTR_VOLUME),
-            media_content_id=call.data.get("media_content_id"),
-            media_content_type=call.data.get("media_content_type"),
-            fallback_rooms=[r for r in rooms if r is not None],
-        )
-
-    hass.services.async_register(DOMAIN, SERVICE_START_FOLLOW, _start_follow, schema=START_FOLLOW_SCHEMA)
     return True
 
 
-def _room_for(hass: HomeAssistant, entity_id: str) -> RoomController | None:
-    """A room by its room player entity, or by its music player."""
-    rooms = get_rooms(hass)
-    entry = er.async_get(hass).async_get(entity_id)
-    if entry is not None and entry.config_entry_id in rooms:
-        return rooms[entry.config_entry_id]
-    for room in rooms.values():
-        if room.audio_player == entity_id:
-            return room
-    return None
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """1 -> 2: the central entry has one follow-me player instead of group policies."""
+    if entry.version > 2:
+        return False
+    if entry.version == 1:
+        options = dict(entry.options)
+        if is_hub(entry):
+            follow = list(options.pop("follow_groups", None) or [])
+            options.pop("always_groups", None)
+            if follow:
+                options[CONF_FOLLOW_PLAYER] = follow[0]
+            # the central "start follow" button is now a button in each room
+            reg = er.async_get(hass)
+            if old := reg.async_get_entity_id("button", DOMAIN, f"{entry.entry_id}_start_follow"):
+                reg.async_remove(old)
+        hass.config_entries.async_update_entry(entry, options=options, version=2)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: BetterMediaPlayerConfigEntry) -> bool:
@@ -109,9 +86,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: BetterMediaPlayerConfig
         await entry.runtime_data.async_stop()
         if is_hub(entry):
             hass.data[DOMAIN].pop("hub", None)
-            # rooms fall back to v0.1 behaviour (every group counts)
             for room in get_rooms(hass).values():
                 room.set_prewarm(False)
+                room.notify()  # no follow me without the central entry
     return ok
 
 

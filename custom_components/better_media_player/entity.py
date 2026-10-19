@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import callback
 from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
 
@@ -52,6 +54,47 @@ class BetterMediaPlayerEntity(Entity):
 
     async def async_added_to_hass(self) -> None:
         self.async_on_remove(self.ctrl.async_add_listener(self.async_write_ha_state))
+
+
+class ControlEntity(BetterMediaPlayerEntity):
+    """A control that can only be used now and then (wake, follow me).
+
+    While it cannot be used it is hidden (hidden_by: integration), so it does
+    not clutter dashboards; pressing it anyway gives an error or does nothing
+    (see the control). Never against the user:
+    a control they hid stays hidden, one they showed again while it was not
+    usable is not hidden any more.
+    """
+
+    @property
+    def usable(self) -> bool:
+        raise NotImplementedError
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(self.ctrl.async_add_listener(self._sync_hidden))
+        self._sync_hidden()
+
+    @callback
+    def _sync_hidden(self) -> None:
+        reg = er.async_get(self.hass)
+        entry = reg.async_get(self.entity_id) if self.entity_id else None
+        if entry is None:
+            return
+        marks: dict[str, str] = self.ctrl.data.setdefault("controls", {})
+        mark = marks.get(entry.unique_id)
+        if self.usable:
+            if entry.hidden_by == er.RegistryEntryHider.INTEGRATION:
+                reg.async_update_entity(self.entity_id, hidden_by=None)
+                marks[entry.unique_id] = "shown"
+                self.ctrl._save()
+        elif mark != "user" and entry.hidden_by is None:
+            if mark == "hidden":
+                marks[entry.unique_id] = "user"  # shown again by the user
+            else:
+                reg.async_update_entity(self.entity_id, hidden_by=er.RegistryEntryHider.INTEGRATION)
+                marks[entry.unique_id] = "hidden"
+            self.ctrl._save()
 
 
 class HubEntity(Entity):

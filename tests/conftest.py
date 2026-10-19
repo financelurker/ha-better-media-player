@@ -13,8 +13,7 @@ from homeassistant.components.media_player import MediaPlayerEntityFeature as F
 from homeassistant.core import HomeAssistant, ServiceRegistry
 
 from custom_components.better_media_player.const import (
-    CONF_ALWAYS_GROUPS,
-    CONF_FOLLOW_GROUPS,
+    CONF_FOLLOW_PLAYER,
     CONF_OCCUPANCY,
     ENTRY_TYPE_HUB,
     HUB_DEFAULTS,
@@ -106,6 +105,7 @@ class FakeHome:
     hass: HomeAssistant
     calls: list[tuple[str, str, str]] = field(default_factory=list)
     played: list[tuple[str, str, dict]] = field(default_factory=list)
+    transferred: list[tuple[str, str]] = field(default_factory=list)
     kodi_boots: bool = False  # turn_on makes Kodi idle immediately
     kodi_suspends: bool = True  # turn_off makes Kodi off immediately
 
@@ -170,6 +170,19 @@ class FakeHome:
                 self.hass.states.async_set(
                     entity_id, "on" if service == "turn_on" else "off", st.attributes, context=context
                 )
+            return True
+        if domain == "music_assistant" and service == "transfer_queue":
+            # the queue moves: the target plays it (or holds it paused), the source stops
+            source = data.get("source_player")
+            self.transferred.append((source, entity_id))
+            if source:
+                self.set(source, "idle")
+            state = "playing" if data.get("auto_play", True) else "paused"
+            if entity_id in GROUPS:
+                if self.members(entity_id):
+                    self.group(state, self.members(entity_id), entity_id)
+            else:
+                self.set(entity_id, state)
             return True
         if domain == "media_player":
             if entity_id == KODI and service == "turn_on" and self.kodi_boots:
@@ -260,6 +273,7 @@ async def setup_room(hass: HomeAssistant, **overrides: Any) -> MockConfigEntry:
         title="Wohnzimmer",
         data={CONF_ENTRY_TYPE: ENTRY_TYPE_ROOM},
         options=room_options(**overrides),
+        version=2,
     )
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
@@ -267,14 +281,15 @@ async def setup_room(hass: HomeAssistant, **overrides: Any) -> MockConfigEntry:
     return entry
 
 
-# ------------------------------------------------------------- follow me (v0.2)
+# ------------------------------------------------------------- follow me
 
 async def setup_hub(hass: HomeAssistant, **overrides) -> MockConfigEntry:
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Better Media Player",
         data={CONF_ENTRY_TYPE: ENTRY_TYPE_HUB},
-        options={**HUB_DEFAULTS, CONF_FOLLOW_GROUPS: [FOLLOW], CONF_ALWAYS_GROUPS: [GROUP], **overrides},
+        options={**HUB_DEFAULTS, CONF_FOLLOW_PLAYER: FOLLOW, **overrides},
+        version=2,
     )
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
@@ -288,6 +303,7 @@ async def setup_kitchen(hass: HomeAssistant) -> MockConfigEntry:
         title="Kitchen",
         data={CONF_ENTRY_TYPE: ENTRY_TYPE_ROOM},
         options={**DEFAULTS, CONF_AUDIO_PLAYER: KITCHEN, CONF_SPEAKERS: [KITCHEN_SPK], CONF_OCCUPANCY: [KITCHEN_OCC]},
+        version=2,
     )
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
@@ -310,3 +326,12 @@ async def house(hass, home):
     return home
 
 
+
+
+async def start_follow(hass: HomeAssistant, home: FakeHome, base: float = 60, offset: float = -10) -> None:
+    """Music plays in the living room at base + offset; follow me is started there
+    (that volume becomes follow me's base volume)."""
+    home.music("playing", volume_level=round((base + offset) / 100, 3))
+    await hass.async_block_till_done()
+    await hass.services.async_call(DOMAIN, "start_follow", {"entity_id": "media_player.wohnzimmer"}, blocking=True)
+    await hass.async_block_till_done()
