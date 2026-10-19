@@ -317,7 +317,7 @@ class FollowManager:
             and (
                 r.sleep.fading_player(r.audio_player)
                 or r.night.cap is not None
-                or r.wake.fading_player(r.audio_player)
+                or r.wake.owns(r.audio_player)  # the wake's volume, not follow me's
             )
         }
 
@@ -411,6 +411,11 @@ class FollowManager:
         if s.group in self.follow_groups:
             if self._resumable(s.group):
                 return s.group
+            if any(
+                (r.wake.follow_snoozed or r.wake.follow_holding) and r.wake.follow_group == s.group
+                for r in get_rooms(self.hass).values()
+            ):
+                return s.group  # a wake room snoozes or was dropped: the session waits for it
             if self.group_state(s.group) == MediaPlayerState.PAUSED and self.group_members(s.group):
                 return s.group  # paused by someone: the session goes on, nothing changes
         return None
@@ -469,8 +474,21 @@ class FollowManager:
         resumable = self._resumable(group)
         if not group_playing and not resumable and not (s.started_by_us and now - s.started_at < START_GRACE_SECONDS):
             # paused by someone: membership stays as it is, prewarm runs down
+            members = self.group_members(group)
             for room in get_rooms(self.hass).values():
                 room.set_prewarm(False)
+                if room.wake.follow_snoozed:
+                    room.set_follow_state(FOLLOW_SNOOZED)
+                elif (
+                    room.wake.follow_holding
+                    and room.wake.follow_group == group
+                    and room.wake.phase != "starting"
+                    and room.audio_player not in members
+                ):
+                    # the wake room was dropped (e.g. the player reconnected): back in, play on
+                    await self._join(room, group, keep_volume=True)
+                    await self._resume(group)
+                    room.set_follow_state(FOLLOW_WAKING)
             return
 
         members = self.group_members(group)
@@ -488,7 +506,11 @@ class FollowManager:
 
             room.set_prewarm(group_playing and room.prewarm_enabled and excluded not in HARD_EXCLUSIONS)
 
-            if room.wake.follow_holding and room.wake.follow_group == group:
+            if rid in s.held_out and member and not (room.wake.follow_holding):
+                await self._leave(room, "held out by a follow wake")
+                room.set_follow_state(FOLLOW_HELD_OUT)
+                continue
+            if room.wake.follow_holding and room.wake.follow_group in ("", group):
                 await self._wake_room(room, group, member, presence, now)
                 continue
 
@@ -677,6 +699,8 @@ class FollowManager:
         if presence == PRESENT:
             room.wake.mark_seen()
             s.empty_since.pop(rid, None)
+        elif presence == UNKNOWN:
+            s.empty_since.pop(rid, None)  # unknown is no "empty" (no left from a sensor outage)
         if not member:
             s.member_since.pop(rid, None)
             if rid not in s.leaving and room.wake.phase != "starting":
@@ -695,36 +719,52 @@ class FollowManager:
                 return
         room.set_follow_state(FOLLOW_WAKING)
 
+    def _running(self, group: str) -> bool:
+        """Plays, or was just started by us (Music Assistant may report it late)."""
+        s = self.session
+        return self.group_state(group) in PLAYING or (
+            s.group == group and s.started_by_us and _now() - s.started_at < START_GRACE_SECONDS
+        )
+
+    def _wake_group(self, group: str | None) -> str:
+        """The group a follow wake goes to: a running follow group wins."""
+        running = [g for g in self.follow_groups if self._running(g)]
+        if self.session.group in running:
+            group = self.session.group
+        elif running:
+            group = running[0]
+        group = group or (self.follow_groups[0] if self.follow_groups else None)
+        if group is None or group not in self.follow_groups:
+            raise HomeAssistantError(f"{group} is not configured as follow group")
+        return group
+
     async def async_wake_start(
         self, room: RoomController, group: str | None, media: dict[str, Any] | None, volume: float
     ) -> str:
         """Follow wake: the wake room joins at its start volume.
 
-        A playing follow group is joined as it is (its media goes on). Otherwise
-        a new session starts with the wake's media; rooms occupied at that moment
-        stay out until their presence went and came again.
+        A running follow group is joined as it is (its media goes on). Otherwise
+        a new session starts with the wake's media: players left in the group
+        from before leave it, and rooms occupied at that moment stay out until
+        their presence went and came again.
         """
-        playing = [g for g in self.follow_groups if self.group_state(g) in PLAYING]
-        if self.session.group in playing:
-            group = self.session.group
-        elif playing:
-            group = playing[0]
-        group = group or (self.follow_groups[0] if self.follow_groups else None)
-        if group is None or group not in self.follow_groups:
-            raise HomeAssistantError(f"{group} is not configured as follow group")
         s = self.session
         async with self._lock:
-            running = self.group_state(group) in PLAYING
+            group = self._wake_group(group)
+            running = self._running(group)
             if not running:
                 s.reset(group, by_us=True)
-                s.started_at = _now()
                 self._maybe_restored.discard(group)
                 for other in self.follow_rooms():
                     if other is not room and other.presence() == PRESENT:
                         s.held_out.add(other.entry.entry_id)
+                for member in self.group_members(group):
+                    if member != room.audio_player:
+                        await self._unjoin(member, "a follow wake starts a new session")
             s.backed.add(room.entry.entry_id)
             s.leaving.discard(room.entry.entry_id)
             s.opted_out.discard(room.entry.entry_id)
+            s.held_out.discard(room.entry.entry_id)
             if room.audio_player not in self.group_members(group):
                 self._commands.pop((room.audio_player, f"join:{group}"), None)
                 await self._join(room, group, volume_override=volume)
@@ -739,10 +779,16 @@ class FollowManager:
         self.async_schedule("wake")
         return group
 
-    async def async_wake_resume(self, room: RoomController, group: str, volume: float) -> None:
-        """After a snooze: back into the group (playing it again if it paused)."""
+    async def async_wake_resume(self, room: RoomController, group: str, volume: float) -> str:
+        """After a snooze: back into the group (playing it again if it paused).
+
+        If another follow group took over meanwhile, the room joins that one.
+        """
         async with self._lock:
             s = self.session
+            running = [g for g in self.follow_groups if self._running(g)]
+            if running and group not in running:
+                group = s.group if s.group in running else running[0]
             if s.group != group:
                 s.reset(group, by_us=True)
             s.backed.add(room.entry.entry_id)
@@ -755,6 +801,13 @@ class FollowManager:
                 self._commands.pop((group, "play"), None)
                 await self._resume(group)
         self.async_schedule("wake")
+        return group
+
+    async def async_wake_snooze(self, room: RoomController) -> None:
+        """Snooze of a follow wake: only this room leaves the group meanwhile."""
+        if room.audio_player in self.group_members(self.session.group):
+            await self._leave(room, "snoozed")
+        self.async_schedule("wake_snooze")
 
     async def _join(
         self,

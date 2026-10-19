@@ -162,12 +162,14 @@ class WakeAlarm:
     def follow_holding(self) -> bool:
         """A follow wake keeps this room in its group."""
         w = self._w
-        return bool(w and w.get("follow") and w["phase"] in (PHASE_STARTING, PHASE_FADING, PHASE_PLAYING))
+        return bool(
+            w and w.get("follow") is not None and w["phase"] in (PHASE_STARTING, PHASE_FADING, PHASE_PLAYING)
+        )
 
     @property
     def follow_snoozed(self) -> bool:
         w = self._w
-        return bool(w and w.get("follow") and w["phase"] == PHASE_SNOOZED)
+        return bool(w and w.get("follow") is not None and w["phase"] == PHASE_SNOOZED)
 
     @property
     def seen(self) -> bool:
@@ -326,8 +328,9 @@ class WakeAlarm:
         if hub is None:
             raise HomeAssistantError("central settings are gone")
         start = self.ctrl.night.limit(w["start_volume"])
-        if w.get("follow") and w.get("started_once"):
-            await hub.async_wake_resume(self.ctrl, w["follow"], start)
+        if w.get("follow") and w.get("started_once") and w.get("playing_since"):
+            # snooze over (or a restart): back into the group
+            w["follow"] = await hub.async_wake_resume(self.ctrl, w["follow"], start)
         else:
             data = w.get("data") or {}
             media = {k: data[k] for k in ("media_content_id", "media_content_type") if data.get(k)}
@@ -457,8 +460,16 @@ class WakeAlarm:
         def _due(_now_dt) -> None:
             self._stop_check = None
             src = self._src()
-            if self._w is w and src is not None and self.ctrl.player_state(src) not in (*_PLAYING, "paused"):
-                self.ctrl._spawn(self.async_finish(REASON_STOPPED))
+            if self._w is not w or src is None or self.ctrl.player_state(src) in (*_PLAYING, "paused"):
+                return
+            hub = self.ctrl.hub
+            if w.get("follow") and hub is not None:
+                if src.player not in hub.group_members(w["follow"]):
+                    hub.async_schedule("wake_dropped")
+                    return  # dropped from its group: follow me takes it back in
+                if hub.group_state(w["follow"]) in _PLAYING:
+                    return
+            self.ctrl._spawn(self.async_finish(REASON_STOPPED))
 
         self._stop_check = async_track_point_in_utc_time(
             self.hass, _due, dt_util.utc_from_timestamp(_now() + STOP_SETTLE)
@@ -494,10 +505,8 @@ class WakeAlarm:
         self._schedule(w["snooze_until"])
         if w.get("follow") is not None:
             # only this room snoozes: it leaves the group, the others play on
-            if ctrl.groups_of(src.player) and ctrl.player_supports(src, MediaPlayerEntityFeature.GROUPING):
-                await ctrl._player(src, "unjoin")
             if (hub := ctrl.hub) is not None:
-                hub.async_schedule("wake_snooze")
+                await hub.async_wake_snooze(ctrl)
         elif ctrl.source_playing(src):
             if can_pause:
                 await ctrl._player(src, "media_pause")
@@ -611,6 +620,14 @@ class WakeAlarm:
                 await self._fail(w, FAILED_START)
         elif phase == PHASE_SNOOZED:
             self._schedule(w["snooze_until"])
+        elif (
+            w.get("follow")
+            and not self.ctrl.groups_of(src.player)
+            and self.ctrl.hub is not None
+            and self.ctrl.hub.group_state(w["follow"]) not in (None, "unavailable", "unknown")
+        ):
+            # a follow wake whose group stopped while HA was down: join again
+            self._spawn_start()
         elif phase == PHASE_FADING:
             left = w["fade_t0"] + w["fade_s"] - now if w.get("fade_t0") else 0
             if left > 0:

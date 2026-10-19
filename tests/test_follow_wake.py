@@ -6,16 +6,27 @@ import asyncio
 from datetime import timedelta
 
 import pytest
-from pytest_homeassistant_custom_component.common import async_capture_events, async_fire_time_changed
-
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import (
+    async_capture_events,
+    async_fire_time_changed,
+)
 
 from custom_components.better_media_player.browser import KIND_ITEM, make_id
 from custom_components.better_media_player.const import DOMAIN, EVENT_WAKE_FINISHED
 from custom_components.better_media_player.hub import get_hub
 
-from .conftest import FOLLOW, KITCHEN, KITCHEN_OCC, LIVING_OCC, MUSIC, SPEAKERS, setup_hub, setup_room
+from .conftest import (
+    FOLLOW,
+    KITCHEN,
+    KITCHEN_OCC,
+    LIVING_OCC,
+    MUSIC,
+    SPEAKERS,
+    setup_hub,
+    setup_room,
+)
 
 ROOM = "media_player.wohnzimmer"  # the wake room ("bedroom")
 KROOM = "media_player.kitchen"
