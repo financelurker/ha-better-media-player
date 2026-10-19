@@ -1115,7 +1115,7 @@ class RoomController:
                 # Assistant's 'play media overrides group' setting)
                 await self._player(src, "unjoin")
             # played here on its own: with the room's volume from the first second
-            await self.volume.async_apply(src)
+            await self.volume.async_apply(src, left_group=True)
         ctx = Context()
         self._own_contexts.append(ctx.id)
         await self.hass.services.async_call(
@@ -1220,8 +1220,8 @@ class RoomController:
         src = self.active_source
         if src is None:
             return
-        if service == "volume_set" and data and "volume_level" in data and not self.groups_of(src.player):
-            self.volume.learn(data["volume_level"])  # a wish for the room
+        if service == "volume_set" and data and "volume_level" in data:
+            self.volume.learn_wish(src, data["volume_level"])
         await self._player(src, service, data)
 
 

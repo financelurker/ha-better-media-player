@@ -15,7 +15,7 @@ volume level.
 
 Own changes are recognised by value: the players report volumes over their
 own connections with a new context, so a reported value we set ourselves in
-the last OWN_SECONDS counts as ours.
+the last OWN_SECONDS counts as ours (once per set).
 """
 
 from __future__ import annotations
@@ -42,6 +42,7 @@ SETTLE_SECONDS = 2
 
 _PLAYING = {"playing", "buffering"}
 _POWERED = {"on", "idle", "playing", "paused", "buffering"}
+_NOT_GROUPED = {"off", "standby", "unavailable", "unknown"}
 
 
 def _volume(state: State | None) -> float | None:
@@ -62,6 +63,7 @@ class RoomVolume:
         self.hass = ctrl.hass
         self._own: dict[str, deque[tuple[float, float]]] = {}
         self._pending: dict[str, CALLBACK_TYPE] = {}
+        self._learning: dict[str, CALLBACK_TYPE] = {}
 
     @property
     def value(self) -> float | None:
@@ -76,10 +78,20 @@ class RoomVolume:
         self._own.setdefault(player, deque(maxlen=8)).append((float(volume), time.monotonic()))
 
     def _is_own(self, player: str, volume: float) -> bool:
+        """A report of a volume we set; each set is recognised once only, so
+        a person going back to that value later is a wish again."""
         now = time.monotonic()
-        return any(
-            abs(volume - v) <= TOLERANCE and now - ts < OWN_SECONDS for v, ts in self._own.get(player, ())
-        )
+        sets = self._own.get(player)
+        if not sets:
+            return False
+        for entry in list(sets):
+            v, ts = entry
+            if now - ts >= OWN_SECONDS:
+                sets.remove(entry)
+            elif abs(volume - v) <= TOLERANCE:
+                sets.remove(entry)
+                return True
+        return False
 
     # ---------------------------------------------------------------- learning
 
@@ -92,8 +104,25 @@ class RoomVolume:
         self.ctrl._save()
         self.ctrl._notify()
 
+    @callback
+    def learn_wish(self, src: Source, volume: float) -> None:
+        """Volume set through the room player."""
+        if self._takes_part(src) and not self._in_group(src):
+            self.learn(volume)
+
     def _in_group(self, src: Source) -> bool:
-        return bool(self.ctrl.groups_of(src.player))
+        """Member of a group, also of one that does not play right now (e.g.
+        joined by follow me before the group starts). Groups that are off are
+        left out: static groups list their members even then."""
+        for state in self.hass.states.async_all("media_player"):
+            if state.entity_id == src.player or state.state in _NOT_GROUPED:
+                continue
+            if src.player in (state.attributes.get("group_members") or []):
+                return True
+        return False
+
+    def _takes_part(self, src: Source) -> bool:
+        return self.ctrl.player_supports(src, MediaPlayerEntityFeature.VOLUME_SET)
 
     @callback
     def async_on_state(self, src: Source, old: State | None, new: State | None) -> None:
@@ -107,9 +136,8 @@ class RoomVolume:
             and abs(vol_new - vol_old) >= 0.0005
             and new.state in _POWERED
             and not self._is_own(src.player, vol_new)
-            and not self._in_group(src)
         ):
-            self.learn(vol_new)
+            self._schedule_learn(src, vol_new)
 
         started = new.state in _PLAYING and old.state not in _PLAYING
         if src.key == "video":
@@ -117,6 +145,23 @@ class RoomVolume:
             started = started or (new.state in _POWERED and old.state not in _POWERED)
         if started:
             self._schedule_apply(src)
+
+    @callback
+    def _schedule_learn(self, src: Source, volume: float) -> None:
+        """Learn after a short moment: by then a group lists its member."""
+        if (unsub := self._learning.pop(src.player, None)) is not None:
+            unsub()  # a newer change replaces the older one
+
+        @callback
+        def _due(_now) -> None:
+            self._learning.pop(src.player, None)
+            if self.ctrl._stopped or self._in_group(src) or not self._takes_part(src):
+                return
+            current = _volume(self.hass.states.get(src.player))
+            if current is not None and abs(current - volume) < 0.0005:
+                self.learn(volume)
+
+        self._learning[src.player] = async_call_later(self.hass, SETTLE_SECONDS, _due)
 
     # ---------------------------------------------------------------- applying
 
@@ -132,13 +177,17 @@ class RoomVolume:
 
         self._pending[src.player] = async_call_later(self.hass, SETTLE_SECONDS, _due)
 
-    async def async_apply(self, src: Source) -> None:
-        """Give the player the room's volume if it plays on its own."""
-        if self.ctrl._stopped or self._in_group(src):
+    async def async_apply(self, src: Source, left_group: bool = False) -> None:
+        """Give the player the room's volume if it plays on its own.
+
+        left_group: we have just taken it out of its group (its report may
+        still list it as a member).
+        """
+        if self.ctrl._stopped or (not left_group and self._in_group(src)):
             return
         if self.ctrl.player_state(src) not in _POWERED:
             return
-        if not self.ctrl.player_supports(src, MediaPlayerEntityFeature.VOLUME_SET):
+        if not self._takes_part(src):
             return
         if self.ctrl.sleep.fading_player(src.player):
             return  # the sleep timer is lowering it right now
@@ -158,6 +207,7 @@ class RoomVolume:
 
     @callback
     def async_stop(self) -> None:
-        for unsub in self._pending.values():
+        for unsub in [*self._pending.values(), *self._learning.values()]:
             unsub()
         self._pending.clear()
+        self._learning.clear()

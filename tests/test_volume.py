@@ -57,6 +57,7 @@ async def test_change_on_player_is_learned(hass, home, freezer):
     await _music_at(hass, home, freezer)
     home.music("playing", volume_level=0.22)  # e.g. Music Assistant app
     await hass.async_block_till_done()
+    await _tick(hass, freezer, 3)  # learned after a short moment (group check)
     assert _room_volume(hass) == 0.22
 
 
