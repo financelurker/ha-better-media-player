@@ -54,6 +54,10 @@ from .sleep import MAX_MINUTES
 
 BASE_FEATURES = MediaPlayerEntityFeature.TURN_ON | MediaPlayerEntityFeature.TURN_OFF
 
+DEVICE_VOLUME = (
+    MediaPlayerEntityFeature.VOLUME_SET | MediaPlayerEntityFeature.VOLUME_MUTE | MediaPlayerEntityFeature.VOLUME_STEP
+)
+
 # Features of the active source that are passed through
 PASSTHROUGH = (
     MediaPlayerEntityFeature.PAUSE
@@ -194,6 +198,12 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
                 features |= MediaPlayerEntityFeature(
                     int(state.attributes.get(ATTR_SUPPORTED_FEATURES, 0) or 0)
                 ) & ANY_SOURCE
+        if (device := self.ctrl.volume_device) is not None:
+            # the room's volume is the device's, also while nothing plays
+            features &= ~DEVICE_VOLUME
+            features |= MediaPlayerEntityFeature.VOLUME_SET | MediaPlayerEntityFeature.VOLUME_STEP
+            if device.can_mute:
+                features |= MediaPlayerEntityFeature.VOLUME_MUTE
         return features
 
     @property
@@ -225,11 +235,16 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
 
     @property
     def volume_level(self) -> float | None:
+        if (device := self.ctrl.volume_device) is not None:
+            level = device.level()
+            return level if level is not None else self.ctrl.volume.value
         value = self._attr("volume_level")
         return float(value) if value is not None else None
 
     @property
     def is_volume_muted(self) -> bool | None:
+        if (device := self.ctrl.volume_device) is not None:
+            return device.muted
         return self._attr("is_volume_muted")
 
     @property

@@ -57,6 +57,8 @@ from .const import (
     CONF_VIDEO_OFF_ACTION,
     CONF_VIDEO_ON_ACTION,
     CONF_VIDEO_PLAYER,
+    CONF_VOLUME_CONTROL,
+    CONF_VOLUME_ENTITY,
     CONF_VOLUME_OFFSET,
     DEFAULTS,
     DOMAIN,
@@ -65,6 +67,9 @@ from .const import (
     HUB_DEFAULTS,
     MASS_TYPE_GROUP,
     SWITCH_DOMAINS,
+    VOLUME_DEVICE,
+    VOLUME_ENTITY_DOMAINS,
+    VOLUME_PLAYERS,
 )
 
 VIDEO_PLATFORMS = ("kodi",)
@@ -99,6 +104,14 @@ def schema_sources() -> vol.Schema:
         {
             vol.Optional(CONF_VIDEO_PLAYER): _entity("media_player"),
             vol.Optional(CONF_AUDIO_PLAYER): _entity("media_player"),
+            vol.Optional(CONF_VOLUME_CONTROL, default=VOLUME_PLAYERS): sel.SelectSelector(
+                sel.SelectSelectorConfig(
+                    options=[VOLUME_PLAYERS, VOLUME_DEVICE],
+                    translation_key=CONF_VOLUME_CONTROL,
+                    mode=sel.SelectSelectorMode.LIST,
+                )
+            ),
+            vol.Optional(CONF_VOLUME_ENTITY): _entity(VOLUME_ENTITY_DOMAINS),
         }
     )
 
@@ -238,6 +251,23 @@ def _validate(hass: HomeAssistant, options: dict) -> dict[str, str]:
         state = hass.states.get(options[key]) if options.get(key) else None
         if state is not None and state.attributes.get(ATTR_MASS_PLAYER_TYPE) == MASS_TYPE_GROUP:
             errors[key] = "group_player"
+    if options.get(CONF_VOLUME_CONTROL) == VOLUME_DEVICE:
+        device = options.get(CONF_VOLUME_ENTITY)
+        state = hass.states.get(device) if device else None
+        if not device:
+            errors[CONF_VOLUME_ENTITY] = "needs_volume_entity"
+        elif device in (video, audio):
+            errors[CONF_VOLUME_ENTITY] = "volume_is_player"
+        elif (reg := er.async_get(hass).async_get(device)) is not None and reg.platform == DOMAIN:
+            errors[CONF_VOLUME_ENTITY] = "volume_is_room"  # a room player (loops)
+        elif state is not None and state.attributes.get(ATTR_MASS_PLAYER_TYPE) == MASS_TYPE_GROUP:
+            errors[CONF_VOLUME_ENTITY] = "group_player"
+        elif (
+            state is not None
+            and device.startswith("media_player.")
+            and not int(state.attributes.get(ATTR_SUPPORTED_FEATURES, 0) or 0) & MediaPlayerEntityFeature.VOLUME_SET
+        ):
+            errors[CONF_VOLUME_ENTITY] = "no_volume"
 
     roles = {k: list(options.get(k) or []) for k in (CONF_DISPLAY, CONF_SPEAKERS, CONF_BASS)}
     if roles[CONF_DISPLAY] and not video:
@@ -263,7 +293,9 @@ def _validate(hass: HomeAssistant, options: dict) -> dict[str, str]:
 
 def _without_volume(hass: HomeAssistant, options: dict) -> list[str]:
     """Chosen players that cannot set a volume (room volume does not work for them)."""
-    out = []
+    out: list[str] = []
+    if options.get(CONF_VOLUME_CONTROL) == VOLUME_DEVICE:
+        return out  # the device sets the room's volume
     for key in (CONF_VIDEO_PLAYER, CONF_AUDIO_PLAYER):
         state = hass.states.get(options[key]) if options.get(key) else None
         if state is None:

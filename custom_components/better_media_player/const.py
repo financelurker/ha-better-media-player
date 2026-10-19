@@ -39,6 +39,12 @@ SERVICE_FOLLOW_STOP = "stop_follow"
 CONF_OCCUPANCY = "occupancy"
 CONF_PRESENCE_RUN_DOWN = "presence_run_down"  # min
 CONF_VOLUME_OFFSET = "volume_offset"  # percentage points
+# where the room's volume is set: on the players, or on an own device
+CONF_VOLUME_CONTROL = "volume_control"
+CONF_VOLUME_ENTITY = "volume_entity"
+VOLUME_PLAYERS = "players"
+VOLUME_DEVICE = "device"
+VOLUME_ENTITY_DOMAINS = ["media_player", "number", "input_number"]
 CONF_PREWARM = "prewarm"
 CONF_WAKE_DETECT_LEFT = "wake_detect_left"  # follow wake: leaving the wake room ends the wake
 WAKE_ARRIVAL_WINDOW = 120  # s: an arrival elsewhere may come this much before the wake room went empty
@@ -158,6 +164,7 @@ DEFAULTS: dict = {
     CONF_AUDIO_STANDBY_MAX: 5,
     CONF_PRESENCE_RUN_DOWN: 2,
     CONF_VOLUME_OFFSET: 0,
+    CONF_VOLUME_CONTROL: VOLUME_PLAYERS,
     CONF_PREWARM: True,
     CONF_WAKE_DETECT_LEFT: True,
     CONF_SLEEP_FADE: 5,

@@ -3,14 +3,18 @@
     "step": {
       "sources": {
         "title": "Media players",
-        "description": "At least one player. The video player (e.g. Kodi) needs display and speakers, the music player (e.g. a Music Assistant / sendspin player) only the speakers. Do not select a group player.",
+        "description": "At least one player. The video player (e.g. Kodi) needs display and speakers, the music player (e.g. a Music Assistant / sendspin player) only the speakers. Do not select a group player. The room's volume is set on the players by default; with an amplifier, AV receiver or soundbar that has its own volume, let that device set it (the players then keep their level).",
         "data": {
           "video_player": "Video player",
-          "audio_player": "Music player"
+          "audio_player": "Music player",
+          "volume_control": "Room volume",
+          "volume_entity": "Volume device"
         },
         "data_description": {
           "video_player": "Turned on/off via its own turn on/off (e.g. Kodi with your Wake-on-LAN automation).",
-          "audio_player": "A single room player, not a Music Assistant group."
+          "audio_player": "A single room player, not a Music Assistant group.",
+          "volume_control": "Players: set on the playing player. Own device: the volume device below (players keep their level; groups and follow me still set the players).",
+          "volume_entity": "A media player with volume, or a number / input_number (its range counts as 0-100 %)."
         }
       },
       "devices": {
@@ -152,7 +156,11 @@
       "duplicate_device": "A device may only be used once.",
       "needs_player": "Needs the corresponding player.",
       "needs_power": "Needs a power sensor.",
-      "not_a_group": "That is no Music Assistant group player."
+      "not_a_group": "That is no Music Assistant group player.",
+      "needs_volume_entity": "Choose the volume device.",
+      "volume_is_player": "The volume device must not be one of the room's players.",
+      "no_volume": "This media player cannot set a volume.",
+      "volume_is_room": "A Better Media Player room cannot be the volume device."
     },
     "abort": {
       "hub_exists": "Central settings already exist. Change them via Configure.",
@@ -193,7 +201,13 @@
         "title": "Media players",
         "data": {
           "video_player": "Video player",
-          "audio_player": "Music player"
+          "audio_player": "Music player",
+          "volume_control": "Room volume",
+          "volume_entity": "Volume device"
+        },
+        "data_description": {
+          "volume_control": "Players: set on the playing player. Own device: the volume device below (players keep their level; groups and follow me still set the players).",
+          "volume_entity": "A media player with volume, or a number / input_number (its range counts as 0-100 %)."
         }
       },
       "devices": {
@@ -290,7 +304,11 @@
       "duplicate_device": "A device may only be used once.",
       "needs_player": "Needs the corresponding player.",
       "needs_power": "Needs a power sensor.",
-      "not_a_group": "That is no Music Assistant group player."
+      "not_a_group": "That is no Music Assistant group player.",
+      "needs_volume_entity": "Choose the volume device.",
+      "volume_is_player": "The volume device must not be one of the room's players.",
+      "no_volume": "This media player cannot set a volume.",
+      "volume_is_room": "A Better Media Player room cannot be the volume device."
     },
     "abort": {
       "invalid_config": "The settings are not consistent. Check media players and power devices."
@@ -517,6 +535,12 @@
       "options": {
         "audio": "Music",
         "video": "Video"
+      }
+    },
+    "volume_control": {
+      "options": {
+        "players": "Players",
+        "device": "Own device"
       }
     }
   },

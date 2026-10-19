@@ -78,14 +78,6 @@ def _now() -> float:
     return dt_util.utcnow().timestamp()
 
 
-def _volume(state: State | None) -> float | None:
-    value = state.attributes.get("volume_level") if state else None
-    try:
-        return float(value) if value is not None else None
-    except (TypeError, ValueError):
-        return None
-
-
 class WakeAlarm:
     def __init__(self, ctrl: RoomController) -> None:
         self.ctrl = ctrl
@@ -137,14 +129,15 @@ class WakeAlarm:
         w = self._w
         return self.ctrl.sources.get(w["source"]) if w else None
 
-    def owns(self, player: str) -> bool:
-        """The wake sets this player's volume (room volume and night fade back keep out)."""
+    def owns(self, output_id: str) -> bool:
+        """The wake sets this output's volume (room volume and night fade back
+        keep out): its player's, or the room's volume device."""
         src = self._src()
-        return src is not None and src.player == player and self.phase != PHASE_IDLE
+        return src is not None and self.ctrl.vol(src).id == output_id and self.phase != PHASE_IDLE
 
-    def start_volume_for(self, player: str) -> float | None:
+    def start_volume_for(self, output_id: str) -> float | None:
         w = self._w
-        if w and self.owns(player) and w["phase"] == PHASE_STARTING:
+        if w and self.owns(output_id) and w["phase"] == PHASE_STARTING:
             return self.ctrl.night.limit(w["start_volume"])
         return None
 
@@ -190,9 +183,9 @@ class WakeAlarm:
         w = self._w
         return w.get("last_present") if w else None
 
-    def fading_player(self, player: str) -> bool:
+    def fading_player(self, output_id: str) -> bool:
         """Its volume is the wake's (not follow me's) right now."""
-        return self.owns(player) and self.phase in (PHASE_STARTING, PHASE_FADING)
+        return self.owns(output_id) and self.phase in (PHASE_STARTING, PHASE_FADING)
 
     def holds(self, role) -> bool:
         """While snoozed the room keeps the power the wake's player needs."""
@@ -229,9 +222,10 @@ class WakeAlarm:
         if ctrl.sleep.active:
             await ctrl.sleep.async_cancel()  # a sleep timer would end the wake
         player = ctrl.sources[key].player
+        out = ctrl.vol(ctrl.sources[key])
         target = target_volume if target_volume is not None else ctrl.volume.value
         if target is None:
-            target = _volume(self.hass.states.get(player)) or 0.25
+            target = out.level() or 0.25
         # the wake owns the player from here on: no room volume, no night fade back,
         # no sleep timer restore on it
         ctrl.data["wake"] = {
@@ -253,11 +247,11 @@ class WakeAlarm:
             "follow": "" if follow else None,  # the follow-me player once joined
             "seen": False,
         }
-        if ctrl.data.get("volume_restore", {}).pop(player, None) is not None:
+        if ctrl.data.get("volume_restore", {}).pop(out.id, None) is not None:
             ctrl._save()
         if night_mode is not None:
             await ctrl.night.async_set(night_mode)
-        ctrl.night.async_cancel_ramp(player)
+        ctrl.night.async_cancel_ramp(out.id)
         self._changed(now=True)
         _LOGGER.info("%s: wake up on %s", ctrl.entry.title, player)
         self._spawn_start()
@@ -328,19 +322,25 @@ class WakeAlarm:
         if hub is None:
             raise HomeAssistantError("central settings are gone")
         start = self.ctrl.night.limit(w["start_volume"])
+        join_volume: float | None = start
+        if self.ctrl.volume_device is not None:
+            # the device fades; the player joins at follow me's volume
+            await self._set_volume(src, start)
+            join_volume = None
         if w.get("follow") and w.get("started_once") and w.get("playing_since"):
             # snooze over (or a restart): back into the group
-            w["follow"] = await hub.async_wake_resume(self.ctrl, start)
+            w["follow"] = await hub.async_wake_resume(self.ctrl, join_volume)
         else:
             data = w.get("data") or {}
             media = {k: data[k] for k in ("media_content_id", "media_content_type") if data.get(k)}
-            w["follow"] = await hub.async_wake_start(self.ctrl, media, start)
+            w["follow"] = await hub.async_wake_start(self.ctrl, media, join_volume)
             w["started_once"] = True
         self.ctrl.data.setdefault("last_source", "audio")
 
     async def _set_volume(self, src: Source, volume: float) -> None:
-        if self.ctrl.player_supports(src, MediaPlayerEntityFeature.VOLUME_SET):
-            await self.ctrl._player(src, "volume_set", {"volume_level": volume})
+        out = self.ctrl.vol(src)
+        if out.can_set:
+            await out.async_set(volume)
 
     async def _playing(self, w: dict[str, Any]) -> None:
         """It plays: fade in, arm the end."""
@@ -348,7 +348,8 @@ class WakeAlarm:
         if self._w is not w or w["phase"] != PHASE_STARTING:
             return
         src = ctrl.sources[w["source"]]
-        ctrl.volume.async_cancel_apply(src.player)  # this start's volume is the wake's
+        out = ctrl.vol(src)
+        ctrl.volume.async_cancel_apply(out.id)  # this start's volume is the wake's
         w["playing_since"] = _now()
         w["fade_t0"] = _now()
         w["user_volume"] = False
@@ -357,9 +358,9 @@ class WakeAlarm:
         self._fire(EVENT_WAKE_STARTED, {})
         target = ctrl.night.limit(w["target_volume"])
         if w["fade_s"] > 0:
-            current = _volume(self.hass.states.get(src.player))
+            current = out.level()
             start = ctrl.night.limit(w["start_volume"])
-            if current is not None and current > start + 0.011:
+            if current is not None and current > start + out.tolerance:
                 await self._set_volume(src, start)
             self._fade(src, target, w["fade_s"])
         else:
@@ -368,18 +369,41 @@ class WakeAlarm:
 
     @callback
     def _fade(self, src: Source, target: float, seconds: float) -> None:
-        if self._ramp is None or self._ramp.entity_id != src.player:
+        out = self.ctrl.vol(src)
+        if self._ramp is None or self._ramp.entity_id != out.id:
             if self._ramp is not None:
                 self._ramp.stop()
-            self._ramp = VolumeRamp(self.hass, src.player, self._setter(src), self.ctrl._spawn, self._fade_done)
+            self._ramp = VolumeRamp(self.hass, out, self.ctrl._spawn, self._fade_done)
         if not self._ramp.start(target, seconds):
+            if out.is_device and out.level() is None:
+                return  # the volume device is not up yet: the fade starts when it is
             self._fade_done()
 
-    def _setter(self, src: Source):
-        async def _set(volume: float) -> None:
-            await self.ctrl._player(src, "volume_set", {"volume_level": volume})
+    @callback
+    def async_output_ready(self) -> None:
+        """The room's volume device is up (its power came on during the wake):
+        the fade goes on from where it would be now; after the fade the device
+        gets the wake's volume (unless someone changed it)."""
+        w, src = self._w, self._src()
+        if w is None or src is None:
+            return
+        if w["phase"] == PHASE_PLAYING and not w.get("user_volume"):
+            self.ctrl._spawn(self._set_volume(src, self.ctrl.night.limit(w["target_volume"])))
+            return
+        if w["phase"] != PHASE_FADING or not w.get("fade_t0"):
+            return
+        if self._ramp is not None and self._ramp.running:
+            return
+        self.ctrl._spawn(self._fade_from_now(w, src))
 
-        return _set
+    async def _fade_from_now(self, w: dict[str, Any], src: Source) -> None:
+        night = self.ctrl.night
+        start, target = night.limit(w["start_volume"]), night.limit(w["target_volume"])
+        left = max(0.0, w["fade_t0"] + w["fade_s"] - _now())
+        progress = 1 - left / w["fade_s"] if w["fade_s"] else 1
+        await self._set_volume(src, round(start + (target - start) * progress, 3))
+        if self._w is w and w["phase"] == PHASE_FADING:
+            self._fade(src, target, left)
 
     @callback
     def _fade_done(self) -> None:
@@ -419,8 +443,9 @@ class WakeAlarm:
             left = w["fade_t0"] + w["fade_s"] - _now()
             self._fade(src, target, max(left, 0))
         elif w["phase"] == PHASE_PLAYING and not w.get("user_volume"):
-            current = _volume(self.hass.states.get(src.player))
-            if current is not None and current < target - 0.011:
+            out = self.ctrl.vol(src)
+            current = out.level()
+            if current is not None and current < target - out.tolerance:
                 w["phase"] = PHASE_FADING
                 self._fade(src, target, float(self.ctrl.opts.get(CONF_NIGHT_FADE_IN, 0)) * 60)
 

@@ -5,9 +5,11 @@ While on (switch, persisted, stays on until someone turns it off):
   night mode starts during playback it goes off right away,
 - video still turns the display on, with shorter times (own idle timeout and
   display run-down),
-- the volume of the room's players is limited to a maximum, whoever sets it.
-  Volumes Better Media Player sets itself are limited before they are sent;
-  others are set back as soon as they are reported (a short moment louder).
+- the room's volume is limited to a maximum, whoever sets it: the players'
+  volume, or with a volume device the device's (the players keep their
+  level). Volumes Better Media Player sets itself are limited before they are
+  sent; others are set back as soon as they are reported (a short moment
+  louder).
 
 When it ends, the volume fades back up to the room volume (or is set at once
 if nothing plays).
@@ -21,7 +23,6 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from homeassistant.components.media_player import MediaPlayerEntityFeature
 from homeassistant.core import State, callback
 
 from .const import (
@@ -32,20 +33,12 @@ from .ramp import VolumeRamp
 
 if TYPE_CHECKING:
     from .controller import RoomController, Source
+    from .output import DeviceOutput, PlayerOutput
 
 _LOGGER = logging.getLogger(__name__)
 
-TOLERANCE = 0.011
 _PLAYING = {"playing", "buffering"}
 _POWERED = {"on", "idle", "playing", "paused", "buffering"}
-
-
-def _volume(state: State | None) -> float | None:
-    value = state.attributes.get("volume_level") if state else None
-    try:
-        return float(value) if value is not None else None
-    except (TypeError, ValueError):
-        return None
 
 
 class NightMode:
@@ -73,13 +66,28 @@ class NightMode:
         cap = self.cap
         return min(volume, cap) if cap is not None else volume
 
+    @property
+    def player_cap(self) -> float | None:
+        """The limit for the players' own volume (none with a volume device:
+        there the device is limited and the players keep their level)."""
+        return None if self.ctrl.volume_device is not None else self.cap
+
+    def player_limit(self, volume: float) -> float:
+        cap = self.player_cap
+        return min(volume, cap) if cap is not None else volume
+
+    def _outputs(self) -> list[tuple[PlayerOutput | DeviceOutput, Source | None]]:
+        if self.ctrl.volume_device is not None:
+            return [(self.ctrl.volume_device, None)]
+        return [(self.ctrl.vol(src), src) for src in self.ctrl.sources.values()]
+
     async def async_started(self) -> None:
         """HA is up: the limit holds also for what changed while it was down
         (or a lower limit from the options); a fade back that was cut by a
         restart goes on from where the volume is now."""
         if self.cap is not None:
-            for src in self.ctrl.sources.values():
-                await self._clamp(src)
+            for out, src in self._outputs():
+                await self._clamp(out, src)
         elif self.ctrl.data.get("night_fade_back"):
             await self._fade_back()
 
@@ -105,8 +113,8 @@ class NightMode:
             bass = ctrl.roles.get(ROLE_BASS)
             if bass is not None and ctrl.auto_power and not ctrl.manual and ctrl.role_on(bass):
                 bass.force_off = True  # no run-down
-            for src in ctrl.sources.values():
-                await self._clamp(src)
+            for out, src in self._outputs():
+                await self._clamp(out, src)
         else:
             await self._fade_back()
         ctrl.wake.async_night_changed()
@@ -119,40 +127,49 @@ class NightMode:
     @callback
     def async_on_state(self, src: Source, new: State | None) -> None:
         """A player of the room reported: over the limit? Set it back."""
-        cap = self.cap
-        if cap is None or new is None or new.state not in _POWERED:
-            return
-        vol = _volume(new)
-        if vol is None or vol <= cap + TOLERANCE or src.player in self._clamping:
-            return
-        self._clamping.add(src.player)
-        self.ctrl._spawn(self._clamp_task(src))
+        if self.ctrl.volume_device is None and new is not None and new.state in _POWERED:
+            self._check(self.ctrl.vol(src), src)
 
-    async def _clamp_task(self, src: Source) -> None:
+    @callback
+    def async_on_device(self, new: State | None) -> None:
+        """The volume device reported: over the limit? Set it back."""
+        if (device := self.ctrl.volume_device) is not None and new is not None:
+            self._check(device, None)
+
+    @callback
+    def _check(self, out: PlayerOutput | DeviceOutput, src: Source | None) -> None:
+        cap = self.cap
+        vol = out.level()
+        if cap is None or vol is None or vol <= cap + out.tolerance or out.id in self._clamping:
+            return
+        self._clamping.add(out.id)
+        self.ctrl._spawn(self._clamp_task(out, src))
+
+    async def _clamp_task(self, out: PlayerOutput | DeviceOutput, src: Source | None) -> None:
         try:
-            await self._clamp(src)
+            await self._clamp(out, src)
         finally:
-            self._clamping.discard(src.player)
+            self._clamping.discard(out.id)
 
-    async def _clamp(self, src: Source) -> None:
+    async def _clamp(self, out: PlayerOutput | DeviceOutput, src: Source | None) -> None:
         cap = self.cap
-        if cap is None or self.ctrl.player_state(src) not in _POWERED:
+        if cap is None or (src is not None and self.ctrl.player_state(src) not in _POWERED):
             return
-        if not self.ctrl.player_supports(src, MediaPlayerEntityFeature.VOLUME_SET):
+        if not out.can_set:
             return
-        vol = _volume(self.hass.states.get(src.player))
-        if vol is not None and vol > cap + TOLERANCE:
-            # a sleep timer fading this player goes on below the limit
-            self.ctrl.sleep.limit_fade(src.player, cap)
-            _LOGGER.debug("%s: %s limited to %.2f (night mode)", self.ctrl.entry.title, src.player, cap)
-            await self.ctrl._player(src, "volume_set", {"volume_level": cap})
+        vol = out.level()
+        if vol is not None and vol > cap + out.tolerance:
+            # a sleep timer fading this output goes on below the limit
+            self.ctrl.sleep.limit_fade(out.id, cap)
+            _LOGGER.debug("%s: %s limited to %.2f (night mode)", self.ctrl.entry.title, out.id, cap)
+            await out.async_set(cap)
 
     async def async_limit_changed(self) -> None:
         """The limit was lowered: holds right away."""
         if self.cap is None:
             return
-        for src in self.ctrl.sources.values():
-            await self._clamp(src)
+        for out, src in self._outputs():
+            await self._clamp(out, src)
         if (hub := self.ctrl.hub) is not None:
             hub.async_schedule("night_limit")
 
@@ -167,21 +184,22 @@ class NightMode:
         ctrl.data["night_fade_back"] = True  # a restart in between goes on afterwards
         ctrl._save_now()
         seconds = float(ctrl.opts.get(CONF_NIGHT_FADE_IN, 0)) * 60
-        for src in ctrl.sources.values():
+        for out, src in self._outputs():
             if (
-                ctrl.player_state(src) not in _POWERED
-                or not ctrl.player_supports(src, MediaPlayerEntityFeature.VOLUME_SET)
-                or self._hub_group(src)
-                or ctrl.sleep.fading_player(src.player)  # the sleep timer is going down
-                or ctrl.wake.owns(src.player)  # the wake fades in itself
+                (src is not None and ctrl.player_state(src) not in _POWERED)
+                or not out.can_set
+                or (src is not None and self._hub_group(src))
+                or ctrl.sleep.fading_player(out.id)  # the sleep timer is going down
+                or ctrl.wake.owns(out.id)  # the wake fades in itself
             ):
                 continue
-            ramp = self._ramps.get(src.player)
+            ramp = self._ramps.get(out.id)
             if ramp is None:
-                ramp = self._ramps[src.player] = VolumeRamp(
-                    self.hass, src.player, self._setter(src), ctrl._spawn, self._ramp_done
-                )
-            ramp.start(target, seconds if ctrl.source_playing(src) else 0)
+                ramp = self._ramps[out.id] = VolumeRamp(self.hass, out, ctrl._spawn, self._ramp_done)
+            playing = ctrl.source_playing(src) if src is not None else any(
+                ctrl.source_playing(s) for s in ctrl.sources.values()
+            )
+            ramp.start(target, seconds if playing else 0)
         self._ramp_done()
 
     @callback
@@ -202,12 +220,6 @@ class NightMode:
             for s in self.hass.states.async_all("media_player")
             if src.player in (s.attributes.get("group_members") or [])
         )
-
-    def _setter(self, src: Source):
-        async def _set(volume: float) -> None:
-            await self.ctrl._player(src, "volume_set", {"volume_level": volume})
-
-        return _set
 
     @callback
     def async_cancel_ramp(self, player: str) -> None:

@@ -3,14 +3,18 @@
     "step": {
       "sources": {
         "title": "Media Player",
-        "description": "Mindestens ein Player. Der Video-Player (z. B. Kodi) braucht Bild und Lautsprecher, der Musik-Player (z. B. ein Music-Assistant-/sendspin-Player) nur die Lautsprecher. Keinen Gruppen-Player auswählen.",
+        "description": "Mindestens ein Player. Der Video-Player (z. B. Kodi) braucht Bild und Lautsprecher, der Musik-Player (z. B. ein Music-Assistant-/sendspin-Player) nur die Lautsprecher. Keinen Gruppen-Player auswählen. Die Raumlautstärke wird standardmäßig an den Playern gesetzt; mit einem Verstärker, AV-Receiver oder einer Soundbar mit eigener Lautstärke regelt sie dieses Gerät (die Player behalten dann ihren Pegel).",
         "data": {
           "video_player": "Video-Player",
-          "audio_player": "Musik-Player"
+          "audio_player": "Musik-Player",
+          "volume_control": "Raumlautstärke",
+          "volume_entity": "Lautstärke-Gerät"
         },
         "data_description": {
           "video_player": "Wird über sein eigenes Ein/Aus geschaltet (z. B. Kodi mit deiner Wake-on-LAN-Automation).",
-          "audio_player": "Der Player des Raums, keine Music-Assistant-Gruppe."
+          "audio_player": "Der Player des Raums, keine Music-Assistant-Gruppe.",
+          "volume_control": "Player: am spielenden Player. Eigenes Gerät: das Lautstärke-Gerät unten (die Player behalten ihren Pegel; Gruppen und Follow-Me setzen weiter die Player).",
+          "volume_entity": "Ein Media Player mit Lautstärke oder eine number / input_number (ihr Bereich zählt als 0–100 %)."
         }
       },
       "devices": {
@@ -152,7 +156,11 @@
       "duplicate_device": "Ein Gerät darf nur einmal verwendet werden.",
       "needs_player": "Braucht den zugehörigen Player.",
       "needs_power": "Braucht einen Leistungssensor.",
-      "not_a_group": "Das ist kein Music-Assistant-Gruppen-Player."
+      "not_a_group": "Das ist kein Music-Assistant-Gruppen-Player.",
+      "needs_volume_entity": "Bitte das Lautstärke-Gerät wählen.",
+      "volume_is_player": "Das Lautstärke-Gerät darf keiner der Player des Raums sein.",
+      "no_volume": "Dieser Media Player kann keine Lautstärke setzen.",
+      "volume_is_room": "Ein Better-Media-Player-Raum kann nicht das Lautstärke-Gerät sein."
     },
     "abort": {
       "hub_exists": "Zentrale Einstellungen gibt es schon. Ändern über Konfigurieren.",
@@ -193,7 +201,13 @@
         "title": "Media Player",
         "data": {
           "video_player": "Video-Player",
-          "audio_player": "Musik-Player"
+          "audio_player": "Musik-Player",
+          "volume_control": "Raumlautstärke",
+          "volume_entity": "Lautstärke-Gerät"
+        },
+        "data_description": {
+          "volume_control": "Player: am spielenden Player. Eigenes Gerät: das Lautstärke-Gerät unten (die Player behalten ihren Pegel; Gruppen und Follow-Me setzen weiter die Player).",
+          "volume_entity": "Ein Media Player mit Lautstärke oder eine number / input_number (ihr Bereich zählt als 0–100 %)."
         }
       },
       "devices": {
@@ -290,7 +304,11 @@
       "duplicate_device": "Ein Gerät darf nur einmal verwendet werden.",
       "needs_player": "Braucht den zugehörigen Player.",
       "needs_power": "Braucht einen Leistungssensor.",
-      "not_a_group": "Das ist kein Music-Assistant-Gruppen-Player."
+      "not_a_group": "Das ist kein Music-Assistant-Gruppen-Player.",
+      "needs_volume_entity": "Bitte das Lautstärke-Gerät wählen.",
+      "volume_is_player": "Das Lautstärke-Gerät darf keiner der Player des Raums sein.",
+      "no_volume": "Dieser Media Player kann keine Lautstärke setzen.",
+      "volume_is_room": "Ein Better-Media-Player-Raum kann nicht das Lautstärke-Gerät sein."
     },
     "abort": {
       "invalid_config": "Die Einstellungen passen nicht zusammen. Bitte Media Player und Stromgeräte prüfen."
@@ -517,6 +535,12 @@
       "options": {
         "audio": "Musik",
         "video": "Video"
+      }
+    },
+    "volume_control": {
+      "options": {
+        "players": "Player",
+        "device": "Eigenes Gerät"
       }
     }
   },
