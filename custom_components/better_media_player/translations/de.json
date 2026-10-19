@@ -54,14 +54,16 @@
           "host_on_wait": "Warten nach Player-Steckdose an",
           "display_on_wait": "Warten nach Bild an",
           "audio_on_wait": "Warten nach Lautsprecher an",
-          "sleep_fade": "Sleep-Timer Ausblenden"
+          "sleep_fade": "Sleep-Timer Ausblenden",
+          "snooze_minutes": "Schlummern"
         },
         "data_description": {
           "display_run_down": "Wie lange das Bild nach dem Ende des Video-Players noch Strom hat.",
           "audio_run_down": "Wie lange die Lautsprecher nach dem Ende der Wiedergabe noch Strom haben.",
           "video_idle_timeout": "Video-Player an, aber es läuft nichts (z. B. im Menü). 0 = nie.",
           "start_timeout": "Ist der Player nach dieser Zeit nicht bereit, wird der Start abgebrochen.",
-          "sleep_fade": "Vorgabe für den Sleep-Timer: Die Lautstärke wird in den letzten Minuten heruntergeregelt. 0 = kein Ausblenden."
+          "sleep_fade": "Vorgabe für den Sleep-Timer: Die Lautstärke wird in den letzten Minuten heruntergeregelt. 0 = kein Ausblenden.",
+          "snooze_minutes": "So lange wartet der Schlummer-Button (oder eine Pause während des Weckens)."
         }
       },
       "standby": {
@@ -219,10 +221,12 @@
           "host_on_wait": "Warten nach Player-Steckdose an",
           "display_on_wait": "Warten nach Bild an",
           "audio_on_wait": "Warten nach Lautsprecher an",
-          "sleep_fade": "Sleep-Timer Ausblenden"
+          "sleep_fade": "Sleep-Timer Ausblenden",
+          "snooze_minutes": "Schlummern"
         },
         "data_description": {
-          "sleep_fade": "Vorgabe für den Sleep-Timer: Die Lautstärke wird in den letzten Minuten heruntergeregelt. 0 = kein Ausblenden."
+          "sleep_fade": "Vorgabe für den Sleep-Timer: Die Lautstärke wird in den letzten Minuten heruntergeregelt. 0 = kein Ausblenden.",
+          "snooze_minutes": "So lange wartet der Schlummer-Button (oder eine Pause während des Weckens)."
         }
       },
       "standby": {
@@ -320,6 +324,16 @@
       },
       "sleep_timer_end": {
         "name": "Sleep-Timer Ende"
+      },
+      "wake": {
+        "name": "Wecken",
+        "state": {
+          "idle": "Inaktiv",
+          "starting": "Startet",
+          "fading": "Blendet ein",
+          "playing": "Spielt",
+          "snoozed": "Schlummert"
+        }
       }
     },
     "binary_sensor": {
@@ -379,6 +393,12 @@
       },
       "sleep_plus_15": {
         "name": "Sleep-Timer +15 min"
+      },
+      "wake_snooze": {
+        "name": "Schlummern"
+      },
+      "wake_stop": {
+        "name": "Wecken beenden"
       }
     }
   },
@@ -426,6 +446,58 @@
     "cancel_sleep_timer": {
       "name": "Sleep-Timer abbrechen",
       "description": "Beendet den Sleep-Timer; ein laufendes Ausblenden wird rückgängig gemacht."
+    },
+    "wake": {
+      "name": "Wecken",
+      "description": "Schaltet den Raum ein, startet die Wiedergabe leise und blendet sie ein. Spielt nach 60 s nichts, schlägt es fehl (Event).",
+      "fields": {
+        "media_content_id": {
+          "name": "Medium",
+          "description": "Was gespielt wird; über den Raum-Player ausgewählt, bestimmt es auch den Player."
+        },
+        "media_content_type": {
+          "name": "Medientyp",
+          "description": "z. B. music."
+        },
+        "start_volume": {
+          "name": "Startlautstärke",
+          "description": "0-1; Vorgabe 0,05."
+        },
+        "target_volume": {
+          "name": "Ziellautstärke",
+          "description": "0-1; Vorgabe die Raumlautstärke."
+        },
+        "fade_minutes": {
+          "name": "Einblenden",
+          "description": "Minuten von Start- bis Ziellautstärke; Vorgabe 10."
+        },
+        "max_duration_minutes": {
+          "name": "Maximale Dauer",
+          "description": "Danach blendet der Sleep-Timer aus und schaltet den Raum aus."
+        },
+        "night_mode": {
+          "name": "Nachtmodus",
+          "description": "Vorher ein- oder ausschalten; leer: unverändert."
+        },
+        "source": {
+          "name": "Player",
+          "description": "Für Medien, die nicht über den Raum-Player ausgewählt wurden; Vorgabe: der Musik-Player."
+        }
+      }
+    },
+    "snooze": {
+      "name": "Schlummern",
+      "description": "Unterbricht das Wecken; danach startet es neu und blendet wieder ein.",
+      "fields": {
+        "minutes": {
+          "name": "Minuten",
+          "description": "Vorgabe aus den Zeiten des Raums (9 min)."
+        }
+      }
+    },
+    "stop_wake": {
+      "name": "Wecken beenden",
+      "description": "Beendet das Wecken; die Wiedergabe läuft weiter."
     }
   },
   "selector": {
@@ -441,6 +513,12 @@
         "add": "➕ Zur Warteschlange hinzufügen",
         "replace": "⟲ Warteschlange ersetzen"
       }
+    },
+    "source": {
+      "options": {
+        "audio": "Musik",
+        "video": "Video"
+      }
     }
   },
   "exceptions": {
@@ -449,6 +527,9 @@
     },
     "night_mode_bool": {
       "message": "night_mode muss true oder false sein."
+    },
+    "no_source": {
+      "message": "Dieser Raum hat keinen {source}-Player."
     }
   }
 }

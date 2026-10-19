@@ -201,7 +201,10 @@ class RoomVolume:
         if self.ctrl.sleep.fading_player(src.player):
             return  # the sleep timer is lowering it right now
         current = _volume(self.hass.states.get(src.player))
-        target = self.value
+        override = self.ctrl.wake.start_volume_for(src.player)
+        if override is None and self.ctrl.wake.owns(src.player):
+            return  # the wake sets this player's volume
+        target = self.value if override is None else override
         if target is not None:
             target = self.ctrl.night.limit(target)
         if target is None:
@@ -215,6 +218,12 @@ class RoomVolume:
             return
         _LOGGER.debug("%s: %s to room volume %.2f", self.ctrl.entry.title, src.player, target)
         await self.ctrl._player(src, "volume_set", {"volume_level": target})
+
+    @callback
+    def async_cancel_apply(self, player: str) -> None:
+        """Someone else (the wake) decides this start's volume."""
+        if (unsub := self._pending.pop(player, None)) is not None:
+            unsub()
 
     @callback
     def async_stop(self) -> None:

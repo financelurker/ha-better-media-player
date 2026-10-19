@@ -110,6 +110,7 @@ from .hub import get_hub, get_rooms
 from .sleep import REASON_ROOM_OFF, SleepTimer
 from .night import NightMode
 from .volume import RoomVolume
+from .wake import PHASE_STARTING, REASON_ROOM_OFF as WAKE_ROOM_OFF, WakeAlarm
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -280,6 +281,7 @@ class RoomController:
         self.sleep = SleepTimer(self)
         self.volume = RoomVolume(self)
         self.night = NightMode(self)
+        self.wake = WakeAlarm(self)
         self._sleep_off_pending = False
         self.turning_off = False
 
@@ -337,6 +339,7 @@ class RoomController:
             self._spawn(self.async_update("start"))
             self.sleep.async_started()
             self._spawn(self.night.async_started())
+            self._spawn(self.wake.async_started())
 
         self._unsubs.append(async_at_started(self.hass, _started))
         self.sleep.async_start()
@@ -358,6 +361,7 @@ class RoomController:
         self.sleep.async_stop()
         self.volume.async_stop()
         self.night.async_stop()
+        self.wake.async_stop()
         seq = self._seq_task
         self._cancel_sequence()
         if seq is not None:
@@ -412,6 +416,7 @@ class RoomController:
                 continue
             self.volume.async_on_state(src, old, new)
             self.night.async_on_state(src, new)
+            self.wake.async_on_state(src, old, new)
             was_playing = old is not None and old.state in PLAYING_STATES
             is_playing = new is not None and new.state in PLAYING_STATES
             if is_playing and not was_playing:
@@ -537,6 +542,8 @@ class RoomController:
     def role_demand(self, role: Role) -> bool:
         if not self.night.role_enabled(role.key):
             return False  # night mode: no subwoofer
+        if self.wake.holds(role):
+            return True  # snoozed: the room stays ready
         if self.prewarm and role.key in (ROLE_AUDIO, ROLE_BASS, ROLE_AUDIO_HOST) and not self.quiet:
             return True
         return any(
@@ -714,6 +721,13 @@ class RoomController:
             if self.sleep.active and self._started and self._fully_off():
                 # everything went off by itself: the timer has nothing left to do
                 self._spawn_sleep_cancel()
+            if (
+                self.wake.active
+                and self.wake.phase != PHASE_STARTING
+                and self._started
+                and self._fully_off()
+            ):
+                self._spawn(self.wake.async_finish(WAKE_ROOM_OFF))
         self._notify()
 
     def _fully_off(self) -> bool:
@@ -1184,6 +1198,7 @@ class RoomController:
             self.turning_off = False
 
     async def _turn_off(self) -> None:
+        await self.wake.async_finish(WAKE_ROOM_OFF)
         self._cancel_sequence()
         self._reset_overrides()
         if (hub := _hub(self.hass)) is not None:

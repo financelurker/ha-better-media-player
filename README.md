@@ -74,7 +74,7 @@ Settings → Devices & services → Add integration → **Better Media Player** 
 | **Media players** | Video player (e.g. Kodi) and/or music player (the room's own player, not a group). |
 | **Power devices** | Display (TV, projector), speakers (one or more: active speakers, amplifier, AVR), subwoofer. |
 | **Players: special cases** | Only if a player cannot turn itself on/off (on/off action) or its hardware hangs on a plug. |
-| **Times** | Run-down times, video idle timeout, start timeout, waits after switching on, default sleep timer fade-out. |
+| **Times** | Run-down times, video idle timeout, start timeout, waits after switching on, default sleep timer fade-out, snooze time. |
 | **Wait for standby** | Optional, needs power sensors. |
 | **Night mode** | Volume limit, video times at night, fade back afterwards. |
 | **Follow me** | Occupancy sensors, presence run-down, volume offset, prewarm. Rooms without occupancy sensors do not take part. |
@@ -199,6 +199,48 @@ The switch `Night mode` puts the room into night mode until it is turned off aga
 - After a restart, or when the limit is lowered (number or options), the limit holds at once.
 - `media_player.play_media` on the room player accepts `extra: {night_mode: true}` (or `false`) to switch the night mode along with the playback; it is not passed on to the player.
 
+### Wake up
+
+`better_media_player.wake` wakes one room: the room powers up as usual, the playback starts at the start volume and fades in once it really plays.
+
+```yaml
+action: better_media_player.wake
+target:
+  entity_id: media_player.bedroom
+data:
+  media_content_id: library://radio/42
+  media_content_type: music
+  start_volume: 0.05        # default 0.05
+  target_volume: 0.3        # default: the room volume
+  fade_minutes: 10          # default 10
+  max_duration_minutes: 60  # optional: then the sleep timer fades out and turns the room off
+  night_mode: false         # optional: switch the night mode before
+```
+
+- **Which player:** media picked through the room player (media selector of an automation) names the player itself, so a film wakes on Kodi and turns the display on. Other media go to the music player, or to `source: video`.
+- **No playback** within 60 s, or a failed start: the event `better_media_player_wake_failed` (`reason`: `start_failed` / `not_playing`) is fired so a different source can be tried, and the room goes off again if it was off before. A successful start fires `better_media_player_wake_started`.
+- **Snooze** (button, `better_media_player.snooze` with optional `minutes`, default 9, or a pause on the player): pauses (or stops, if the player cannot pause), keeps the room powered, then starts again at the start volume and fades in. `max_duration` counts from the last start.
+- A **volume change** by hand ends only the fade.
+- **Ends** (`better_media_player_wake_finished`, `reason`): `stopped` (button / `better_media_player.stop_wake` / a stop on the player; the playback goes on unless stopped), `max_duration`, `room_off`, `sleep_timer` (a sleep timer set during the wake; the playback goes on), `replaced` (a new wake). A wake ends a running sleep timer.
+- What the wake sets is not taken as the room volume; the night mode's limit holds.
+- It survives a restart: the fade and the snooze go on, a start cut by the restart is tried again (within 5 min).
+- The sensor `Wake` shows `idle`, `starting`, `fading`, `playing` or `snoozed`. The buttons *Snooze* and *Stop wake* are hidden and unavailable while no wake runs. Cards that list them explicitly still show them; to show them only during a wake:
+
+```yaml
+type: conditional
+conditions:
+  - condition: state
+    entity: sensor.bedroom_wake
+    state_not: idle
+card:
+  type: entities
+  entities:
+    - button.bedroom_snooze
+    - button.bedroom_stop_wake
+```
+
+Waking several rooms with one call wakes each on its own (not in sync). Waking with follow me is planned separately.
+
 ### Sleep timer
 
 The room turns itself off after a set time, whatever plays (video or music). Over the last minutes the volume of the active player fades out; then the normal *room off* runs and the volume from before the fade is set again, so the next playback does not start at zero. A player that is suspended at the end (e.g. Kodi) gets its volume when it is up again.
@@ -242,6 +284,8 @@ With power sensors, a plug is cut only after its device has drawn less than the 
 | `sensor.<room>_sleep_timer_end` | when the sleep timer turns the room off |
 | `switch.<room>_quiet` | quiet mode: the room takes no part in follow me |
 | `switch.<room>_night_mode` | night mode (see above) |
+| `sensor.<room>_wake` | wake state; snooze end, end time and volumes in the attributes |
+| `button.<room>_snooze`, `button.<room>_stop_wake` | wake controls (hidden while no wake runs) |
 | `number.<room>_night_maximum_volume`, `_night_video_idle_timeout`, `_night_display_run_down` | night mode limit (%) and times (min) |
 | `sensor.<room>_follow` | follow state of the room (with occupancy sensors only) |
 | `sensor.better_media_player_follow_rooms` | central: rooms in the playing follow group |

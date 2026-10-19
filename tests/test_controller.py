@@ -393,6 +393,9 @@ async def test_entity_ids_match_readme(hass, home):
         "number.wohnzimmer_night_video_idle_timeout",
         "number.wohnzimmer_night_display_run_down",
         "number.wohnzimmer_night_maximum_volume",
+        "sensor.wohnzimmer_wake",
+        "button.wohnzimmer_snooze",
+        "button.wohnzimmer_stop_wake",
     }
 
 

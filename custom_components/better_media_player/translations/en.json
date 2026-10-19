@@ -54,14 +54,16 @@
           "host_on_wait": "Wait after player plug on",
           "display_on_wait": "Wait after display on",
           "audio_on_wait": "Wait after speakers on",
-          "sleep_fade": "Sleep timer fade-out"
+          "sleep_fade": "Sleep timer fade-out",
+          "snooze_minutes": "Snooze"
         },
         "data_description": {
           "display_run_down": "How long the display stays powered after the video player stopped.",
           "audio_run_down": "How long the speakers stay powered after playback stopped.",
           "video_idle_timeout": "Video player on but nothing playing (e.g. in the menu). 0 = never.",
           "start_timeout": "If the player is not ready after this time, the start is aborted.",
-          "sleep_fade": "Default for the sleep timer: the volume goes down over the last minutes. 0 = no fade."
+          "sleep_fade": "Default for the sleep timer: the volume goes down over the last minutes. 0 = no fade.",
+          "snooze_minutes": "How long the snooze button (or a pause during the wake) waits."
         }
       },
       "standby": {
@@ -219,10 +221,12 @@
           "host_on_wait": "Wait after player plug on",
           "display_on_wait": "Wait after display on",
           "audio_on_wait": "Wait after speakers on",
-          "sleep_fade": "Sleep timer fade-out"
+          "sleep_fade": "Sleep timer fade-out",
+          "snooze_minutes": "Snooze"
         },
         "data_description": {
-          "sleep_fade": "Default for the sleep timer: the volume goes down over the last minutes. 0 = no fade."
+          "sleep_fade": "Default for the sleep timer: the volume goes down over the last minutes. 0 = no fade.",
+          "snooze_minutes": "How long the snooze button (or a pause during the wake) waits."
         }
       },
       "standby": {
@@ -320,6 +324,16 @@
       },
       "sleep_timer_end": {
         "name": "Sleep timer end"
+      },
+      "wake": {
+        "name": "Wake",
+        "state": {
+          "idle": "Idle",
+          "starting": "Starting",
+          "fading": "Fading in",
+          "playing": "Playing",
+          "snoozed": "Snoozed"
+        }
       }
     },
     "binary_sensor": {
@@ -379,6 +393,12 @@
       },
       "sleep_plus_15": {
         "name": "Sleep timer +15 min"
+      },
+      "wake_snooze": {
+        "name": "Snooze"
+      },
+      "wake_stop": {
+        "name": "Stop wake"
       }
     }
   },
@@ -426,6 +446,58 @@
     "cancel_sleep_timer": {
       "name": "Cancel sleep timer",
       "description": "Stop the sleep timer; a running fade-out is undone."
+    },
+    "wake": {
+      "name": "Wake up",
+      "description": "Power the room, start playback quietly and fade it in. Fails (event) if nothing plays within 60 s.",
+      "fields": {
+        "media_content_id": {
+          "name": "Media",
+          "description": "What to play; picked through the room player, it also chooses the player."
+        },
+        "media_content_type": {
+          "name": "Media type",
+          "description": "e.g. music."
+        },
+        "start_volume": {
+          "name": "Start volume",
+          "description": "0-1; default 0.05."
+        },
+        "target_volume": {
+          "name": "Target volume",
+          "description": "0-1; default the room volume."
+        },
+        "fade_minutes": {
+          "name": "Fade-in",
+          "description": "Minutes from start to target volume; default 10."
+        },
+        "max_duration_minutes": {
+          "name": "Maximum duration",
+          "description": "Afterwards the sleep timer fades out and turns the room off."
+        },
+        "night_mode": {
+          "name": "Night mode",
+          "description": "Turn the night mode on or off before; empty: unchanged."
+        },
+        "source": {
+          "name": "Player",
+          "description": "For media not picked through the room player; default: the music player."
+        }
+      }
+    },
+    "snooze": {
+      "name": "Snooze",
+      "description": "Pause the wake; afterwards it starts again and fades in.",
+      "fields": {
+        "minutes": {
+          "name": "Minutes",
+          "description": "Default from the room's times (9 min)."
+        }
+      }
+    },
+    "stop_wake": {
+      "name": "Stop wake",
+      "description": "End the wake; the playback goes on."
     }
   },
   "selector": {
@@ -441,6 +513,12 @@
         "add": "➕ Add to queue",
         "replace": "⟲ Replace queue"
       }
+    },
+    "source": {
+      "options": {
+        "audio": "Music",
+        "video": "Video"
+      }
     }
   },
   "exceptions": {
@@ -449,6 +527,9 @@
     },
     "night_mode_bool": {
       "message": "night_mode must be true or false."
+    },
+    "no_source": {
+      "message": "This room has no {source} player."
     }
   }
 }
