@@ -97,7 +97,7 @@
         "description": "Was möchtest du hinzufügen?",
         "menu_options": {
           "room": "Einen Raum",
-          "hub": "Zentrale Einstellungen (Follow-Me)"
+          "hub": "Zentrale Einstellungen (Follow-Me, dynamische Controls)"
         }
       },
       "hub": {

@@ -138,6 +138,7 @@ async def test_follow_player_playing_without_follow_me_can_be_started(hass, hous
 
 
 async def test_buttons_shown_only_when_usable(hass, house, freezer):
+    await _tick(hass, freezer, 5)  # hidden after the start and the hide delay
     reg = er.async_get(hass)
     hidden = er.RegistryEntryHider.INTEGRATION
     assert reg.async_get(START).hidden_by == hidden  # nothing plays

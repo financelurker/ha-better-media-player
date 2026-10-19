@@ -179,7 +179,7 @@ target:
   entity_id: media_player.living_room
 ```
 
-The room joins the follow-me player and its queue moves there (`music_assistant.transfer_queue`). The room's volume becomes follow me's volume (its offset taken out). While follow me runs, the **Follow me** buttons are hidden in every room and the **Stop follow me** buttons are shown; pressing a hidden button gives an error.
+The room joins the follow-me player and its queue moves there (`music_assistant.transfer_queue`). The room's volume becomes follow me's volume (its offset taken out). While follow me runs, the **Follow me** buttons are hidden in every room and the **Stop follow me** buttons are shown ([dynamic controls](#dynamic-controls)); pressing *Follow me* while it runs, or *Stop follow me* while it does not, gives an error.
 
 While it plays:
 
@@ -357,8 +357,8 @@ A room's controls that make no sense right now are hidden (`hidden_by: integrati
 | All off | the room plays or is on, or a device still has power (run-down, manual mode) |
 | Sleep timer, Sleep timer +15 min | the room plays or is on, or a sleep timer runs |
 | Sleep timer end | a sleep timer runs |
-| Night mode | the room plays or is on, it is on, or follow me runs (music may come in: it joins limited) |
-| Quiet | follow me runs, or it is on (it only matters for follow me, also while nothing plays here) |
+| Night mode | the room plays or is on, it is on, or follow me runs and the room takes part (occupancy sensors and a music player; music may come in: it joins limited) |
+| Quiet | follow me runs and the room takes part, or it is on (it only matters for follow me, also while nothing plays here) |
 | Wake, Snooze, Stop wake | a wake runs |
 | Follow me / Stop follow me | it can be started here / follow me runs |
 | Volume preset | the room plays or is on |

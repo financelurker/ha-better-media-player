@@ -97,7 +97,7 @@
         "description": "What do you want to add?",
         "menu_options": {
           "room": "A room",
-          "hub": "Central settings (follow me)"
+          "hub": "Central settings (follow me, dynamic controls)"
         }
       },
       "hub": {

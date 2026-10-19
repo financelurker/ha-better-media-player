@@ -77,6 +77,11 @@ class SourceWatch:
         self._requested = (key, time.monotonic())
 
     @property
+    def ready(self) -> bool:
+        """The first look after a start is done."""
+        return self._announced is not _UNSET
+
+    @property
     def active(self) -> bool:
         """The room has a source: one plays, or the announced one (stable)."""
         return bool(self._playing()) or self._announced not in (None, _UNSET)
@@ -133,7 +138,7 @@ class SourceWatch:
         if (
             audio is not None
             and ctrl.player_state(audio) == MediaPlayerState.PAUSED
-            and self._announced == SOURCE_AUDIO
+            and self._announced in (SOURCE_AUDIO, _UNSET)  # (also at the first look after a start)
             and self._usable(SOURCE_AUDIO)
         ):
             return SOURCE_AUDIO  # paused: still the room's source while it has power for it
@@ -159,6 +164,7 @@ class SourceWatch:
                 self._recheck()
                 return
             self._announced = self._current()
+            ctrl._notify()  # controls wait for this first look
             return
         announced = ctrl.sources.get(self._announced) if self._announced else None
         if announced is not None and ctrl.player_state(announced) in _UNCERTAIN:

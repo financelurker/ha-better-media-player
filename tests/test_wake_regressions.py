@@ -161,6 +161,7 @@ async def test_controls_shown_by_the_user_stay_shown(hass, home, freezer):
     from .test_wake import SNOOZE
 
     entry = await _room(hass, home)
+    await _tick(hass, freezer, 5)  # hidden after the start and the hide delay
     reg = er.async_get(hass)
     assert reg.async_get(SNOOZE).hidden_by == er.RegistryEntryHider.INTEGRATION
     reg.async_update_entity(SNOOZE, hidden_by=None)  # the user shows it again

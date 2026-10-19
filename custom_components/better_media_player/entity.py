@@ -15,8 +15,10 @@ from homeassistant.helpers.event import async_call_later
 from .const import (
     CONF_AREA,
     CONF_DYNAMIC_CONTROLS,
+    CONF_ENTRY_TYPE,
     CONF_HIDE_DELAY,
     DOMAIN,
+    ENTRY_TYPE_HUB,
     HUB_DEFAULTS,
     NAME,
     SOURCE_AUDIO,
@@ -69,9 +71,14 @@ class BetterMediaPlayerEntity(Entity):
 
 
 def controls_settings(hass) -> tuple[bool, float]:
-    """Dynamic controls on (central settings, default on) and the hide delay (s)."""
-    hub = hass.data.get(DOMAIN, {}).get("hub")
-    opts = hub.opts if hub is not None else HUB_DEFAULTS
+    """Dynamic controls on (central settings, default on) and the hide delay (s).
+
+    Read from the central entry's options: right whatever loads first, also
+    while the central entry reloads."""
+    opts = next(
+        (e.options for e in hass.config_entries.async_entries(DOMAIN) if e.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_HUB),
+        HUB_DEFAULTS,
+    )
     return bool(opts.get(CONF_DYNAMIC_CONTROLS, True)), float(opts.get(CONF_HIDE_DELAY, 3) or 0)
 
 
@@ -80,28 +87,33 @@ class Visibility:
 
     So dashboards only show what can be used in the room's state. Shown at
     once when it makes sense again, hidden only after the hide delay (no
-    flicker between two items). A hidden control still works (actions,
-    automations); pressing a hidden button gives an error or does nothing
-    (see the control). Never against the user: a control they hid stays
-    hidden, one they showed again while hidden is not hidden any more. With
-    dynamic controls off (central settings) nothing is hidden.
+    flicker between two items), and not before the owner is ready after a
+    start (the players have reported). A hidden control still works
+    (actions, automations); pressing a hidden button gives an error or does
+    nothing (see the control). Never against the user: a control they hid
+    stays hidden, one they showed again (after it was hidden) stays shown.
+    With dynamic controls off (central settings) nothing is hidden.
+
+    Marks per unique id in the owner's data["controls"]: shown / hidden (by
+    us), user_hidden (hidden by the user), user (shown by the user).
     """
 
     _hide_unsub: Callable[[], None] | None = None
+    _hide_delay: float | None = None
 
     @property
     def usable(self) -> bool:
         raise NotImplementedError
 
     def _visibility_owner(self):
-        """The controller (room) or the hub: data (marks), save, listener."""
+        """The controller (room) or the hub: data (marks), _save, listener, visibility_ready."""
         raise NotImplementedError
 
     def _start_visibility(self) -> None:
         owner = self._visibility_owner()
         self.async_on_remove(owner.async_add_listener(self._sync_hidden))
         self.async_on_remove(self._cancel_hide)
-        self._sync_hidden(fresh=True)
+        self._sync_hidden()
 
     @callback
     def _cancel_hide(self) -> None:
@@ -110,48 +122,62 @@ class Visibility:
             self._hide_unsub = None
 
     @callback
-    def _sync_hidden(self, fresh: bool = False) -> None:
+    def _mark(self, uid: str, mark: str) -> None:
+        owner = self._visibility_owner()
+        marks: dict[str, str] = owner.data.setdefault("controls", {})
+        if marks.get(uid) != mark:
+            marks[uid] = mark
+            owner._save()
+
+    @callback
+    def _sync_hidden(self) -> None:
         reg = er.async_get(self.hass)
         entry = reg.async_get(self.entity_id) if self.entity_id else None
         if entry is None:
             return
         enabled, delay = controls_settings(self.hass)
         owner = self._visibility_owner()
-        marks: dict[str, str] = owner.data.setdefault("controls", {})
-        mark = marks.get(entry.unique_id)
+        uid = entry.unique_id
+        mark = owner.data.get("controls", {}).get(uid)
+        if entry.hidden_by == er.RegistryEntryHider.USER:
+            self._cancel_hide()
+            self._mark(uid, "user_hidden")  # the user's: never shown by us
+            return
         if not enabled or self.usable:
             self._cancel_hide()
             if entry.hidden_by == er.RegistryEntryHider.INTEGRATION:
                 reg.async_update_entity(self.entity_id, hidden_by=None)
-                marks[entry.unique_id] = "shown"
-                owner._save()
+                self._mark(uid, "shown")
             return
         if mark == "user" or entry.hidden_by is not None:
             return
-        if mark == "hidden":
-            marks[entry.unique_id] = "user"  # shown again by the user
-            owner._save()
+        if mark in ("hidden", "user_hidden"):
+            self._mark(uid, "user")  # shown again by the user: stays shown
             return
-        if fresh or delay <= 0:
+        if not owner.visibility_ready:
+            return  # still starting: nothing is hidden before the room is known
+        if delay <= 0:
+            self._cancel_hide()
             self._hide(reg)
-        elif self._hide_unsub is None:
+            return
+        if self._hide_unsub is not None and self._hide_delay == delay:
+            return
+        self._cancel_hide()  # (another delay from the central settings)
+        self._hide_delay = delay
 
-            @callback
-            def _due(_now) -> None:
-                self._hide_unsub = None
-                if not self.usable and controls_settings(self.hass)[0]:
-                    current = reg.async_get(self.entity_id)
-                    if current is not None and current.hidden_by is None:
-                        self._hide(reg)
+        @callback
+        def _due(_now) -> None:
+            self._hide_unsub = None
+            current = reg.async_get(self.entity_id)
+            if current is not None and current.hidden_by is None:  # (usable again: cancelled)
+                self._hide(reg)
 
-            self._hide_unsub = async_call_later(self.hass, delay, _due)
+        self._hide_unsub = async_call_later(self.hass, delay, _due)
 
     @callback
     def _hide(self, reg) -> None:
-        owner = self._visibility_owner()
         reg.async_update_entity(self.entity_id, hidden_by=er.RegistryEntryHider.INTEGRATION)
-        owner.data.setdefault("controls", {})[reg.async_get(self.entity_id).unique_id] = "hidden"
-        owner._save()
+        self._mark(reg.async_get(self.entity_id).unique_id, "hidden")
 
 
 class ControlEntity(Visibility, BetterMediaPlayerEntity):

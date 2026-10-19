@@ -253,6 +253,10 @@ class FollowManager:
     # ------------------------------------------------------------------ state
 
     @property
+    def visibility_ready(self) -> bool:
+        return self._started
+
+    @property
     def active(self) -> bool:
         """Follow me is on."""
         return bool(self.data.get("active")) and self.follow_player is not None
@@ -921,6 +925,7 @@ class FollowManager:
     def _save(self) -> None:
         self._save_later()
 
+    @callback
     def _save_later(self) -> None:
         self._store.async_delay_save(lambda: self.data, 10)
 

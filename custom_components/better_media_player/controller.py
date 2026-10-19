@@ -528,6 +528,11 @@ class RoomController:
         return self.sequence_running or self.source_watch.active
 
     @property
+    def visibility_ready(self) -> bool:
+        """Started, and the room's source is known (its players have reported)."""
+        return self._started and self.source_watch.ready
+
+    @property
     def has_power(self) -> bool:
         return any(self.is_on(e) for e in self.power_entities)
 
