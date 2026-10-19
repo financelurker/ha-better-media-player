@@ -417,8 +417,14 @@ class FollowManager:
                 )
             group, player = self.follow_player, room.audio_player
             # the volume the music had in this room becomes follow me's volume (at
-            # night the room's own wish, not the limited one)
-            volume = room.volume.value if room.night.player_cap is not None else self._player_volume(player)
+            # night the room's own wish, not the limited one); with a volume device
+            # the player's level says nothing: follow me keeps its last volume
+            if room.volume_device is not None:
+                volume = None
+            elif room.night.player_cap is not None:
+                volume = room.volume.value
+            else:
+                volume = self._player_volume(player)
             if volume is not None and volume > 0:
                 self.data["volumes"][group] = round(max(0.0, min(100.0, volume * 100 - room.volume_offset)), 1)
             self._activate(room)

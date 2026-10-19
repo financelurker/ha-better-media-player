@@ -18,7 +18,7 @@ Better Media Player is a custom integration in the spirit of Better Thermostat. 
 
 - a room has a video player (e.g. Kodi) and/or a music player (e.g. a Music Assistant player);
 - TV, speakers or subwoofer hang on switchable plugs and start by themselves when they get power;
-- the room's volume is set on the players, or on an amplifier, AV receiver or soundbar with its own volume;
+- the room's volume is set on the players, or on an amplifier, AV receiver or soundbar with its own volume (a media player or a number);
 - for follow me: occupancy sensors in the rooms and one Music Assistant group player with dynamic members.
 
 **It does not fit (yet) if**
@@ -198,10 +198,11 @@ A room has one volume, not one per player. It is the volume last chosen in the r
 With an amplifier, AV receiver or soundbar that has its own volume, choose **Room volume: Own device** and the **Volume device** in *Media players*: a media player that can set a volume, or a `number` / `input_number` (its range counts as 0–100 %, e.g. −80…0 dB).
 
 - The room's volume is the device's. Volume, steps and mute of the room player go there (mute only with a media player); changes on the device itself (its remote, its app) are learned, also during group playback.
-- The players keep their level: set it once yourself (e.g. Kodi at 100 %). Better Media Player does not touch it, except for group playback below.
+- The players keep their own level: set it once yourself (e.g. Kodi at 100 %). Better Media Player does not change it; after group playback (below) a player gets its own level back when it plays on its own again.
 - Sleep timer fade, wake fade, night mode limit and the fade back after the night act on the device.
 - While the device is off, a volume set on the room player is remembered; the device gets the room's volume as soon as it is up again (e.g. after its plug switched on), whatever it comes back with.
-- **Groups and follow me** still set the players' volume (follow me's volume plus the room's offset): there the group decides. The night mode limits the device, not the player in the group.
+- **Groups and follow me** still set the players' volume (follow me's volume plus the room's offset): there the group decides. The night mode limits the device, not the player in the group. Started in such a room, follow me keeps its last volume (the player's own level says nothing about loudness).
+- Switching between players and a device (or to another device) in the options starts the room volume afresh: it is learned from the new output.
 - The note about players that cannot set a volume is not shown: the device sets it.
 
 ### Night mode

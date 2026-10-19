@@ -159,7 +159,8 @@
       "not_a_group": "That is no Music Assistant group player.",
       "needs_volume_entity": "Choose the volume device.",
       "volume_is_player": "The volume device must not be one of the room's players.",
-      "no_volume": "This media player cannot set a volume."
+      "no_volume": "This media player cannot set a volume.",
+      "volume_is_room": "A Better Media Player room cannot be the volume device."
     },
     "abort": {
       "hub_exists": "Central settings already exist. Change them via Configure.",
@@ -306,7 +307,8 @@
       "not_a_group": "That is no Music Assistant group player.",
       "needs_volume_entity": "Choose the volume device.",
       "volume_is_player": "The volume device must not be one of the room's players.",
-      "no_volume": "This media player cannot set a volume."
+      "no_volume": "This media player cannot set a volume.",
+      "volume_is_room": "A Better Media Player room cannot be the volume device."
     },
     "abort": {
       "invalid_config": "The settings are not consistent. Check media players and power devices."

@@ -399,8 +399,15 @@ class SleepTimer:
             if not isinstance(item, dict):
                 item = {"volume": item}
             out, src = self.ctrl.output(player)
+            stale = False
             if out is None:
-                pending.pop(player, None)  # no such output any more (options changed)
+                # left from before the volume output changed (players <-> device):
+                # a player still gets its own volume back, an old device nothing
+                out, src = self.ctrl.player_output(player)
+                stale = True
+            if out is None:
+                pending.pop(player, None)
+                self.ctrl._save()
                 continue
             if self.ctrl.wake.owns(player):
                 pending.pop(player, None)  # the wake sets this output's volume
@@ -421,9 +428,14 @@ class SleepTimer:
                 continue  # someone set a volume meanwhile (e.g. follow me's join): it wins
             if out.can_set:
                 # the room's volume is what the player would get next anyway
-                room = self.ctrl.volume.value
+                room = None if stale else self.ctrl.volume.value
                 target = room if room is not None else item["volume"]
-                await out.async_set(target)
+                if stale:
+                    await self.ctrl._call(
+                        "media_player", "volume_set", {"entity_id": player, "volume_level": target}
+                    )
+                else:
+                    await out.async_set(target)
 
     # ----------------------------------------------------------------- event
 

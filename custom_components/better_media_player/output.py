@@ -13,6 +13,7 @@ Every output speaks 0..1; a number is mapped from its min..max.
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 from homeassistant.components.media_player import MediaPlayerEntityFeature
@@ -22,6 +23,8 @@ if TYPE_CHECKING:
     from .controller import RoomController, Source
 
 TOLERANCE = 0.011  # players round to whole percent
+# a receiver or TV may have coarse steps of its own (e.g. 30 or 50 steps)
+DEVICE_TOLERANCE = 0.035
 _NOT_READY = {"off", "standby", "unavailable", "unknown"}
 NUMBER_DOMAINS = ("number", "input_number")
 
@@ -101,7 +104,9 @@ class DeviceOutput:
     @property
     def tolerance(self) -> float:
         """A coarse number (e.g. 0..30) reports its own steps."""
-        rng = self._range() if self.domain in NUMBER_DOMAINS else None
+        if self.domain not in NUMBER_DOMAINS:
+            return DEVICE_TOLERANCE
+        rng = self._range()
         if rng is None or not rng[2]:
             return TOLERANCE
         lo, hi, step = rng
@@ -126,8 +131,9 @@ class DeviceOutput:
         state = self._state()
         return state.attributes.get("is_volume_muted") if state is not None and self.can_mute else None
 
-    def _effective(self, volume: float) -> tuple[float, float | None]:
-        """The level the device will report (and the number value to send)."""
+    def _effective(self, volume: float, at_most: bool = False) -> tuple[float, float | None]:
+        """The level the device will report (and the number value to send);
+        at_most: round down to the step (a limit must hold)."""
         volume = max(0.0, min(1.0, volume))
         if self.domain not in NUMBER_DOMAINS:
             return volume, None
@@ -137,14 +143,16 @@ class DeviceOutput:
         lo, hi, step = rng
         value = lo + volume * (hi - lo)
         if step:
-            value = lo + round((value - lo) / step) * step
+            steps = (value - lo) / step
+            value = lo + (math.floor(steps + 1e-9) if at_most else round(steps)) * step
         value = round(min(hi, max(lo, value)), 6)
         return round((value - lo) / (hi - lo), 4), value
 
     async def async_set(self, volume: float) -> None:
         """Set the device's volume (the night mode's limit holds)."""
         ctrl = self.ctrl
-        level, value = self._effective(ctrl.night.limit(float(volume)))
+        limited = ctrl.night.limit(float(volume))
+        level, value = self._effective(limited, at_most=ctrl.night.cap is not None and limited >= ctrl.night.cap)
         ctrl.volume.note_own(self.id, level)
         if self.domain in NUMBER_DOMAINS:
             if value is None:

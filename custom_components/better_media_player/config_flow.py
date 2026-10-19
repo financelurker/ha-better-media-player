@@ -258,6 +258,10 @@ def _validate(hass: HomeAssistant, options: dict) -> dict[str, str]:
             errors[CONF_VOLUME_ENTITY] = "needs_volume_entity"
         elif device in (video, audio):
             errors[CONF_VOLUME_ENTITY] = "volume_is_player"
+        elif (reg := er.async_get(hass).async_get(device)) is not None and reg.platform == DOMAIN:
+            errors[CONF_VOLUME_ENTITY] = "volume_is_room"  # a room player (loops)
+        elif state is not None and state.attributes.get(ATTR_MASS_PLAYER_TYPE) == MASS_TYPE_GROUP:
+            errors[CONF_VOLUME_ENTITY] = "group_player"
         elif (
             state is not None
             and device.startswith("media_player.")

@@ -375,16 +375,22 @@ class WakeAlarm:
                 self._ramp.stop()
             self._ramp = VolumeRamp(self.hass, out, self.ctrl._spawn, self._fade_done)
         if not self._ramp.start(target, seconds):
-            if out.level() is None:
+            if out.is_device and out.level() is None:
                 return  # the volume device is not up yet: the fade starts when it is
             self._fade_done()
 
     @callback
     def async_output_ready(self) -> None:
         """The room's volume device is up (its power came on during the wake):
-        the fade goes on from where it would be now."""
+        the fade goes on from where it would be now; after the fade the device
+        gets the wake's volume (unless someone changed it)."""
         w, src = self._w, self._src()
-        if w is None or src is None or w["phase"] != PHASE_FADING or not w.get("fade_t0"):
+        if w is None or src is None:
+            return
+        if w["phase"] == PHASE_PLAYING and not w.get("user_volume"):
+            self.ctrl._spawn(self._set_volume(src, self.ctrl.night.limit(w["target_volume"])))
+            return
+        if w["phase"] != PHASE_FADING or not w.get("fade_t0"):
             return
         if self._ramp is not None and self._ramp.running:
             return

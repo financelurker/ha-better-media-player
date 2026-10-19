@@ -112,6 +112,7 @@ class FakeHome:
     kodi_boots: bool = False  # turn_on makes Kodi idle immediately
     kodi_suspends: bool = True  # turn_off makes Kodi off immediately
     avr_memory: float = 0.4  # the AVR's own volume when its power comes back
+    avr_steps: int = 0  # >0: the AVR reports its volume in 1/avr_steps steps
 
     def avr(self, state: str, **attrs: Any) -> None:
         self.set(AVR, state, supported_features=AVR_FEATURES, friendly_name="AV Receiver", **attrs)
@@ -196,7 +197,10 @@ class FakeHome:
         if entity_id == AVR:
             vol = st.attributes.get("volume_level") or 0
             if service == "volume_set":
-                self.set(AVR, st.state, volume_level=round(data["volume_level"], 3))
+                v = data["volume_level"]
+                if self.avr_steps:
+                    v = round(v * self.avr_steps) / self.avr_steps
+                self.set(AVR, st.state, volume_level=round(v, 4))
             elif service in ("volume_up", "volume_down"):
                 self.set(AVR, st.state, volume_level=round(min(1, max(0, vol + (0.05 if service == "volume_up" else -0.05))), 3))
             elif service == "volume_mute":

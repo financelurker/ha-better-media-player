@@ -314,6 +314,14 @@ class RoomController:
         }
         if "wake_controls" in self.data:  # stored under the old name (wake controls only)
             self.data["controls"] = self.data.pop("wake_controls")
+        # another volume output (players <-> device, another device): the room's
+        # volume was learned in another scale, it is learned again
+        volume_cfg = self.volume_device.id if self.volume_device is not None else "players"
+        if self.data.get("cfg_volume") != volume_cfg:
+            if "cfg_volume" in self.data:
+                self.data.pop("room_volume", None)
+                self.data.pop("player_levels", None)
+            self.data["cfg_volume"] = volume_cfg
         if self.data.get("last_source") not in self.sources:
             self.data["last_source"] = default_source
         # run-down values: option changes win, otherwise keep the number entity value
@@ -502,6 +510,13 @@ class RoomController:
     def vol(self, src: Source) -> PlayerOutput | DeviceOutput:
         """Where this source's volume is heard (room features act there)."""
         return self.volume_device or self._outputs[src.key]
+
+    def player_output(self, entity_id: str | None) -> tuple[PlayerOutput | None, Source | None]:
+        """A player's own volume, whatever sets the room's volume."""
+        for key, src in self.sources.items():
+            if src.player == entity_id:
+                return self._outputs[key], src
+        return None, None
 
     def output(self, entity_id: str | None) -> tuple[PlayerOutput | DeviceOutput | None, Source | None]:
         """The output with this id and its source (None for the volume device)."""
