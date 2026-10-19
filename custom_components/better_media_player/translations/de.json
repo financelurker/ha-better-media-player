@@ -120,6 +120,10 @@
           "volume_offset": "Prozentpunkte gegenüber der Gruppenlautstärke beim Beitritt, z. B. -10.",
           "prewarm": "Lautsprecher an, sobald irgendwo Follow-Musik spielt, damit der Ton beim Betreten sofort da ist."
         }
+      },
+      "volume_note": {
+        "title": "Hinweis: Lautstärke",
+        "description": "{players} kann keine Lautstärke setzen. Die Raumlautstärke (eine Lautstärke für den ganzen Raum, die beim Wechsel zwischen den Playern mitgenommen wird) wirkt bei diesem Player nicht. Alles andere funktioniert wie gewohnt."
       }
     },
     "error": {
@@ -232,6 +236,10 @@
           "volume_offset": "Prozentpunkte gegenüber der Gruppenlautstärke beim Beitritt, z. B. -10.",
           "prewarm": "Lautsprecher an, sobald irgendwo Follow-Musik spielt, damit der Ton beim Betreten sofort da ist."
         }
+      },
+      "volume_note": {
+        "title": "Hinweis: Lautstärke",
+        "description": "{players} kann keine Lautstärke setzen. Die Raumlautstärke (eine Lautstärke für den ganzen Raum, die beim Wechsel zwischen den Playern mitgenommen wird) wirkt bei diesem Player nicht. Alles andere funktioniert wie gewohnt."
       }
     },
     "error": {

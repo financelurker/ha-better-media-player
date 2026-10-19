@@ -555,6 +555,7 @@ class FollowManager:
         base = self.base_volume(group) if base is None else base
         volume = max(0.0, min(100.0, base + room.volume_offset))
         _LOGGER.info("Follow: %s joins %s at %.0f%%", room.entry.title, group, volume)
+        room.volume.note_own(player, volume / 100)  # follow's volume, not a wish for the room
         await self._call("volume_set", {ATTR_ENTITY_ID: player, "volume_level": volume / 100})
         await self._call("join", {ATTR_ENTITY_ID: group, "group_members": [player]})
 
