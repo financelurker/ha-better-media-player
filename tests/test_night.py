@@ -333,9 +333,11 @@ async def test_group_limited_only_when_all_rooms_at_night(hass, house, freezer):
     await _tick(hass, freezer, 12, step=4)
     assert _vol(hass, FOLLOW) == 0.3
 
-    # the kitchen leaves the night mode: the group fades back to its volume
+    # the kitchen leaves the night mode: its player fades back to follow me's
+    # volume; the group is not raised (the living room is still at night)
     await hass.services.async_call("switch", "turn_off", {"entity_id": "switch.kitchen_night_mode"}, blocking=True)
     await hass.async_block_till_done()
     await _tick(hass, freezer, 150, step=5)
-    assert _vol(hass, FOLLOW) == pytest.approx(0.55, abs=0.01)  # 60 % base - 5 average offset
+    assert _vol(hass, KITCHEN) == pytest.approx(0.6, abs=0.01)
+    assert _vol(hass, MUSIC) == 0.3
     assert GROUP  # the 'always' group plays no part here

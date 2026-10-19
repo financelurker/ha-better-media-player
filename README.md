@@ -193,8 +193,10 @@ The switch `Night mode` puts the room into night mode until it is turned off aga
 - **No subwoofer:** it stays off, also when follow me prewarms the speakers. Turned on during playback, the subwoofer goes off at once; turned off, it comes back if something plays. With automatic power off or in manual mode, nothing is switched.
 - **Video:** still turns the display on, with shorter times: idle timeout 5 min instead of 30, display run-down 1 min (the display still goes after the speakers).
 - **Volume limit** (default 30 %, 0 = none) for both players of the room, whoever sets the volume. What Better Media Player sets itself is limited before it is sent; a higher volume set elsewhere (app, remote) is set back as soon as it is reported, so it may be louder for a moment. A wish above the limit counts as the limit for the room volume.
-- **Groups:** a room's player in a group is limited like any other. The group itself is limited only when all its players belong to rooms in night mode; when the last of them leaves the night mode, the group fades back to the volume follow me remembers for it. A limited volume is never remembered as follow me's volume.
-- **Afterwards:** the volume fades back to the room volume (default over 2 min); a volume change during the fade stops it. If nothing plays, the room volume is set at once.
+- **Groups:** a room's player in a group is limited like any other. The group itself is limited only when all its players belong to rooms in night mode. When a room leaves the night mode, its player fades back to the group's volume (follow me: the remembered volume plus the room's offset; other groups: the group's volume from before the night); the group volume itself is not raised, as that would raise the players still in night mode too. A limited volume is never remembered as follow me's volume.
+- **Afterwards:** the volume fades back to the room volume (default over 2 min); a volume change during the fade stops it. If nothing plays, the room volume is set at once. A restart during the fade continues it.
+- **Sleep timer:** turning the night mode on during the sleep timer's fade keeps the fade going, below the limit.
+- After a restart, or when the limit is lowered (number or options), the limit holds at once.
 - `media_player.play_media` on the room player accepts `extra: {night_mode: true}` (or `false`) to switch the night mode along with the playback; it is not passed on to the player.
 
 ### Sleep timer

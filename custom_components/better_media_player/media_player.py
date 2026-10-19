@@ -341,6 +341,8 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
                     translation_domain=DOMAIN, translation_key="night_mode_bool"
                 )
             kwargs[ATTR_MEDIA_EXTRA] = extra or None
+            if is_own_id(media_id):
+                self._browser.resolve_play(media_id)  # a bad id fails before anything changes
             await self.ctrl.async_set_night_mode(night)
         if is_own_id(media_id):
             # from the room browser or search: the id names the player

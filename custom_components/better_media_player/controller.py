@@ -336,6 +336,7 @@ class RoomController:
             self._started = True
             self._spawn(self.async_update("start"))
             self.sleep.async_started()
+            self._spawn(self.night.async_started())
 
         self._unsubs.append(async_at_started(self.hass, _started))
         self.sleep.async_start()
@@ -1020,6 +1021,8 @@ class RoomController:
             after_player = [r for r in roles if r not in before_player]
 
             for role in before_player:
+                if not self.night.role_enabled(role.key):
+                    continue
                 if not self.role_fully_on(role):
                     await self._switch_role(role, True, force=True)
                     switched.append(role)
@@ -1040,6 +1043,8 @@ class RoomController:
                         raise _StartFailed(f"{src.player} did not start")
 
             for role in after_player:
+                if not self.night.role_enabled(role.key):
+                    continue  # night mode switched on during the start
                 if not self.role_fully_on(role):
                     await self._switch_role(role, True, force=True)
                     switched.append(role)

@@ -73,6 +73,16 @@ class NightMode:
         cap = self.cap
         return min(volume, cap) if cap is not None else volume
 
+    async def async_started(self) -> None:
+        """HA is up: the limit holds also for what changed while it was down
+        (or a lower limit from the options); a fade back that was cut by a
+        restart goes on from where the volume is now."""
+        if self.cap is not None:
+            for src in self.ctrl.sources.values():
+                await self._clamp(src)
+        elif self.ctrl.data.get("night_fade_back"):
+            await self._fade_back()
+
     def role_enabled(self, key: str) -> bool:
         return not (self.active and key == ROLE_BASS)
 
@@ -91,6 +101,7 @@ class NightMode:
         _LOGGER.info("%s: night mode %s", ctrl.entry.title, "on" if on else "off")
         if on:
             self._cancel_ramps()
+            ctrl.data.pop("night_fade_back", None)
             bass = ctrl.roles.get(ROLE_BASS)
             if bass is not None and ctrl.auto_power and not ctrl.manual and ctrl.role_on(bass):
                 bass.force_off = True  # no run-down
@@ -130,6 +141,8 @@ class NightMode:
             return
         vol = _volume(self.hass.states.get(src.player))
         if vol is not None and vol > cap + TOLERANCE:
+            # a sleep timer fading this player goes on below the limit
+            self.ctrl.sleep.limit_fade(src.player, cap)
             _LOGGER.debug("%s: %s limited to %.2f (night mode)", self.ctrl.entry.title, src.player, cap)
             await self.ctrl._player(src, "volume_set", {"volume_level": cap})
 
@@ -150,21 +163,43 @@ class NightMode:
         target = ctrl.volume.value
         if target is None:
             return
+        ctrl.data["night_fade_back"] = True  # a restart in between goes on afterwards
+        ctrl._save_now()
         seconds = float(ctrl.opts.get(CONF_NIGHT_FADE_IN, 0)) * 60
         for src in ctrl.sources.values():
             if (
                 ctrl.player_state(src) not in _POWERED
                 or not ctrl.player_supports(src, MediaPlayerEntityFeature.VOLUME_SET)
-                or ctrl.volume.in_group(src)
+                or self._hub_group(src)
                 or ctrl.sleep.fading_player(src.player)  # the sleep timer is going down
             ):
                 continue
             ramp = self._ramps.get(src.player)
             if ramp is None:
                 ramp = self._ramps[src.player] = VolumeRamp(
-                    self.hass, src.player, self._setter(src), ctrl._spawn
+                    self.hass, src.player, self._setter(src), ctrl._spawn, self._ramp_done
                 )
             ramp.start(target, seconds if ctrl.source_playing(src) else 0)
+        self._ramp_done()
+
+    @callback
+    def _ramp_done(self) -> None:
+        if not any(r.running for r in self._ramps.values()) and self.ctrl.data.pop("night_fade_back", None):
+            self.ctrl._save_now()
+
+    def _hub_group(self, src: Source) -> bool:
+        """In a group the hub looks after (it brings the member back);
+        other groups: the room does it itself."""
+        if not self.ctrl.volume.in_group(src):
+            return False
+        hub = self.ctrl.hub
+        if hub is None:
+            return False
+        return any(
+            hub.manages(s.entity_id)
+            for s in self.hass.states.async_all("media_player")
+            if src.player in (s.attributes.get("group_members") or [])
+        )
 
     def _setter(self, src: Source):
         async def _set(volume: float) -> None:
@@ -179,4 +214,5 @@ class NightMode:
 
     @callback
     def async_stop(self) -> None:
-        self._cancel_ramps()
+        for ramp in self._ramps.values():
+            ramp.stop()
