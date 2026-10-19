@@ -44,6 +44,10 @@ from .const import (
     CONF_OCCUPANCY,
     CONF_PRESENCE_RUN_DOWN,
     CONF_PREWARM,
+    CONF_NIGHT_DISPLAY_RUN_DOWN,
+    CONF_NIGHT_FADE_IN,
+    CONF_NIGHT_MAX_VOLUME,
+    CONF_NIGHT_VIDEO_IDLE_TIMEOUT,
     CONF_SLEEP_FADE,
     CONF_SPEAKERS,
     CONF_START_TIMEOUT,
@@ -121,6 +125,18 @@ def schema_advanced() -> vol.Schema:
     )
 
 
+def schema_night() -> vol.Schema:
+    d = DEFAULTS
+    return vol.Schema(
+        {
+            vol.Optional(CONF_NIGHT_MAX_VOLUME, default=d[CONF_NIGHT_MAX_VOLUME]): _num(0, 100, 1, "%"),
+            vol.Optional(CONF_NIGHT_VIDEO_IDLE_TIMEOUT, default=d[CONF_NIGHT_VIDEO_IDLE_TIMEOUT]): _num(0, 480, 1, "min"),
+            vol.Optional(CONF_NIGHT_DISPLAY_RUN_DOWN, default=d[CONF_NIGHT_DISPLAY_RUN_DOWN]): _num(0, 120, 1, "min"),
+            vol.Optional(CONF_NIGHT_FADE_IN, default=d[CONF_NIGHT_FADE_IN]): _num(0, 30, 1, "min"),
+        }
+    )
+
+
 def schema_timing() -> vol.Schema:
     d = DEFAULTS
     return vol.Schema(
@@ -191,6 +207,7 @@ STEPS = {
     "advanced": schema_advanced,
     "timing": schema_timing,
     "standby": schema_standby,
+    "night": schema_night,
     "follow": schema_follow,
 }
 
@@ -341,7 +358,10 @@ class BetterMediaPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
         return await self._step("timing", user_input, self.async_step_standby)
 
     async def async_step_standby(self, user_input: dict | None = None) -> ConfigFlowResult:
-        return await self._step("standby", user_input, self.async_step_follow)
+        return await self._step("standby", user_input, self.async_step_night)
+
+    async def async_step_night(self, user_input: dict | None = None) -> ConfigFlowResult:
+        return await self._step("night", user_input, self.async_step_follow)
 
     async def async_step_follow(self, user_input: dict | None = None) -> ConfigFlowResult:
         return await self._step("follow", user_input, self._finish)
@@ -439,6 +459,9 @@ class BetterMediaPlayerOptionsFlow(OptionsFlow):
 
     async def async_step_standby(self, user_input=None) -> ConfigFlowResult:
         return await self._section("standby", user_input)
+
+    async def async_step_night(self, user_input=None) -> ConfigFlowResult:
+        return await self._section("night", user_input)
 
     async def async_step_follow(self, user_input=None) -> ConfigFlowResult:
         return await self._section("follow", user_input)

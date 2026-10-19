@@ -124,6 +124,20 @@
       "volume_note": {
         "title": "Hinweis: Lautstärke",
         "description": "{players} kann keine Lautstärke setzen. Die Raumlautstärke (eine Lautstärke für den ganzen Raum, die beim Wechsel zwischen den Playern mitgenommen wird) wirkt bei diesem Player nicht. Alles andere funktioniert wie gewohnt."
+      },
+      "night": {
+        "title": "Nachtmodus",
+        "description": "Solange der Nachtmodus an ist: kein Subwoofer, kürzere Video-Zeiten und eine Lautstärke-Grenze. Ein- und Ausschalten ist Sache des Anwenders oder anderer Integrationen und Automationen; er bleibt an, bis er ausgeschaltet wird.",
+        "data": {
+          "night_max_volume": "Maximale Lautstärke",
+          "night_video_idle_timeout": "Video-Player im Leerlauf ausschalten nach",
+          "night_display_run_down": "Nachlauf Bild",
+          "night_fade_in": "Danach wieder einblenden über"
+        },
+        "data_description": {
+          "night_max_volume": "Grenze für beide Player des Raums, solange der Nachtmodus an ist. 0 = keine Grenze.",
+          "night_fade_in": "Endet der Nachtmodus, wird die Lautstärke über diese Zeit auf die Raumlautstärke zurückgeblendet."
+        }
       }
     },
     "error": {
@@ -153,7 +167,8 @@
           "timing": "Zeiten",
           "standby": "Standby abwarten",
           "follow": "Follow-Me",
-          "save": "Speichern"
+          "save": "Speichern",
+          "night": "Nachtmodus"
         },
         "data": {
           "follow_groups": "Follow-Me-Gruppen",
@@ -240,6 +255,20 @@
       "volume_note": {
         "title": "Hinweis: Lautstärke",
         "description": "{players} kann keine Lautstärke setzen. Die Raumlautstärke (eine Lautstärke für den ganzen Raum, die beim Wechsel zwischen den Playern mitgenommen wird) wirkt bei diesem Player nicht. Alles andere funktioniert wie gewohnt."
+      },
+      "night": {
+        "title": "Nachtmodus",
+        "description": "Solange der Nachtmodus an ist: kein Subwoofer, kürzere Video-Zeiten und eine Lautstärke-Grenze. Ein- und Ausschalten ist Sache des Anwenders oder anderer Integrationen und Automationen; er bleibt an, bis er ausgeschaltet wird.",
+        "data": {
+          "night_max_volume": "Maximale Lautstärke",
+          "night_video_idle_timeout": "Video-Player im Leerlauf ausschalten nach",
+          "night_display_run_down": "Nachlauf Bild",
+          "night_fade_in": "Danach wieder einblenden über"
+        },
+        "data_description": {
+          "night_max_volume": "Grenze für beide Player des Raums, solange der Nachtmodus an ist. 0 = keine Grenze.",
+          "night_fade_in": "Endet der Nachtmodus, wird die Lautstärke über diese Zeit auf die Raumlautstärke zurückgeblendet."
+        }
       }
     },
     "error": {
@@ -310,6 +339,9 @@
       },
       "quiet": {
         "name": "Ruhe"
+      },
+      "night_mode": {
+        "name": "Nachtmodus"
       }
     },
     "number": {
@@ -327,6 +359,15 @@
       },
       "sleep_timer": {
         "name": "Sleep-Timer"
+      },
+      "night_video_idle_timeout": {
+        "name": "Nacht: Leerlauf-Timeout Video"
+      },
+      "night_display_run_down": {
+        "name": "Nacht: Nachlauf Bild"
+      },
+      "night_max_volume": {
+        "name": "Nacht: maximale Lautstärke"
       }
     },
     "button": {
@@ -405,6 +446,9 @@
   "exceptions": {
     "room_off": {
       "message": "{room} ist aus - ein Sleep-Timer braucht einen laufenden Raum."
+    },
+    "night_mode_bool": {
+      "message": "night_mode muss true oder false sein."
     }
   }
 }

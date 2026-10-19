@@ -1,4 +1,4 @@
-"""Auto-power and quiet switches."""
+"""Auto-power, quiet and night mode switches."""
 
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ async def async_setup_entry(
     entities: list[SwitchEntity] = [AutoPowerSwitch(entry, ctrl, "auto_power")]
     if ctrl.audio_player is not None:
         entities.append(QuietSwitch(entry, ctrl, "quiet"))
+    entities.append(NightModeSwitch(entry, ctrl, "night_mode"))
     async_add_entities(entities)
 
 
@@ -55,3 +56,19 @@ class QuietSwitch(BetterMediaPlayerEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self.ctrl.async_set_quiet(False)
+
+
+class NightModeSwitch(BetterMediaPlayerEntity, SwitchEntity):
+    """On: no subwoofer, shorter video times, volume limit. Stays on until turned off."""
+
+    _attr_icon = "mdi:weather-night"
+
+    @property
+    def is_on(self) -> bool:
+        return self.ctrl.night.active
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self.ctrl.async_set_night_mode(True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self.ctrl.async_set_night_mode(False)

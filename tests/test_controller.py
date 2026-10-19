@@ -389,6 +389,10 @@ async def test_entity_ids_match_readme(hass, home):
         "number.wohnzimmer_sleep_timer",
         "button.wohnzimmer_sleep_timer_15_min",
         "sensor.wohnzimmer_sleep_timer_end",
+        "switch.wohnzimmer_night_mode",
+        "number.wohnzimmer_night_video_idle_timeout",
+        "number.wohnzimmer_night_display_run_down",
+        "number.wohnzimmer_night_maximum_volume",
     }
 
 

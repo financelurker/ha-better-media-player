@@ -97,6 +97,18 @@ class SleepTimer:
         s = self._s
         return bool(player and self.fading and s.get("fade_player") == player)
 
+    @callback
+    def limit_fade(self, player: str, cap: float) -> None:
+        """The night mode limits this player: the fade goes on below the limit
+        (and the limit's own set is not taken for a change from outside)."""
+        s = self._s
+        if not self.fading_player(player):
+            return
+        if s["fade_from"] > cap:
+            s["fade_from"] = cap
+        s["recent"] = [*s.get("recent", []), cap][-RECENT_SETS:]
+        self._save()
+
     @property
     def fading(self) -> bool:
         s = self._s

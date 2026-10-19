@@ -97,7 +97,8 @@ class RoomVolume:
 
     @callback
     def learn(self, volume: float) -> None:
-        volume = round(max(0.0, min(1.0, float(volume))), 3)
+        # at night, a wish above the limit counts as the limit (what is heard)
+        volume = round(max(0.0, min(1.0, self.ctrl.night.limit(float(volume)))), 3)
         if self.value is not None and abs(self.value - volume) < 0.0005:
             return
         self.ctrl.data["room_volume"] = volume
@@ -109,6 +110,9 @@ class RoomVolume:
         """Volume set through the room player."""
         if self._takes_part(src) and not self._in_group(src):
             self.learn(volume)
+
+    def in_group(self, src: Source) -> bool:
+        return self._in_group(src)
 
     def _in_group(self, src: Source) -> bool:
         """Member of a group, also of one that does not play right now (e.g.
@@ -158,7 +162,12 @@ class RoomVolume:
             if self.ctrl._stopped or self._in_group(src) or not self._takes_part(src):
                 return
             current = _volume(self.hass.states.get(src.player))
-            if current is not None and abs(current - volume) < 0.0005:
+            cap = self.ctrl.night.cap
+            if current is not None and (
+                abs(current - volume) < 0.0005
+                # set back by the night mode meanwhile: the wish was "loud"
+                or (cap is not None and volume > cap and abs(current - cap) <= TOLERANCE)
+            ):
                 self.learn(volume)
 
         self._learning[src.player] = async_call_later(self.hass, SETTLE_SECONDS, _due)
@@ -193,6 +202,8 @@ class RoomVolume:
             return  # the sleep timer is lowering it right now
         current = _volume(self.hass.states.get(src.player))
         target = self.value
+        if target is not None:
+            target = self.ctrl.night.limit(target)
         if target is None:
             if current is not None:
                 self.learn(current)  # first time: the room starts from what plays now

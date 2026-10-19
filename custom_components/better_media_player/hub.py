@@ -47,6 +47,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_NIGHT_FADE_IN,
     CONF_ALWAYS_GROUPS,
     CONF_DEFAULT_VOLUME,
     CONF_FOLLOW_GROUPS,
@@ -67,6 +68,7 @@ from .const import (
     STORAGE_VERSION,
     TICK_SECONDS,
 )
+from .ramp import VolumeRamp
 
 if TYPE_CHECKING:
     from .controller import RoomController
@@ -150,6 +152,10 @@ class FollowManager:
         # groups that may already have been playing before HA (re)started
         self._maybe_restored: set[str] = set()
         self.active_group: str | None = None
+        # groups limited because all their rooms are in night mode
+        self._night_capped: set[str] = set()
+        self._group_ramps: dict[str, VolumeRamp] = {}
+        self._night_limited: dict[str, set[str]] = {}
 
     # ------------------------------------------------------------------ setup
 
@@ -179,6 +185,8 @@ class FollowManager:
         if self._track_unsub:
             self._track_unsub()
             self._track_unsub = None
+        for ramp in self._group_ramps.values():
+            ramp.stop()
         for task in list(self._tasks):
             task.cancel()
         for room in get_rooms(self.hass).values():
@@ -294,10 +302,13 @@ class FollowManager:
         return float(self.opts[CONF_DEFAULT_VOLUME])
 
     def _faded_members(self, members: list[str]) -> set[str]:
+        """Members whose volume is not a wish right now: a sleep timer lowers
+        it, or the night mode limits it."""
         return {
             r.audio_player
             for r in get_rooms(self.hass).values()
-            if r.audio_player in members and r.sleep.fading_player(r.audio_player)
+            if r.audio_player in members
+            and (r.sleep.fading_player(r.audio_player) or r.night.cap is not None)
         }
 
     def _player_volume(self, player: str) -> float | None:
@@ -315,6 +326,8 @@ class FollowManager:
             return
         if self._faded_members(self.group_members(group)):
             return  # the volume is being lowered by a sleep timer, not set by someone
+        if self._member_ramping(self.group_members(group)):
+            return  # members fading back from the night mode
         base = round(self.base_volume(group), 1)
         if self.data["volumes"].get(group) != base:
             self.data["volumes"][group] = base
@@ -395,6 +408,7 @@ class FollowManager:
         playing = [g for g in self.follow_groups if self.group_state(g) in PLAYING]
         group = self._pick_group(playing, now)
 
+        await self._night_groups()
         for g in self.follow_groups:
             self._remember_volume(g)
 
@@ -533,6 +547,87 @@ class FollowManager:
             return False
         return True
 
+    @callback
+    def _spawn(self, coro) -> None:
+        if self._stopped:
+            coro.close()
+            return
+        task = self.hass.async_create_task(coro, eager_start=False)
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
+
+    async def _night_groups(self) -> None:
+        """Night mode and the hub's groups.
+
+        - A group whose players all belong to rooms in night mode is limited
+          as a whole (to the highest of their limits; each member is limited
+          to its own room's anyway).
+        - A member whose room leaves the night mode fades back to the group's
+          volume for it (follow: the remembered base plus the room's offset;
+          always groups: the group's volume from before the night), at once
+          if the group does not play. The group volume itself is not raised:
+          that would raise the members still in night mode as well.
+        """
+        by_player = {r.audio_player: r for r in get_rooms(self.hass).values() if r.audio_player}
+        free: dict[str, float] = self.data.setdefault("free_volumes", {})
+        for group in dict.fromkeys([*self.follow_groups, *self.always_groups]):
+            members = self.group_members(group)
+            limited = {p for p in members if p in by_player and by_player[p].night.cap is not None}
+            was = self._night_limited.get(group, set())
+            self._night_limited[group] = limited
+            caps = [by_player[p].night.cap if p in by_player else None for p in members]
+            cap = max(caps) if members and all(c is not None for c in caps) else None
+            vol = self._player_volume(group)
+            if cap is not None:
+                if vol is not None and vol > cap + 0.011 and self._due(group, "night_cap"):
+                    _LOGGER.debug("%s limited to %.2f (night mode)", group, cap)
+                    await self._call("volume_set", {ATTR_ENTITY_ID: group, "volume_level": cap})
+            elif (
+                not limited
+                and not self._member_ramping(members)
+                and members
+                and vol is not None
+                and vol > 0
+                and free.get(group) != vol
+            ):
+                free[group] = vol  # the group's volume while nobody limits it
+                self._save_later()
+            for player in (was - limited) & set(members):
+                await self._member_back(group, by_player[player], free.get(group))
+
+    async def _member_back(self, group: str, room: RoomController, free: float | None) -> None:
+        """The member's room left the night mode: back to the group's volume."""
+        base = self.data.get("volumes", {}).get(group) if group in self.follow_groups else None
+        if base is not None:
+            target = max(0.0, min(100.0, float(base) + room.volume_offset)) / 100
+        elif free is not None:
+            target = free
+        else:
+            return  # nothing known: stays
+        player = room.audio_player
+        seconds = float(room.opts.get(CONF_NIGHT_FADE_IN, 0)) * 60 if self.group_state(group) in PLAYING else 0
+        ramp = self._group_ramps.get(player)
+        if ramp is None:
+            ramp = self._group_ramps[player] = VolumeRamp(self.hass, player, self._member_setter(room), self._spawn)
+        ramp.start(target, seconds)
+
+    def _member_setter(self, room: RoomController):
+        async def _set(volume: float) -> None:
+            room.volume.note_own(room.audio_player, volume)  # the group's volume, not a room wish
+            await self._call("volume_set", {ATTR_ENTITY_ID: room.audio_player, "volume_level": volume})
+
+        return _set
+
+    def _member_ramping(self, members: list[str]) -> bool:
+        return any((r := self._group_ramps.get(p)) is not None and r.running for p in members)
+
+    def manages(self, group: str) -> bool:
+        return group in self.follow_groups or group in self.always_groups
+
+    @callback
+    def _save_later(self) -> None:
+        self._store.async_delay_save(lambda: self.data, 10)
+
     def _due(self, target: str, action: str) -> bool:
         """True if this command was not sent within the repeat window; marks it sent."""
         now = _now()
@@ -554,6 +649,7 @@ class FollowManager:
             return  # MA has not reported the last join yet
         base = self.base_volume(group) if base is None else base
         volume = max(0.0, min(100.0, base + room.volume_offset))
+        volume = room.night.limit(volume / 100) * 100
         _LOGGER.info("Follow: %s joins %s at %.0f%%", room.entry.title, group, volume)
         room.volume.note_own(player, volume / 100)  # follow's volume, not a wish for the room
         await self._call("volume_set", {ATTR_ENTITY_ID: player, "volume_level": volume / 100})
