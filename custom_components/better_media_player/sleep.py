@@ -1,7 +1,7 @@
 """Sleep timer of a room.
 
 The room turns itself off at a set time. Over the last minutes the volume of
-the active player is lowered step by step; at the end the normal "room off"
+the active player (or of the room's volume device) is lowered step by step; at the end the normal "room off"
 runs (exactly once) and the volume from before the fade is set again, so the
 next playback does not start at zero.
 
@@ -10,7 +10,7 @@ State lives in controller.data (persisted), so the timer survives a restart:
     data["sleep"] = {
         "ends_at": <utc timestamp>,
         "fade": <seconds>,
-        "fade_player": <entity id> | None,   # set when the fade begins
+        "fade_player": <entity id> | None,   # the faded output, set when the fade begins
         "fade_from": <volume 0..1> | None,   # volume before the fade
         "recent": [<volume 0..1>, ...],      # last volumes we set (late reports)
         "fade_aborted": bool,                # someone changed the volume
@@ -31,7 +31,6 @@ import math
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.components.media_player import MediaPlayerEntityFeature
 from homeassistant.core import CALLBACK_TYPE, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_point_in_utc_time
@@ -40,7 +39,7 @@ from homeassistant.util import dt as dt_util
 from .const import CONF_SLEEP_FADE, DOMAIN, EVENT_SLEEP_TIMER_FINISHED
 
 if TYPE_CHECKING:
-    from .controller import RoomController, Source
+    from .controller import RoomController
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -259,47 +258,43 @@ class SleepTimer:
         if finish:
             await self._finish()
 
-    def _fade_source(self) -> Source | None:
+    def _fade_output(self):
+        """The output to fade: the active player's, or the volume device."""
         src = self.ctrl.active_source
-        if (
-            src is None
-            or src.suppressed
-            or self.ctrl.player_state(src) not in _POWERED
-            or not self.ctrl.player_supports(src, MediaPlayerEntityFeature.VOLUME_SET)
-        ):
+        if src is None or src.suppressed or self.ctrl.player_state(src) not in _POWERED:
             return None
-        return src
+        out = self.ctrl.vol(src)
+        return out if out.can_set else None
 
-    def _volume(self, player: str) -> float | None:
-        state = self.hass.states.get(player)
-        if state is None:
-            return None
-        value = state.attributes.get("volume_level")
-        try:
-            return float(value) if value is not None else None
-        except (TypeError, ValueError):
-            return None
+    def _level(self, output_id: str | None) -> float | None:
+        out, _src = self.ctrl.output(output_id)
+        return out.level() if out is not None else None
+
+    def _tolerance(self, output_id: str | None) -> float:
+        out, _src = self.ctrl.output(output_id)
+        return out.tolerance if out is not None else VOLUME_TOLERANCE
 
     async def _fade_step(self, s: dict[str, Any], now: float) -> None:
-        src = self._fade_source()
-        if s.get("fade_player") is not None and (src is None or src.player != s["fade_player"]):
-            if src is not None:
+        out = self._fade_output()
+        if s.get("fade_player") is not None and (out is None or out.id != s["fade_player"]):
+            if out is not None:
                 # another player took over: the old one gets its volume back
                 await self._end_fade(restore=True)
             return  # nothing to fade right now (e.g. paused into standby)
-        if src is None:
+        if out is None:
             return
-        current = self._volume(src.player)
+        current = out.level()
         if current is None:
             return
         if s.get("fade_player") is None:
-            pending = self._restores.pop(src.player, None)
-            start = pending["volume"] if pending and self._unchanged(current, pending.get("left")) else None
-            s["fade_player"] = src.player
+            pending = self._restores.pop(out.id, None)
+            unchanged = pending and self._unchanged(current, pending.get("left"), out.tolerance)
+            start = pending["volume"] if unchanged else None
+            s["fade_player"] = out.id
             s["fade_from"] = start if start is not None else current
             s["recent"] = [current]
             self._save(now=True)
-        elif self._external(s, current):
+        elif self._external(s, current, out.tolerance):
             self._abort_fade(s, current)
             return
         left = max(0.0, s["ends_at"] - now)
@@ -307,15 +302,15 @@ class SleepTimer:
         if target < current - 0.004:
             s["recent"] = [*s.get("recent", []), target][-RECENT_SETS:]
             self._save()
-            await self.ctrl._player(src, "volume_set", {"volume_level": target})
+            await out.async_set(target)
         self.ctrl._notify()
 
     @staticmethod
-    def _unchanged(current: float | None, expected: float | None) -> bool:
-        return expected is None or current is None or abs(current - expected) <= VOLUME_TOLERANCE
+    def _unchanged(current: float | None, expected: float | None, tolerance: float = VOLUME_TOLERANCE) -> bool:
+        return expected is None or current is None or abs(current - expected) <= tolerance
 
     @staticmethod
-    def _external(s: dict[str, Any], current: float) -> bool:
+    def _external(s: dict[str, Any], current: float, tolerance: float = VOLUME_TOLERANCE) -> bool:
         """The volume is none of ours: someone else changed it.
 
         Our own sets may be reported late, so any of the last few values we
@@ -324,14 +319,14 @@ class SleepTimer:
         recent = s.get("recent") or []
         if not recent:
             return False
-        return all(abs(current - v) > VOLUME_TOLERANCE for v in recent)
+        return all(abs(current - v) > tolerance for v in recent)
 
     def _check_external(self, s: dict[str, Any]) -> None:
         """Right before ending a fade: a change since the last step counts too."""
         if s.get("fade_player") is None or s.get("fade_aborted"):
             return
-        current = self._volume(s["fade_player"])
-        if current is not None and self._external(s, current):
+        current = self._level(s["fade_player"])
+        if current is not None and self._external(s, current, self._tolerance(s["fade_player"])):
             self._abort_fade(s, current)
 
     def _abort_fade(self, s: dict[str, Any], current: float) -> None:
@@ -403,29 +398,32 @@ class SleepTimer:
         for player, item in list(pending.items()):
             if not isinstance(item, dict):
                 item = {"volume": item}
-            src = next((x for x in self.ctrl.sources.values() if x.player == player), None)
-            if src is None:
-                pending.pop(player, None)
+            out, src = self.ctrl.output(player)
+            if out is None:
+                pending.pop(player, None)  # no such output any more (options changed)
                 continue
             if self.ctrl.wake.owns(player):
-                pending.pop(player, None)  # the wake sets this player's volume
+                pending.pop(player, None)  # the wake sets this output's volume
                 self.ctrl._save()
                 continue
-            state = self.ctrl.player_state(src)
-            if state not in _POWERED:
-                continue
-            if state in _PLAYING and src.suppressed:
-                continue
+            if src is not None:
+                state = self.ctrl.player_state(src)
+                if state not in _POWERED or (state in _PLAYING and src.suppressed):
+                    continue
+            elif not out.ready or any(
+                self.ctrl.player_state(x) in _PLAYING and x.suppressed for x in self.ctrl.sources.values()
+            ):
+                continue  # the device is off, or a player is still on its way to stop
             if pending.pop(player, None) is None:
                 continue  # done meanwhile by a concurrent call
             self.ctrl._save()
-            if not self._unchanged(self._volume(player), item.get("left")):
+            if not self._unchanged(out.level(), item.get("left"), out.tolerance):
                 continue  # someone set a volume meanwhile (e.g. follow me's join): it wins
-            if self.ctrl.player_supports(src, MediaPlayerEntityFeature.VOLUME_SET):
+            if out.can_set:
                 # the room's volume is what the player would get next anyway
                 room = self.ctrl.volume.value
                 target = room if room is not None else item["volume"]
-                await self.ctrl._player(src, "volume_set", {"volume_level": target})
+                await out.async_set(target)
 
     # ----------------------------------------------------------------- event
 

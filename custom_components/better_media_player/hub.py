@@ -74,6 +74,7 @@ from .const import (
     TICK_SECONDS,
     WAKE_ARRIVAL_WINDOW,
 )
+from .output import MemberOutput
 from .ramp import VolumeRamp
 
 if TYPE_CHECKING:
@@ -346,7 +347,7 @@ class FollowManager:
             if r.audio_player in members
             and (
                 r.sleep.fading_player(r.audio_player)
-                or r.night.cap is not None
+                or r.night.player_cap is not None
                 or r.wake.owns(r.audio_player)
             )
         }
@@ -417,7 +418,7 @@ class FollowManager:
             group, player = self.follow_player, room.audio_player
             # the volume the music had in this room becomes follow me's volume (at
             # night the room's own wish, not the limited one)
-            volume = room.volume.value if room.night.cap is not None else self._player_volume(player)
+            volume = room.volume.value if room.night.player_cap is not None else self._player_volume(player)
             if volume is not None and volume > 0:
                 self.data["volumes"][group] = round(max(0.0, min(100.0, volume * 100 - room.volume_offset)), 1)
             self._activate(room)
@@ -705,10 +706,10 @@ class FollowManager:
         free: dict[str, float] = self.data.setdefault("free_volumes", {})
         for group in self.ma_groups():
             members = self.group_members(group)
-            limited = {p for p in members if p in by_player and by_player[p].night.cap is not None}
+            limited = {p for p in members if p in by_player and by_player[p].night.player_cap is not None}
             was = self._night_limited.get(group, set())
             self._night_limited[group] = limited
-            caps = [by_player[p].night.cap if p in by_player else None for p in members]
+            caps = [by_player[p].night.player_cap if p in by_player else None for p in members]
             cap = max(caps) if members and all(c is not None for c in caps) else None
             vol = self._player_volume(group)
             if cap is not None:
@@ -741,7 +742,9 @@ class FollowManager:
         seconds = float(room.opts.get(CONF_NIGHT_FADE_IN, 0)) * 60 if self.group_state(group) in PLAYING else 0
         ramp = self._group_ramps.get(player)
         if ramp is None:
-            ramp = self._group_ramps[player] = VolumeRamp(self.hass, player, self._member_setter(room), self._spawn)
+            ramp = self._group_ramps[player] = VolumeRamp(
+                self.hass, MemberOutput(self.hass, player, self._member_setter(room)), self._spawn
+            )
         ramp.start(target, seconds)
 
     def _member_setter(self, room: RoomController):
@@ -826,7 +829,7 @@ class FollowManager:
         return self.follow_player
 
     async def async_wake_start(
-        self, room: RoomController, media: dict[str, Any] | None, volume: float
+        self, room: RoomController, media: dict[str, Any] | None, volume: float | None
     ) -> str:
         """Follow wake: the wake room joins at its start volume.
 
@@ -864,7 +867,7 @@ class FollowManager:
         self.async_schedule("wake")
         return group
 
-    async def async_wake_resume(self, room: RoomController, volume: float) -> str:
+    async def async_wake_resume(self, room: RoomController, volume: float | None) -> str:
         """After a snooze: back into the follow-me player (playing it again if it paused)."""
         async with self._lock:
             group = self._require_follow_player()
@@ -944,7 +947,7 @@ class FollowManager:
             volume = volume_override * 100  # a wake room: its start volume
         else:
             volume = max(0.0, min(100.0, self.base_volume(group) + room.volume_offset))
-        volume = room.night.limit(volume / 100) * 100
+        volume = room.night.player_limit(volume / 100) * 100
         _LOGGER.info("Follow: %s joins %s at %.0f%%", room.entry.title, group, volume)
         room.volume.note_own(player, volume / 100)  # follow's volume, not a wish for the room
         await self._call("volume_set", {ATTR_ENTITY_ID: player, "volume_level": volume / 100})

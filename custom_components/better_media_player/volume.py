@@ -13,6 +13,11 @@ the player is in a group: there the group (or follow me) decides.
 Assumption: the room's players have about the same loudness at the same
 volume level.
 
+With a volume device (see output.py) the room's volume is the device's: it is
+learned from the device (also during group playback: the device is no group
+member) and set on it once it is ready again (e.g. after its power came
+back). The players are left alone.
+
 Own changes are recognised by value: the players report volumes over their
 own connections with a new context, so a reported value we set ourselves in
 the last OWN_SECONDS counts as ours (once per set).
@@ -108,7 +113,9 @@ class RoomVolume:
     @callback
     def learn_wish(self, src: Source, volume: float) -> None:
         """Volume set through the room player."""
-        if self._takes_part(src) and not self._in_group(src):
+        if self.ctrl.volume_device is not None:
+            self.learn(volume)
+        elif self._takes_part(src) and not self._in_group(src):
             self.learn(volume)
 
     def in_group(self, src: Source) -> bool:
@@ -129,13 +136,30 @@ class RoomVolume:
         return self.ctrl.player_supports(src, MediaPlayerEntityFeature.VOLUME_SET)
 
     @callback
+    def async_on_device(self, old: State | None, new: State | None) -> None:
+        """State change of the room's volume device."""
+        device = self.ctrl.volume_device
+        if device is None or new is None or old is None or self.ctrl._stopped:
+            return
+        level = device.level()
+        if level is None:
+            return  # off / unavailable: the room keeps its volume
+        before = device.level(old)
+        if before is None:
+            # ready again (e.g. its power came back): it gets the room's volume
+            self._schedule_apply_device()
+        elif abs(level - before) >= 0.0005 and not self._is_own(device.id, level):
+            self._schedule_learn_device(level)
+
+    @callback
     def async_on_state(self, src: Source, old: State | None, new: State | None) -> None:
         """State change of one of the room's players."""
         if new is None or old is None or self.ctrl._stopped:
             return
         vol_new, vol_old = _volume(new), _volume(old)
         if (
-            vol_new is not None
+            self.ctrl.volume_device is None
+            and vol_new is not None
             and vol_old is not None
             and abs(vol_new - vol_old) >= 0.0005
             and new.state in _POWERED
@@ -172,6 +196,66 @@ class RoomVolume:
 
         self._learning[src.player] = async_call_later(self.hass, SETTLE_SECONDS, _due)
 
+    @callback
+    def _schedule_learn_device(self, volume: float) -> None:
+        key = self.ctrl.volume_device.id
+        if (unsub := self._learning.pop(key, None)) is not None:
+            unsub()
+
+        @callback
+        def _due(_now) -> None:
+            self._learning.pop(key, None)
+            device = self.ctrl.volume_device
+            if self.ctrl._stopped or device is None:
+                return
+            current = device.level()
+            cap = self.ctrl.night.cap
+            if current is not None and (
+                abs(current - volume) < 0.0005
+                or (cap is not None and volume > cap and abs(current - cap) <= device.tolerance)
+            ):
+                self.learn(volume)
+
+        self._learning[key] = async_call_later(self.hass, SETTLE_SECONDS, _due)
+
+    @callback
+    def _schedule_apply_device(self) -> None:
+        key = self.ctrl.volume_device.id
+        if key in self._pending:
+            return
+
+        @callback
+        def _due(_now) -> None:
+            self._pending.pop(key, None)
+            self.ctrl._spawn(self.async_apply_device())
+
+        self._pending[key] = async_call_later(self.hass, SETTLE_SECONDS, _due)
+
+    async def async_apply_device(self) -> None:
+        """The volume device gets the room's volume (or the wake's start volume)."""
+        device = self.ctrl.volume_device
+        if device is None or self.ctrl._stopped or not device.can_set:
+            return
+        if self.ctrl.sleep.fading_player(device.id):
+            return
+        override = self.ctrl.wake.start_volume_for(device.id)
+        if override is None and self.ctrl.wake.owns(device.id):
+            self.ctrl.wake.async_output_ready()  # a wake fading in goes on there
+            return
+        target = self.value if override is None else override
+        current = device.level()
+        if target is None:
+            if current is not None:
+                self.learn(current)
+            return
+        target = self.ctrl.night.limit(target)
+        if self.ctrl.data.get("volume_restore", {}).pop(device.id, None) is not None:
+            self.ctrl._save()
+        if current is not None and abs(current - target) <= device.tolerance:
+            return
+        _LOGGER.debug("%s: %s to room volume %.2f", self.ctrl.entry.title, device.id, target)
+        await device.async_set(target)
+
     # ---------------------------------------------------------------- applying
 
     @callback
@@ -192,6 +276,9 @@ class RoomVolume:
         left_group: we have just taken it out of its group (its report may
         still list it as a member).
         """
+        if self.ctrl.volume_device is not None:
+            await self.async_apply_device()  # the players keep their level
+            return
         if self.ctrl._stopped or (not left_group and self._in_group(src)):
             return
         if self.ctrl.player_state(src) not in _POWERED:

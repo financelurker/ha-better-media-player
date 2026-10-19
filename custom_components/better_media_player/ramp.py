@@ -1,4 +1,4 @@
-"""A volume ramp: moves one media player's volume linearly to a target.
+"""A volume ramp: moves one volume output linearly to a target.
 
 Used to fade the volume back up when the night mode ends (and later for wake
 up). One scheduled callback at a time; a volume change from outside during
@@ -11,15 +11,18 @@ from __future__ import annotations
 import logging
 from collections.abc import Awaitable, Callable
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.util import dt as dt_util
 
+if TYPE_CHECKING:
+    from .output import DeviceOutput, PlayerOutput
+
 _LOGGER = logging.getLogger(__name__)
 
 STEP_SECONDS = 5
-TOLERANCE = 0.011
 RECENT = 4
 
 
@@ -31,15 +34,14 @@ class VolumeRamp:
     def __init__(
         self,
         hass: HomeAssistant,
-        entity_id: str,
-        set_volume: Callable[[float], Awaitable[None]],
+        output: PlayerOutput | DeviceOutput,
         spawn: Callable[[Awaitable[None]], None],
         on_done: Callable[[], None] | None = None,
     ) -> None:
         self._on_done = on_done
         self.hass = hass
-        self.entity_id = entity_id
-        self._set = set_volume
+        self.output = output
+        self.entity_id = output.id
         self._spawn = spawn
         self._unsub: CALLBACK_TYPE | None = None
         self._start = 0.0
@@ -51,12 +53,7 @@ class VolumeRamp:
         self.aborted = False  # stopped because the volume was changed from outside
 
     def _volume(self) -> float | None:
-        state = self.hass.states.get(self.entity_id)
-        value = state.attributes.get("volume_level") if state else None
-        try:
-            return float(value) if value is not None else None
-        except (TypeError, ValueError):
-            return None
+        return self.output.level()
 
     @callback
     def start(self, target: float, seconds: float) -> bool:
@@ -66,10 +63,10 @@ class VolumeRamp:
             self._unsub()
             self._unsub = None
         current = self._volume()
-        if current is None or abs(current - target) <= TOLERANCE:
+        if current is None or abs(current - target) <= self.output.tolerance:
             return False
         if seconds <= 0:
-            self._spawn(self._set(target))
+            self._spawn(self.output.async_set(target))
             return True
         self._start, self._target = current, target
         self._t0, self._duration = _now(), float(seconds)
@@ -115,7 +112,7 @@ class VolumeRamp:
         if current is None:
             self.cancel()  # player gone (e.g. turned off)
             return
-        if all(abs(current - v) > TOLERANCE for v in self._recent):
+        if all(abs(current - v) > self.output.tolerance for v in self._recent):
             _LOGGER.info("%s: volume changed during the ramp, keeping %.2f", self.entity_id, current)
             self.aborted = True
             self.cancel()
@@ -127,7 +124,7 @@ class VolumeRamp:
             self._schedule()
         if abs(value - current) > 0.004 or done:
             self._recent = [*self._recent, value][-RECENT:]
-            await self._set(value)
+            await self.output.async_set(value)
         if done:
             self.running = False
             if self._on_done is not None:

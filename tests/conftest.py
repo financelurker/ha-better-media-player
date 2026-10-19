@@ -41,6 +41,9 @@ KITCHEN_SPK = "switch.kitchen_speakers"
 LIVING_OCC = "binary_sensor.living_occupancy"
 KITCHEN_OCC = "binary_sensor.kitchen_occupancy"
 GROUPS = (GROUP, FOLLOW)
+AVR = "media_player.avr"  # volume device behind the speaker plug
+AMP = "number.amp_volume"  # volume device as a number (-80..0 dB)
+AVR_FEATURES = int(F.VOLUME_SET | F.VOLUME_MUTE | F.VOLUME_STEP | F.TURN_ON | F.TURN_OFF)
 
 KODI_FEATURES = int(
     F.TURN_ON | F.TURN_OFF | F.PLAY | F.PAUSE | F.STOP | F.VOLUME_SET | F.VOLUME_MUTE | F.SEEK
@@ -108,6 +111,13 @@ class FakeHome:
     transferred: list[tuple[str, str]] = field(default_factory=list)
     kodi_boots: bool = False  # turn_on makes Kodi idle immediately
     kodi_suspends: bool = True  # turn_off makes Kodi off immediately
+    avr_memory: float = 0.4  # the AVR's own volume when its power comes back
+
+    def avr(self, state: str, **attrs: Any) -> None:
+        self.set(AVR, state, supported_features=AVR_FEATURES, friendly_name="AV Receiver", **attrs)
+
+    def amp(self, value: float, **attrs: Any) -> None:
+        self.set(AMP, str(value), min=-80.0, max=0.0, step=1.0, friendly_name="Amp", **attrs)
 
     def set(self, entity_id: str, state: str, **attrs: Any) -> None:
         old = self.hass.states.get(entity_id)
@@ -170,6 +180,27 @@ class FakeHome:
                 self.hass.states.async_set(
                     entity_id, "on" if service == "turn_on" else "off", st.attributes, context=context
                 )
+                avr = self.hass.states.get(AVR)
+                if entity_id == SPEAKERS and avr is not None:
+                    # the AVR hangs on the speaker plug: its own last volume comes back
+                    if service == "turn_on":
+                        self.avr("on", volume_level=self.avr_memory, is_volume_muted=False)
+                    else:
+                        if avr.attributes.get("volume_level") is not None:
+                            self.avr_memory = avr.attributes["volume_level"]
+                        self.hass.states.async_set(AVR, "off", {"supported_features": AVR_FEATURES})
+            return True
+        if domain in ("number", "input_number") and service == "set_value":
+            self.set(entity_id, str(float(data["value"])))
+            return True
+        if entity_id == AVR:
+            vol = st.attributes.get("volume_level") or 0
+            if service == "volume_set":
+                self.set(AVR, st.state, volume_level=round(data["volume_level"], 3))
+            elif service in ("volume_up", "volume_down"):
+                self.set(AVR, st.state, volume_level=round(min(1, max(0, vol + (0.05 if service == "volume_up" else -0.05))), 3))
+            elif service == "volume_mute":
+                self.set(AVR, st.state, is_volume_muted=data["is_volume_muted"])
             return True
         if domain == "music_assistant" and service == "transfer_queue":
             # the queue moves: the target plays it (or holds it paused), the source stops
@@ -237,7 +268,7 @@ def home(hass: HomeAssistant):
         ids = (service_data or {}).get("entity_id")
         if isinstance(ids, str) and ids.split(".")[1] in {
             "tv_plug", "speaker_plug", "bass_plug", "kodi", "office_player", "kodi_box_plug", "wol",
-            "all_players", "all_players_follow", "kitchen_player", "kitchen_speakers",
+            "all_players", "all_players_follow", "kitchen_player", "kitchen_speakers", "avr", "amp_volume",
         }:
             if service in ("browse_media", "search_media", "get_queue"):
                 return fake.respond(service, ids, service_data or {})

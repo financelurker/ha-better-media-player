@@ -12,6 +12,21 @@ Better Media Player is a custom integration in the spirit of Better Thermostat. 
 - **Follow me:** start it in a room and the music moves with you from room to room, using the rooms' occupancy sensors and one Music Assistant group player.
 - **Media browser and search:** browse and search all of the room's players in one place, with their queues on top; picking a movie powers up TV and Kodi first.
 
+## Who it fits
+
+**It fits if**
+
+- a room has a video player (e.g. Kodi) and/or a music player (e.g. a Music Assistant player);
+- TV, speakers or subwoofer hang on switchable plugs and start by themselves when they get power;
+- the room's volume is set on the players, or on an amplifier, AV receiver or soundbar with its own volume;
+- for follow me: occupancy sensors in the rooms and one Music Assistant group player with dynamic members.
+
+**It does not fit (yet) if**
+
+- an AV receiver switches between the players (input selection);
+- several rooms (zones) hang on one device;
+- devices cannot be powered by a plug and are only turned on and off by IR or CEC.
+
 ## Screenshots
 
 Taken from the Home Assistant demo integration: two demo players stand in for Kodi and a Music Assistant player, the plugs are template switches ([how](scripts/screenshots/README.md)).
@@ -71,7 +86,7 @@ Settings → Devices & services → Add integration → **Better Media Player** 
 | Step | What you enter |
 |---|---|
 | **New room** | Name and area. Kodi and Music Assistant players of the area are pre-selected in the next step. |
-| **Media players** | Video player (e.g. Kodi) and/or music player (the room's own player, not a group). |
+| **Media players** | Video player (e.g. Kodi) and/or music player (the room's own player, not a group). Where the room's volume is set: on the players, or on an own device. |
 | **Power devices** | Display (TV, projector), speakers (one or more: active speakers, amplifier, AVR), subwoofer. |
 | **Players: special cases** | Only if a player cannot turn itself on/off (on/off action) or its hardware hangs on a plug. |
 | **Times** | Run-down times, video idle timeout, start timeout, waits after switching on, default sleep timer fade-out, snooze time. |
@@ -178,13 +193,24 @@ A room has one volume, not one per player. It is the volume last chosen in the r
 - Players that cannot set a volume take no part; the setup shows a note for them.
 - The room player shows the room volume in the attribute `room_volume`; `volume_level` is the volume of the active player.
 
+#### On an own device
+
+With an amplifier, AV receiver or soundbar that has its own volume, choose **Room volume: Own device** and the **Volume device** in *Media players*: a media player that can set a volume, or a `number` / `input_number` (its range counts as 0–100 %, e.g. −80…0 dB).
+
+- The room's volume is the device's. Volume, steps and mute of the room player go there (mute only with a media player); changes on the device itself (its remote, its app) are learned, also during group playback.
+- The players keep their level: set it once yourself (e.g. Kodi at 100 %). Better Media Player does not touch it, except for group playback below.
+- Sleep timer fade, wake fade, night mode limit and the fade back after the night act on the device.
+- While the device is off, a volume set on the room player is remembered; the device gets the room's volume as soon as it is up again (e.g. after its plug switched on), whatever it comes back with.
+- **Groups and follow me** still set the players' volume (follow me's volume plus the room's offset): there the group decides. The night mode limits the device, not the player in the group.
+- The note about players that cannot set a volume is not shown: the device sets it.
+
 ### Night mode
 
 The switch `Night mode` puts the room into night mode until it is turned off again. Turning it on and off is up to you or to other integrations and automations (e.g. at bedtime and in the morning).
 
 - **No subwoofer:** it stays off, also when follow me prewarms the speakers. Turned on during playback, the subwoofer goes off at once; turned off, it comes back if something plays. With automatic power off or in manual mode, nothing is switched.
 - **Video:** still turns the display on, with shorter times: idle timeout 5 min instead of 30, display run-down 1 min (the display still goes after the speakers).
-- **Volume limit** (default 30 %, 0 = none) for both players of the room, whoever sets the volume. What Better Media Player sets itself is limited before it is sent; a higher volume set elsewhere (app, remote) is set back as soon as it is reported, so it may be louder for a moment. A wish above the limit counts as the limit for the room volume.
+- **Volume limit** (default 30 %, 0 = none) for both players of the room (with a [volume device](#on-an-own-device): for the device), whoever sets the volume. What Better Media Player sets itself is limited before it is sent; a higher volume set elsewhere (app, remote) is set back as soon as it is reported, so it may be louder for a moment. A wish above the limit counts as the limit for the room volume.
 - **Groups:** a room's player in a group is limited like any other. The group itself is limited only when all its players belong to rooms in night mode. When a room leaves the night mode, its player fades back to the group's volume (follow me: the remembered volume plus the room's offset; other groups: the group's volume from before the night); the group volume itself is not raised, as that would raise the players still in night mode too. A limited volume is never remembered as follow me's volume.
 - **Afterwards:** the volume fades back to the room volume (default over 2 min); a volume change during the fade stops it. If nothing plays, the room volume is set at once. A restart during the fade continues it.
 - **Sleep timer:** turning the night mode on during the sleep timer's fade keeps the fade going, below the limit.

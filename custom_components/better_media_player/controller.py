@@ -78,6 +78,8 @@ from .const import (
     CONF_PREWARM,
     CONF_SPEAKERS,
     CONF_START_TIMEOUT,
+    CONF_VOLUME_CONTROL,
+    CONF_VOLUME_ENTITY,
     CONF_VOLUME_OFFSET,
     DEFAULTS,
     DOMAIN,
@@ -103,10 +105,12 @@ from .const import (
     STATUS_STOPPING,
     STORAGE_VERSION,
     TICK_SECONDS,
+    VOLUME_DEVICE,
 )
 from .hub import get_hub, get_rooms
 from .sleep import REASON_ROOM_OFF, SleepTimer
 from .night import NightMode
+from .output import DeviceOutput, PlayerOutput
 from .volume import RoomVolume
 from .wake import PHASE_STARTING, REASON_ROOM_OFF as WAKE_ROOM_OFF, WakeAlarm
 
@@ -276,6 +280,11 @@ class RoomController:
         self.prewarm = False
         self.follow_state = FOLLOW_INACTIVE
 
+        # where the room's volume is heard
+        device = o.get(CONF_VOLUME_ENTITY) if o.get(CONF_VOLUME_CONTROL) == VOLUME_DEVICE else None
+        self.volume_device: DeviceOutput | None = DeviceOutput(self, device) if device else None
+        self._outputs = {key: PlayerOutput(self, src) for key, src in self.sources.items()}
+
         self.sleep = SleepTimer(self)
         self.volume = RoomVolume(self)
         self.night = NightMode(self)
@@ -323,6 +332,8 @@ class RoomController:
                 self.data[f"cfg_{key}"] = configured
 
         tracked: list[str] = [s.player for s in self.sources.values()]
+        if self.volume_device is not None:
+            tracked.append(self.volume_device.id)
         tracked += self.power_entities
         for role in self.roles.values():
             tracked += role.power or []
@@ -416,6 +427,10 @@ class RoomController:
         old = event.data["old_state"]
         self._changed.set()
 
+        if self.volume_device is not None and entity_id == self.volume_device.id:
+            self.volume.async_on_device(old, new)
+            self.night.async_on_device(new)
+
         for src in self.sources.values():
             if entity_id != src.player:
                 continue
@@ -483,6 +498,19 @@ class RoomController:
         if state is None:
             return False
         return bool(int(state.attributes.get(ATTR_SUPPORTED_FEATURES, 0) or 0) & feature)
+
+    def vol(self, src: Source) -> PlayerOutput | DeviceOutput:
+        """Where this source's volume is heard (room features act there)."""
+        return self.volume_device or self._outputs[src.key]
+
+    def output(self, entity_id: str | None) -> tuple[PlayerOutput | DeviceOutput | None, Source | None]:
+        """The output with this id and its source (None for the volume device)."""
+        if self.volume_device is not None and entity_id == self.volume_device.id:
+            return self.volume_device, None
+        for key, src in self.sources.items():
+            if src.player == entity_id and self.volume_device is None:
+                return self._outputs[key], src
+        return None, None
 
     def source_playing(self, src: Source) -> bool:
         return self.player_state(src) in PLAYING_STATES
@@ -931,8 +959,9 @@ class RoomController:
 
     async def _player(self, src: Source, service: str, extra: dict | None = None) -> bool:
         if service == "volume_set" and extra and "volume_level" in extra:
-            # the night mode's limit holds for everything we set
-            extra = {**extra, "volume_level": self.night.limit(float(extra["volume_level"]))}
+            # the night mode's limit holds for everything we set (with a volume
+            # device the limit is the device's: the players keep their level)
+            extra = {**extra, "volume_level": self.night.player_limit(float(extra["volume_level"]))}
             self.volume.note_own(src.player, extra["volume_level"])
         return await self._call(MP_DOMAIN, service, {ATTR_ENTITY_ID: src.player, **(extra or {})})
 
@@ -1270,12 +1299,27 @@ class RoomController:
 
     async def async_media_call(self, service: str, data: dict | None = None) -> None:
         """Forward a media command to the active source."""
+        device = self.volume_device
+        if device is not None and service in ("volume_set", "volume_up", "volume_down", "volume_mute"):
+            await self._device_volume(device, service, data or {})
+            return
         src = self.active_source
         if src is None:
             return
         if service == "volume_set" and data and "volume_level" in data:
             self.volume.learn_wish(src, data["volume_level"])
         await self._player(src, service, data)
+
+    async def _device_volume(self, device: DeviceOutput, service: str, data: dict) -> None:
+        """Volume commands go to the room's volume device (also while nothing plays)."""
+        if service == "volume_set":
+            self.volume.learn(float(data["volume_level"]))  # remembered while the device is off
+            if device.can_set:
+                await device.async_set(float(data["volume_level"]))
+        elif service == "volume_mute":
+            await device.async_mute(bool(data.get("is_volume_muted")))
+        elif device.can_set:
+            await device.async_step(service == "volume_up")
 
 
 class _StartFailed(Exception):
