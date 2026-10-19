@@ -89,10 +89,12 @@ class RoomVolume:
 
     @property
     def presets(self) -> dict[str, float]:
-        """The room's presets (0..1), in their order; empty ones are not offered."""
+        """The room's presets (0..1), in their order; 0 is not offered. The
+        values are the number entities' (set from the options)."""
         out: dict[str, float] = {}
         for name in PRESETS:
-            value = self.ctrl.opts.get(CONF_PRESET.format(name))
+            key = CONF_PRESET.format(name)
+            value = self.ctrl.data.get(key, self.ctrl.opts.get(key))
             if value not in (None, "") and float(value) > 0:
                 out[name] = max(0.0, min(1.0, float(value) / 100))
         return out
@@ -145,8 +147,21 @@ class RoomVolume:
         """The room came on: the power-on preset is its volume (players get it
         when they start)."""
         name = self.ctrl.opts.get(CONF_POWER_ON_PRESET)
-        if name and name != PRESET_NONE and name in self.presets:
-            self._choose(name, self.presets[name])
+        if not name or name == PRESET_NONE:
+            return
+        if name not in self.presets:
+            _LOGGER.info("%s: power-on preset %s is not offered (0): skipped", self.ctrl.entry.title, name)
+            return
+        self._choose(name, self.presets[name])
+
+    async def async_preset_changed(self, name: str) -> None:
+        """A preset's value was changed (number entity): the chosen one goes along."""
+        if self.ctrl.data.get("volume_preset") != name:
+            return  # (the select is updated with the room)
+        if name in self.presets:
+            await self.async_set_preset(name)
+        else:
+            self._choose(None)  # no longer offered: the volume stays
 
     async def async_started(self) -> None:
         """HA is up: a chosen preset whose value was changed in the options."""

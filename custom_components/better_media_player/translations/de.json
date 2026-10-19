@@ -441,6 +441,18 @@
       },
       "night_max_volume": {
         "name": "Nacht: maximale Lautstärke"
+      },
+      "preset_quiet": {
+        "name": "Preset: Leise"
+      },
+      "preset_normal": {
+        "name": "Preset: Normal"
+      },
+      "preset_loud": {
+        "name": "Preset: Laut"
+      },
+      "preset_party": {
+        "name": "Preset: Party"
       }
     },
     "button": {

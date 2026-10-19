@@ -9,6 +9,8 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import BetterMediaPlayerConfigEntry
 from .const import (
+    CONF_PRESET,
+    PRESETS,
     ROLE_AUDIO,
     ROLE_AUDIO_HOST,
     ROLE_BASS,
@@ -39,6 +41,7 @@ async def async_setup_entry(
     if ROLE_DISPLAY in ctrl.roles:
         entities.append(MinutesNumber(entry, ctrl, "night_display_run_down", 0, 120))
     entities.append(PercentNumber(entry, ctrl, "night_max_volume"))
+    entities += [PresetNumber(entry, ctrl, name) for name in PRESETS]
     entities.append(SleepTimerNumber(entry, ctrl, "sleep_timer"))
     async_add_entities(entities)
 
@@ -75,6 +78,21 @@ class PercentNumber(MinutesNumber):
     async def async_set_native_value(self, value: float) -> None:
         await self.ctrl.async_set_number(self._key, value)
         await self.ctrl.night.async_limit_changed()
+
+
+class PresetNumber(MinutesNumber):
+    """The volume of a preset in %; 0 = not offered in the room."""
+
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_icon = "mdi:volume-equal"
+
+    def __init__(self, entry, ctrl, name: str) -> None:
+        super().__init__(entry, ctrl, CONF_PRESET.format(name), 0, 100)
+        self._name = name
+
+    async def async_set_native_value(self, value: float) -> None:
+        await self.ctrl.async_set_number(self._key, value)
+        await self.ctrl.volume.async_preset_changed(self._name)
 
 
 class SleepTimerNumber(BetterMediaPlayerEntity, NumberEntity):
