@@ -58,6 +58,9 @@ FOLLOW_EXCLUDED_VIDEO = "excluded_video"
 FOLLOW_EXCLUDED_OFF = "excluded_off"  # room was turned off during this session
 FOLLOW_EXCLUDED_BUSY = "excluded_busy"  # plays directly or in another group
 FOLLOW_UNKNOWN = "presence_unknown"
+FOLLOW_WAKING = "waking"  # wake room of a follow wake (held until it is left)
+FOLLOW_SNOOZED = "snoozed"  # wake room, snoozed: out of the group meanwhile
+FOLLOW_HELD_OUT = "held_out"  # occupied when a follow wake started: joins after its presence went and came
 FOLLOW_STATES = [
     FOLLOW_INACTIVE,
     FOLLOW_ACTIVE,
@@ -68,6 +71,9 @@ FOLLOW_STATES = [
     FOLLOW_EXCLUDED_OFF,
     FOLLOW_EXCLUDED_BUSY,
     FOLLOW_UNKNOWN,
+    FOLLOW_WAKING,
+    FOLLOW_SNOOZED,
+    FOLLOW_HELD_OUT,
 ]
 
 # --- Room --------------------------------------------------------------------

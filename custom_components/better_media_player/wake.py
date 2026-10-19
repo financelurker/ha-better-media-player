@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.media_player import MediaPlayerEntityFeature
 from homeassistant.core import CALLBACK_TYPE, State, callback
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.util import dt as dt_util
@@ -66,6 +66,7 @@ REASON_MAX_DURATION = "max_duration"
 REASON_ROOM_OFF = "room_off"
 REASON_SLEEP_TIMER = "sleep_timer"
 REASON_REPLACED = "replaced"
+REASON_LEFT = "left"  # follow wake: the wake room was left
 FAILED_START = "start_failed"
 FAILED_NOT_PLAYING = "not_playing"
 
@@ -150,6 +151,41 @@ class WakeAlarm:
             return self.ctrl.night.limit(w["start_volume"])
         return None
 
+    # follow wake ---------------------------------------------------------
+
+    @property
+    def follow_group(self) -> str | None:
+        w = self._w
+        return w.get("follow") if w else None
+
+    @property
+    def follow_holding(self) -> bool:
+        """A follow wake keeps this room in its group."""
+        w = self._w
+        return bool(w and w.get("follow") and w["phase"] in (PHASE_STARTING, PHASE_FADING, PHASE_PLAYING))
+
+    @property
+    def follow_snoozed(self) -> bool:
+        w = self._w
+        return bool(w and w.get("follow") and w["phase"] == PHASE_SNOOZED)
+
+    @property
+    def seen(self) -> bool:
+        w = self._w
+        return bool(w and w.get("seen"))
+
+    @callback
+    def mark_seen(self) -> None:
+        """Someone moved in the wake room after the wake started."""
+        w = self._w
+        if w is not None and not w.get("seen"):
+            w["seen"] = True
+            self.ctrl._save()
+
+    def fading_player(self, player: str) -> bool:
+        """Its volume is the wake's (not follow me's) right now."""
+        return self.owns(player) and self.phase in (PHASE_STARTING, PHASE_FADING)
+
     def holds(self, role) -> bool:
         """While snoozed the room keeps the power the wake's player needs."""
         w = self._w
@@ -167,10 +203,24 @@ class WakeAlarm:
         fade_minutes: float | None,
         max_minutes: float | None,
         night_mode: bool | None,
+        follow: bool = False,
+        group: str | None = None,
     ) -> None:
         ctrl = self.ctrl
         if key not in ctrl.sources:
             raise HomeAssistantError(f"Unknown source: {key}")
+        if follow:
+            hub = ctrl.hub
+            if hub is None or key != "audio" or not ctrl.follow_capable:
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="follow_wake",
+                    translation_placeholders={"room": ctrl.entry.title},
+                )
+            if group is not None and group not in hub.follow_groups:
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN, translation_key="not_follow_group", translation_placeholders={"group": group}
+                )
         if self.active:
             await self.async_finish(REASON_REPLACED)
         if ctrl.sleep.active:
@@ -197,6 +247,8 @@ class WakeAlarm:
             "fade_t0": None,
             "snooze_until": None,
             "user_volume": False,
+            "follow": (group or "") if follow else None,
+            "seen": False,
         }
         if ctrl.data.get("volume_restore", {}).pop(player, None) is not None:
             ctrl._save()
@@ -247,7 +299,9 @@ class WakeAlarm:
         resume = w.pop("resume", False) and ctrl.player_state(src) == "paused"
         self._before = self._snapshot(src)
         try:
-            if resume:
+            if w.get("follow") is not None:
+                await self._start_follow(w, src)
+            elif resume:
                 await self._set_volume(src, ctrl.night.limit(w["start_volume"]))
                 await ctrl._player(src, "media_play")
             else:
@@ -265,6 +319,21 @@ class WakeAlarm:
         self._schedule(w["requested_at"] + PLAY_TIMEOUT)
         if w.get("seen_new") or (ctrl.source_playing(src) and self._before[0] not in _PLAYING):
             await self._playing(w)
+
+    async def _start_follow(self, w: dict[str, Any], src: Source) -> None:
+        """Follow wake: the room joins the follow group at its start volume."""
+        hub = self.ctrl.hub
+        if hub is None:
+            raise HomeAssistantError("central settings are gone")
+        start = self.ctrl.night.limit(w["start_volume"])
+        if w.get("follow") and w.get("started_once"):
+            await hub.async_wake_resume(self.ctrl, w["follow"], start)
+        else:
+            data = w.get("data") or {}
+            media = {k: data[k] for k in ("media_content_id", "media_content_type") if data.get(k)}
+            w["follow"] = await hub.async_wake_start(self.ctrl, w["follow"] or None, media, start)
+            w["started_once"] = True
+        self.ctrl.data.setdefault("last_source", "audio")
 
     async def _set_volume(self, src: Source, volume: float) -> None:
         if self.ctrl.player_supports(src, MediaPlayerEntityFeature.VOLUME_SET):
@@ -423,7 +492,13 @@ class WakeAlarm:
         w["resume"] = can_pause and not starting
         self._changed(now=True)
         self._schedule(w["snooze_until"])
-        if ctrl.source_playing(src):
+        if w.get("follow") is not None:
+            # only this room snoozes: it leaves the group, the others play on
+            if ctrl.groups_of(src.player) and ctrl.player_supports(src, MediaPlayerEntityFeature.GROUPING):
+                await ctrl._player(src, "unjoin")
+            if (hub := ctrl.hub) is not None:
+                hub.async_schedule("wake_snooze")
+        elif ctrl.source_playing(src):
             if can_pause:
                 await ctrl._player(src, "media_pause")
             elif ctrl.player_supports(src, MediaPlayerEntityFeature.STOP):

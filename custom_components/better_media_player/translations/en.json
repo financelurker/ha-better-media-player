@@ -316,7 +316,10 @@
           "excluded_video": "Left out: video",
           "excluded_off": "Left out: room off",
           "excluded_busy": "Left out: plays elsewhere",
-          "presence_unknown": "Presence unknown"
+          "presence_unknown": "Presence unknown",
+          "waking": "Waking up",
+          "snoozed": "Snoozed",
+          "held_out": "Waits (wake started)"
         }
       },
       "follow": {
@@ -482,6 +485,14 @@
         "source": {
           "name": "Player",
           "description": "For media not picked through the room player; default: the music player."
+        },
+        "follow": {
+          "name": "Follow me",
+          "description": "The music follows you from this room (needs central settings and occupancy sensors here)."
+        },
+        "group": {
+          "name": "Follow group",
+          "description": "Default: the playing follow group, else the first one."
         }
       }
     },
@@ -530,6 +541,12 @@
     },
     "no_source": {
       "message": "This room has no {source} player."
+    },
+    "follow_wake": {
+      "message": "{room} cannot wake with follow me: it needs central settings, a music player and occupancy sensors."
+    },
+    "not_follow_group": {
+      "message": "{group} is not a follow group."
     }
   }
 }

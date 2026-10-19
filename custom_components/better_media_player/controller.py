@@ -505,8 +505,8 @@ class RoomController:
         if not groups:
             return True  # direct playback
         policies = {hub.policy(g) for g in groups}
-        if self.quiet:
-            policies.discard(POLICY_FOLLOW)  # quiet room: follow music does not count
+        if self.quiet and not self.wake.follow_holding:
+            policies.discard(POLICY_FOLLOW)  # quiet room: follow music does not count (unless it wakes)
         return bool(policies - {POLICY_IGNORE})
 
     def source_ready(self, src: Source) -> bool:

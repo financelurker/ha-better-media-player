@@ -241,7 +241,18 @@ card:
     - button.bedroom_stop_wake
 ```
 
-Waking several rooms with one call wakes each on its own (not in sync). Waking with follow me is planned separately.
+Waking several rooms with one call wakes each on its own (not in sync).
+
+#### With follow me
+
+With `follow: true` (and optionally `group`) the music follows you out of the wake room. It needs the central settings, a music player and occupancy sensors in the wake room.
+
+- **The wake room** joins the follow group at its start volume and fades in its own player. Only it fades: rooms that join later get follow me's normal volume. Its quiet mode does not keep it out while it wakes.
+- **New session or running group:** if no follow group plays, a session starts with the wake's media. Rooms that are occupied at that moment (someone already in the kitchen) stay out until their presence went and came again. If a follow group already plays, the wake room joins it and the group's media goes on.
+- **Left = woken up:** once presence was seen in the wake room after the wake started and then ran down, the wake is done (`wake_finished`, reason `left`) and the room leaves the group like any follow room; the music plays on where you are. Motion sensors often miss sleepers: as long as no presence was seen, the wake room stays until the wake ends otherwise.
+- **Snooze** only snoozes the wake room: it leaves the group meanwhile (the others play on; as the only member the group pauses) and comes back at the start volume. Follow me does not take it back in during the snooze.
+- **Ends:** `stop_wake` makes it a normal follow room; `max_duration` fades out only the wake room, which then leaves the group; room off takes only this room out.
+- Night mode is per room as always: a room in night mode joins without subwoofer and limited.
 
 ### Sleep timer
 
@@ -314,6 +325,8 @@ With power sensors, a plug is cut only after its device has drawn less than the 
 | `excluded_quiet` / `excluded_video` / `excluded_off` | left out: quiet mode / video / turned off this session |
 | `excluded_busy` | plays something else (directly or in another group) |
 | `presence_unknown` | occupancy sensors unavailable; nothing changes |
+| `waking` / `snoozed` | wake room of a follow wake / snoozed (out of the group meanwhile) |
+| `held_out` | occupied when a follow wake started: joins once its presence went and came again |
 
 ## Releases
 

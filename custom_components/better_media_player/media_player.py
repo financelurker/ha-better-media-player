@@ -113,6 +113,8 @@ async def async_setup_entry(
             vol.Optional("max_duration_minutes"): vol.All(vol.Coerce(float), vol.Range(min=1, max=720)),
             vol.Optional(ATTR_NIGHT_MODE): cv.boolean,
             vol.Optional("source"): vol.In([SOURCE_AUDIO, SOURCE_VIDEO]),
+            vol.Optional("follow"): cv.boolean,
+            vol.Optional("group"): cv.entity_id,
         },
         "async_wake",
     )
@@ -412,6 +414,8 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
         max_duration_minutes: float | None = None,
         night_mode: bool | None = None,
         source: str | None = None,
+        follow: bool = False,
+        group: str | None = None,
     ) -> None:
         """Wake up in this room; the player comes from the media id (room browser),
         from source, or is the music player (else the video player)."""
@@ -428,7 +432,16 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
                 translation_domain=DOMAIN, translation_key="no_source", translation_placeholders={"source": key}
             )
         await self.ctrl.wake.async_wake(
-            key, data, room_mode, start_volume, target_volume, fade_minutes, max_duration_minutes, night_mode
+            key,
+            data,
+            room_mode,
+            start_volume,
+            target_volume,
+            fade_minutes,
+            max_duration_minutes,
+            night_mode,
+            follow=bool(follow),
+            group=group,
         )
 
     async def async_snooze(self, minutes: float | None = None) -> None:
