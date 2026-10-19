@@ -398,6 +398,10 @@ async def test_entity_ids_match_readme(hass, home):
         "button.wohnzimmer_stop_wake",
         "button.wohnzimmer_stop_follow_me",
         "select.wohnzimmer_volume_preset",
+        "number.wohnzimmer_preset_quiet",
+        "number.wohnzimmer_preset_normal",
+        "number.wohnzimmer_preset_loud",
+        "number.wohnzimmer_preset_party",
     }
 
 

@@ -17,8 +17,8 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     ctrl = entry.runtime_data
-    if ctrl.volume.presets:
-        async_add_entities([VolumePresetSelect(entry, ctrl, "volume_preset")])
+    # always there: the presets can be offered later (number entities)
+    async_add_entities([VolumePresetSelect(entry, ctrl, "volume_preset")])
 
 
 class VolumePresetSelect(BetterMediaPlayerEntity, SelectEntity):

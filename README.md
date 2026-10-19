@@ -208,7 +208,7 @@ With an amplifier, AV receiver or soundbar that has its own volume, choose **Roo
 
 #### Presets
 
-Room volumes by name: **quiet**, **normal**, **loud** and **party** (default 15 / 30 / 50 / 70 %, set per room in *Volume presets*; 0 = not offered in the room). Choose one with the select `Volume preset` or the action below; this works with players and with a volume device alike.
+Room volumes by name: **quiet**, **normal**, **loud** and **party** (default 15 / 30 / 50 / 70 %; 0 = not offered in the room). Their volumes are number entities of the room (`Preset: Quiet` etc., like `Night: maximum volume`); *Volume presets* in the options sets them too. Changing the chosen preset's volume sets it right away; a preset set to 0 is no longer offered (the volume stays). Choose one with the select `Volume preset` or the action below; this works with players and with a volume device alike.
 
 ```yaml
 action: better_media_player.set_volume_preset
@@ -338,7 +338,8 @@ With power sensors, a plug is cut only after its device has drawn less than the 
 | `sensor.<room>_wake` | wake state; snooze end, end time and volumes in the attributes |
 | `button.<room>_snooze`, `button.<room>_stop_wake` | wake controls (hidden while no wake runs) |
 | `number.<room>_night_maximum_volume`, `_night_video_idle_timeout`, `_night_display_run_down` | night mode limit (%) and times (min) |
-| `select.<room>_volume_preset` | volume preset (quiet, normal, loud, party, manual); only with at least one preset |
+| `select.<room>_volume_preset` | volume preset (the offered presets and manual) |
+| `number.<room>_preset_quiet`, `_preset_normal`, `_preset_loud`, `_preset_party` | volume of each preset (%), 0 = not offered |
 | `sensor.<room>_follow` | follow state of the room (with occupancy sensors only) |
 | `button.<room>_follow_me`, `button.<room>_stop_follow_me` | start / stop follow me (only the usable one is shown) |
 | `sensor.better_media_player_follow_rooms` | central: rooms in follow me; follow-me player, start room in the attributes |

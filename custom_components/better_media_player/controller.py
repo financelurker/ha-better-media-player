@@ -78,12 +78,14 @@ from .const import (
     CONF_PREWARM,
     CONF_SPEAKERS,
     CONF_START_TIMEOUT,
+    CONF_PRESET,
     CONF_VOLUME_CONTROL,
     CONF_VOLUME_ENTITY,
     CONF_VOLUME_OFFSET,
     DEFAULTS,
     DOMAIN,
     FOLLOW_INACTIVE,
+    PRESETS,
     ROLE_AUDIO,
     ROLE_AUDIO_HOST,
     ROLE_BASS,
@@ -315,6 +317,23 @@ class RoomController:
         }
         if "wake_controls" in self.data:  # stored under the old name (wake controls only)
             self.data["controls"] = self.data.pop("wake_controls")
+        if self.data.get("last_source") not in self.sources:
+            self.data["last_source"] = default_source
+        # run-down values: option changes win, otherwise keep the number entity value
+        for key in (
+            "display_run_down",
+            "audio_run_down",
+            "host_run_down",
+            "video_idle_timeout",
+            "night_video_idle_timeout",
+            "night_display_run_down",
+            "night_max_volume",
+            *(CONF_PRESET.format(name) for name in PRESETS),
+        ):
+            configured = float(self.opts[key])
+            if self.data.get(f"cfg_{key}") != configured or key not in self.data:
+                self.data[key] = configured
+                self.data[f"cfg_{key}"] = configured
         # another volume output (players <-> device, another device): the room's
         # volume was learned in another scale, it is learned again
         volume_cfg = self.volume_device.id if self.volume_device is not None else "players"
@@ -327,22 +346,6 @@ class RoomController:
                 if preset is not None:
                     self.data["room_volume"] = self.volume.presets[preset]
             self.data["cfg_volume"] = volume_cfg
-        if self.data.get("last_source") not in self.sources:
-            self.data["last_source"] = default_source
-        # run-down values: option changes win, otherwise keep the number entity value
-        for key in (
-            "display_run_down",
-            "audio_run_down",
-            "host_run_down",
-            "video_idle_timeout",
-            "night_video_idle_timeout",
-            "night_display_run_down",
-            "night_max_volume",
-        ):
-            configured = float(self.opts[key])
-            if self.data.get(f"cfg_{key}") != configured or key not in self.data:
-                self.data[key] = configured
-                self.data[f"cfg_{key}"] = configured
 
         tracked: list[str] = [s.player for s in self.sources.values()]
         if self.volume_device is not None:

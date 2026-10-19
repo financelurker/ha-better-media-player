@@ -106,9 +106,64 @@ async def test_action_and_not_offered_preset(hass, home, freezer):
         await hass.services.async_call(DOMAIN, "set_volume_preset", {"entity_id": ROOM, "preset": "party"}, blocking=True)
 
 
-async def test_no_select_without_presets(hass, home):
+async def test_select_without_presets_offers_only_manual(hass, home):
     await setup_room(hass, preset_quiet=0, preset_normal=0, preset_loud=0, preset_party=0)
-    assert hass.states.get(SELECT) is None
+    assert hass.states.get(SELECT).attributes["options"] == ["manual"]
+
+
+# ------------------------------------------------------------ preset numbers
+
+
+async def _number(hass, name, value):
+    await hass.services.async_call(
+        "number", "set_value", {"entity_id": f"number.wohnzimmer_preset_{name}", "value": value}, blocking=True
+    )
+    await hass.async_block_till_done()
+
+
+async def test_preset_values_are_number_entities(hass, home, freezer):
+    from homeassistant.const import EntityCategory
+    from homeassistant.helpers import entity_registry as er
+
+    await _music_at(hass, home, freezer)
+    st = hass.states.get("number.wohnzimmer_preset_loud")
+    assert float(st.state) == 50 and st.attributes["unit_of_measurement"] == "%"
+    assert er.async_get(hass).async_get("number.wohnzimmer_preset_loud").entity_category is EntityCategory.CONFIG
+    await _number(hass, "loud", 60)
+    await _select(hass, "loud")
+    assert _vol(hass) == 0.6
+
+
+async def test_changing_the_chosen_preset_sets_the_volume(hass, home, freezer):
+    await _music_at(hass, home, freezer)
+    await _select(hass, "normal")
+    await _number(hass, "normal", 35)
+    assert _vol(hass) == 0.35
+    assert hass.states.get(SELECT).state == "normal"
+
+
+async def test_preset_set_to_zero_is_no_longer_offered(hass, home, freezer):
+    await _music_at(hass, home, freezer)
+    await _select(hass, "party")
+    await _number(hass, "party", 0)
+    st = hass.states.get(SELECT)
+    assert "party" not in st.attributes["options"]
+    assert st.state == "manual"
+    assert _vol(hass) == 0.7  # the volume stays
+    await _number(hass, "party", 80)
+    assert "party" in hass.states.get(SELECT).attributes["options"]
+    assert hass.states.get(SELECT).state == "manual", "a preset dropped once is not chosen again by itself"
+
+
+async def test_number_value_survives_a_reload_and_options_win(hass, home, freezer):
+    entry = await _music_at(hass, home, freezer)
+    await _number(hass, "quiet", 10)
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert float(hass.states.get("number.wohnzimmer_preset_quiet").state) == 10
+    hass.config_entries.async_update_entry(entry, options={**entry.options, "preset_quiet": 12})
+    await hass.async_block_till_done()
+    assert float(hass.states.get("number.wohnzimmer_preset_quiet").state) == 12
 
 
 async def test_removed_preset_counts_as_manual(hass, home, freezer):
