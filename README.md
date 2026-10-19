@@ -139,7 +139,7 @@ Paused music is not demand: the speakers switch off after the run-down and on ag
 
 #### Source changes
 
-When the room's source changes, the event `better_media_player_source_changed` is fired, e.g. to switch the TV input by IR. The source is `video` while the video player is on, `audio` while the music player plays or is paused (also in a group), or `null` when no player is active any more.
+When the room's source changes, the event `better_media_player_source_changed` is fired, e.g. to switch the TV input by IR. The source is `video` while the video player is on, `audio` while the music player plays (also in a group) or is paused while the room still has power for it, or `null` when no player is active any more. A source chosen through the room player (on, source, play, wake) is the room's source from then on, even before something plays (e.g. turned on with music) and during a snooze, until another source plays or the room goes off.
 
 | Data | |
 |---|---|
@@ -149,7 +149,7 @@ When the room's source changes, the event `better_media_player_source_changed` i
 | `reason` | `selected` (through the room player: source, on, play, wake), `player` (a player took over by itself, e.g. a film cast to Kodi), `off` |
 
 - Fired once the room is ready for it: after the power-on sequence, so the TV already has power (plus its wait after switching on).
-- Only for a stable change: two players at the same time for a moment fire nothing. A pause, new media on the same player, a player that drops out for a moment or a restart of Home Assistant fire nothing either.
+- Only for a stable change: two players at the same time for a moment fire nothing. A pause, new media on the same player, a dropout of the current source's player or a restart of Home Assistant fire nothing either. Another player that is unavailable (e.g. behind its host plug) counts as off.
 - The same as **device triggers** in the automation editor: *Source changed*, *Switched to video*, *Switched to music*, *Source off*.
 
 ```yaml

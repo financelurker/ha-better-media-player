@@ -14,7 +14,16 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.trigger import TriggerActionType, TriggerInfo
 from homeassistant.helpers.typing import ConfigType
 
-from .const import CONF_ENTRY_TYPE, DOMAIN, ENTRY_TYPE_HUB, EVENT_SOURCE_CHANGED, SOURCE_AUDIO, SOURCE_VIDEO
+from .const import (
+    CONF_AUDIO_PLAYER,
+    CONF_ENTRY_TYPE,
+    CONF_VIDEO_PLAYER,
+    DOMAIN,
+    ENTRY_TYPE_HUB,
+    EVENT_SOURCE_CHANGED,
+    SOURCE_AUDIO,
+    SOURCE_VIDEO,
+)
 
 # trigger type -> the source it waits for (None: any change)
 TRIGGERS: dict[str, str | None] = {
@@ -44,7 +53,9 @@ async def async_get_triggers(hass: HomeAssistant, device_id: str) -> list[dict[s
     if entry_id is None:
         return []
     entry = hass.config_entries.async_get_entry(entry_id)
-    sources = getattr(entry.runtime_data, "sources", {}) if entry is not None else {}
+    options = entry.options if entry is not None else {}
+    # from the options: also for a room that is not loaded right now
+    sources = {k for k, conf in ((SOURCE_VIDEO, CONF_VIDEO_PLAYER), (SOURCE_AUDIO, CONF_AUDIO_PLAYER)) if options.get(conf)}
     types = [t for t, src in TRIGGERS.items() if src in (None, "off") or src in sources]
     return [
         {CONF_PLATFORM: "device", CONF_DOMAIN: DOMAIN, CONF_DEVICE_ID: device_id, CONF_TYPE: t} for t in types

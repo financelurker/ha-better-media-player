@@ -1,14 +1,21 @@
 """Source changes of a room as an event (and device triggers).
 
-The room's source is the source the room plays or is turned on with: video
-while the video player is on, music while the music player plays or is
-paused (on its own or in a group that counts for the room), or none.
+The room's source is the source the room plays or is turned on with:
+- video while the video player is on,
+- music while the music player plays (on its own or in a group that counts
+  for the room), while it is paused and the room still has power for it, or
+  after the room was turned on with music,
+- a source chosen through the room player (or a wake) stays the room's source
+  until another source plays or the room goes off (e.g. during a snooze),
+- none otherwise ("off").
 
 A change is announced once it is stable for a moment (two players playing
 at the same time for a moment fire nothing) and the room is ready for it:
 after the power-on sequence, so e.g. the TV already has power and takes an
-IR command. Not after a restart of Home Assistant with the room already on,
-and not while a player is unavailable (a dropout is no change).
+IR command. Not after a restart of Home Assistant with the room already on
+(the first look waits until the players have reported), and not while the
+current source's player is unavailable (a dropout is no change); another
+unavailable player (e.g. behind its host plug) counts as off.
 
     better_media_player_source_changed:
         entity_id, entry_id, room, source (video / audio / None),
@@ -26,7 +33,7 @@ from homeassistant.core import CALLBACK_TYPE, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_call_later
 
-from .const import DOMAIN, EVENT_SOURCE_CHANGED, SOURCE_VIDEO
+from .const import DOMAIN, EVENT_SOURCE_CHANGED, SOURCE_AUDIO, SOURCE_VIDEO
 
 if TYPE_CHECKING:
     from .controller import RoomController
@@ -34,7 +41,8 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 SETTLE_SECONDS = 2
-REQUEST_SECONDS = 180  # a wish through the room player counts this long for the reason
+REQUEST_SECONDS = 60  # a wish through the room player counts this long after its start
+FIRST_LOOK_SECONDS = 60  # at most this long for the players to report after a start
 _UNSET = object()
 
 REASON_SELECTED = "selected"
@@ -48,8 +56,9 @@ _VIDEO_ON = {
     MediaPlayerState.PAUSED,
     MediaPlayerState.BUFFERING,
 }
-_AUDIO_ON = {MediaPlayerState.PLAYING, MediaPlayerState.PAUSED, MediaPlayerState.BUFFERING}
+_AUDIO_PLAYING = {MediaPlayerState.PLAYING, MediaPlayerState.BUFFERING}
 _UNCERTAIN = {"unavailable", "unknown", None}
+_NOT_LOADED = {"unknown", None}
 
 
 class SourceWatch:
@@ -58,6 +67,8 @@ class SourceWatch:
         self._announced: Any = _UNSET  # the last announced source (None: off)
         self._pending: tuple[str | None, float] | None = None
         self._requested: tuple[str, float] | None = None
+        self._held: str | None = None  # turned on with this source (e.g. music, still idle)
+        self._since = time.monotonic()
         self._unsub: CALLBACK_TYPE | None = None
 
     @callback
@@ -65,25 +76,69 @@ class SourceWatch:
         """The room was asked for this source (turn on, source, play, wake)."""
         self._requested = (key, time.monotonic())
 
+    def _playing(self) -> list[str]:
+        ctrl = self.ctrl
+        on = []
+        for src in ctrl.sources.values():
+            if src.suppressed:
+                continue
+            state = ctrl.player_state(src)
+            if src.key == SOURCE_VIDEO and state in _VIDEO_ON:
+                on.append(src.key)
+            elif src.key == SOURCE_AUDIO and state in _AUDIO_PLAYING and ctrl._group_counts(src.player):
+                on.append(src.key)
+        return on
+
+    def _usable(self, key: str) -> bool:
+        """The room still holds this source (not off, not on its way off)."""
+        ctrl = self.ctrl
+        src = ctrl.sources.get(key)
+        return (
+            src is not None
+            and not src.suppressed
+            and not ctrl.turning_off
+            and ctrl.player_state(src) not in (*_UNCERTAIN, "off", "standby")
+            and (ctrl.room_on or not ctrl.roles)
+        )
+
     def _current(self) -> str | None:
         ctrl = self.ctrl
         if ctrl.sequence_running:
-            return ctrl.last_source  # the source the room is turned on with
-        on = []
-        for src in ctrl.sources.values():
-            state = ctrl.player_state(src)
-            if src.suppressed:
-                continue
-            if src.key == SOURCE_VIDEO and state in _VIDEO_ON:
-                on.append(src.key)
-            elif src.key != SOURCE_VIDEO and state in _AUDIO_ON and ctrl._group_counts(src.player):
-                on.append(src.key)
-        if not on:
+            # nothing changes until the room is ready (e.g. the TV has power)
+            if self._requested is not None:
+                self._requested = (self._requested[0], time.monotonic())  # counts from the end of the start
+            return self._announced
+        if ctrl.error:
+            self._requested = None  # the start failed: no wish left
+        on = self._playing()
+        if on:
+            if self._held not in on:
+                self._held = None  # another source took over
+            if len(on) == 1:
+                return on[0]
+            active = ctrl.active_source
+            return active.key if active is not None and active.key in on else on[0]
+        if self._held is not None and not self._usable(self._held):
+            self._held = None
+        if self._held is not None:
+            return self._held
+        if self._fresh_request() is not None and self._usable(self._requested[0]):
+            return self._requested[0]  # turned on with it (e.g. music, not playing yet)
+        audio = ctrl.sources.get(SOURCE_AUDIO)
+        if (
+            audio is not None
+            and ctrl.player_state(audio) == MediaPlayerState.PAUSED
+            and self._announced == SOURCE_AUDIO
+            and self._usable(SOURCE_AUDIO)
+        ):
+            return SOURCE_AUDIO  # paused: still the room's source while it has power for it
+        return None
+
+    def _fresh_request(self) -> str | None:
+        req = self._requested
+        if req is None or time.monotonic() - req[1] >= REQUEST_SECONDS:
             return None
-        if len(on) == 1:
-            return on[0]
-        active = ctrl.active_source
-        return active.key if active is not None and active.key in on else on[0]
+        return req[0]
 
     @callback
     def async_check(self) -> None:
@@ -91,19 +146,28 @@ class SourceWatch:
         ctrl = self.ctrl
         if not ctrl._started or ctrl._stopped:
             return
-        if any(ctrl.player_state(s) in _UNCERTAIN for s in ctrl.sources.values()):
-            return  # a dropout (or not loaded yet) is no change
-        current = self._current()
         if self._announced is _UNSET:
-            self._announced = current  # Home Assistant started: the room is as it is
+            # Home Assistant started: the room is as it is, once its players have
+            # reported (and no sequence is running)
+            loading = any(ctrl.player_state(s) in _NOT_LOADED for s in ctrl.sources.values())
+            if ctrl.sequence_running or (loading and time.monotonic() - self._since < FIRST_LOOK_SECONDS):
+                self._recheck()
+                return
+            self._announced = self._current()
             return
+        announced = ctrl.sources.get(self._announced) if self._announced else None
+        if announced is not None and ctrl.player_state(announced) in _UNCERTAIN:
+            return  # the current source drops out for a moment: no change
+        current = self._current()
         if current == self._announced:
             self._pending = None
+            if self._requested is not None and self._requested[0] == current and not ctrl.sequence_running:
+                self._requested = None  # asked for what it is already
             return
         now = time.monotonic()
         if self._pending is None or self._pending[0] != current:
             self._pending = (current, now)
-        if now - self._pending[1] < SETTLE_SECONDS or ctrl.sequence_running:
+        if now - self._pending[1] < SETTLE_SECONDS:
             self._recheck()
             return
         self._fire(current)
@@ -128,12 +192,9 @@ class SourceWatch:
         self._pending = None
         if source is None:
             reason = REASON_OFF
-        elif (
-            self._requested is not None
-            and self._requested[0] == source
-            and time.monotonic() - self._requested[1] < REQUEST_SECONDS
-        ):
+        elif self._fresh_request() == source:
             reason = REASON_SELECTED
+            self._held = source  # the room holds it until another source plays or it goes off
         else:
             reason = REASON_PLAYER
         self._requested = None
