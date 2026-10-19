@@ -446,7 +446,7 @@ async def test_old_central_entry_is_migrated(hass, home):
         domain=DOMAIN,
         title="Better Media Player",
         data={CONF_ENTRY_TYPE: ENTRY_TYPE_HUB},
-        options={"follow_groups": [FOLLOW], "always_groups": [GROUP], CONF_DEFAULT_VOLUME: 30},
+        options={"follow_groups": [FOLLOW, GROUP], "always_groups": [GROUP], CONF_DEFAULT_VOLUME: 30},
         version=1,
     )
     entry.add_to_hass(hass)
