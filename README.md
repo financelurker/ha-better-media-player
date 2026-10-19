@@ -137,6 +137,36 @@ Paused music is not demand: the speakers switch off after the run-down and on ag
 - **Off** (or **All off**): leave a Music Assistant group with `media_player.unjoin` (if it was the last member, Music Assistant pauses the group), otherwise stop direct playback; turn the video player off; switch all plugs off in order. A player that takes a while to stop does not switch the room back on; only new playback does.
 - **Volume and transport** go to the player that is currently active.
 
+#### Source changes
+
+When the room's source changes, the event `better_media_player_source_changed` is fired, e.g. to switch the TV input by IR. The source is `video` while the video player is on, `audio` while the music player plays or is paused (also in a group), or `null` when no player is active any more.
+
+| Data | |
+|---|---|
+| `entity_id`, `entry_id`, `room` | the room player and the room |
+| `source`, `previous` | `video`, `audio` or `null` |
+| `player` | the player of the new source |
+| `reason` | `selected` (through the room player: source, on, play, wake), `player` (a player took over by itself, e.g. a film cast to Kodi), `off` |
+
+- Fired once the room is ready for it: after the power-on sequence, so the TV already has power (plus its wait after switching on).
+- Only for a stable change: two players at the same time for a moment fire nothing. A pause, new media on the same player, a player that drops out for a moment or a restart of Home Assistant fire nothing either.
+- The same as **device triggers** in the automation editor: *Source changed*, *Switched to video*, *Switched to music*, *Source off*.
+
+```yaml
+trigger:
+  - trigger: event
+    event_type: better_media_player_source_changed
+    event_data:
+      room: Living room
+      source: video
+action:
+  - action: remote.send_command
+    target:
+      entity_id: remote.living_room_ir
+    data:
+      command: tv_input_hdmi1
+```
+
 ### Follow me
 
 Needs the **Central settings** entry with one **follow-me player**: a Music Assistant group player with dynamic members (e.g. *All players*). There is one follow me per Home Assistant installation. Every other Music Assistant group simply plays: it powers the speakers of its members like direct playback.

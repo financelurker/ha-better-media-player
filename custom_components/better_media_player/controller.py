@@ -110,6 +110,7 @@ from .const import (
 from .hub import get_hub, get_rooms
 from .sleep import REASON_ROOM_OFF, SleepTimer
 from .night import NightMode
+from .source_event import SourceWatch
 from .output import DeviceOutput, PlayerOutput
 from .volume import RoomVolume
 from .wake import PHASE_STARTING, REASON_ROOM_OFF as WAKE_ROOM_OFF, WakeAlarm
@@ -289,6 +290,7 @@ class RoomController:
         self.volume = RoomVolume(self)
         self.night = NightMode(self)
         self.wake = WakeAlarm(self)
+        self.source_watch = SourceWatch(self)
         self._sleep_off_pending = False
         self.turning_off = False
         self._was_on: bool | None = None  # None: not looked yet (no power-on after a restart)
@@ -387,6 +389,7 @@ class RoomController:
         self.volume.async_stop()
         self.night.async_stop()
         self.wake.async_stop()
+        self.source_watch.async_stop()
         seq = self._seq_task
         self._cancel_sequence()
         if seq is not None:
@@ -778,6 +781,7 @@ class RoomController:
             elif self._fully_off():
                 self._was_on = False
             await self.sleep.async_apply_restores()
+            self.source_watch.async_check()
             if self.sleep.active and self._started and self._fully_off():
                 # everything went off by itself: the timer has nothing left to do
                 self._spawn_sleep_cancel()
@@ -1154,6 +1158,7 @@ class RoomController:
         key = source or self.last_source
         if key not in self.sources:
             key = next(iter(self.sources))
+        self.source_watch.note_request(key)
         src = self.sources[key]
         src.suppressed = False
         for role in self.roles.values():
@@ -1198,6 +1203,7 @@ class RoomController:
             raise HomeAssistantError(f"Unknown source: {key}")
         enqueue = room_mode or data.get("enqueue")
         if enqueue is None or str(enqueue) in ("play", "replace"):
+            self.source_watch.note_request(key)
             await self._stop_others(key)
             if not self.source_powered(key):
                 await self.async_turn_on(key)

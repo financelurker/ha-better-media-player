@@ -193,6 +193,7 @@ SERVICE_CANCEL_SLEEP_TIMER = "cancel_sleep_timer"
 ATTR_MINUTES = "minutes"
 ATTR_FADE_MINUTES = "fade_minutes"
 EVENT_SLEEP_TIMER_FINISHED = f"{DOMAIN}_sleep_timer_finished"
+EVENT_SOURCE_CHANGED = f"{DOMAIN}_source_changed"
 
 # --- Status ------------------------------------------------------------------
 STATUS_OFF = "off"
