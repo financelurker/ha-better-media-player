@@ -124,6 +124,20 @@
       "volume_note": {
         "title": "Note: volume",
         "description": "{players} cannot set a volume. The room volume (one volume for the whole room, taken along when switching between the players) does not work for it. Everything else works as usual."
+      },
+      "night": {
+        "title": "Night mode",
+        "description": "While the night mode is on: no subwoofer, shorter video times and a volume limit. Turning it on and off is up to you or to other integrations and automations; it stays on until turned off.",
+        "data": {
+          "night_max_volume": "Maximum volume",
+          "night_video_idle_timeout": "Turn off idle video player after",
+          "night_display_run_down": "Display run-down",
+          "night_fade_in": "Fade back up afterwards"
+        },
+        "data_description": {
+          "night_max_volume": "Limit for both players of the room while the night mode is on. 0 = no limit.",
+          "night_fade_in": "When the night mode ends, the volume fades back to the room volume over this time."
+        }
       }
     },
     "error": {
@@ -153,7 +167,8 @@
           "timing": "Times",
           "standby": "Wait for standby",
           "follow": "Follow me",
-          "save": "Save"
+          "save": "Save",
+          "night": "Night mode"
         },
         "data": {
           "follow_groups": "Follow-me groups",
@@ -240,6 +255,20 @@
       "volume_note": {
         "title": "Note: volume",
         "description": "{players} cannot set a volume. The room volume (one volume for the whole room, taken along when switching between the players) does not work for it. Everything else works as usual."
+      },
+      "night": {
+        "title": "Night mode",
+        "description": "While the night mode is on: no subwoofer, shorter video times and a volume limit. Turning it on and off is up to you or to other integrations and automations; it stays on until turned off.",
+        "data": {
+          "night_max_volume": "Maximum volume",
+          "night_video_idle_timeout": "Turn off idle video player after",
+          "night_display_run_down": "Display run-down",
+          "night_fade_in": "Fade back up afterwards"
+        },
+        "data_description": {
+          "night_max_volume": "Limit for both players of the room while the night mode is on. 0 = no limit.",
+          "night_fade_in": "When the night mode ends, the volume fades back to the room volume over this time."
+        }
       }
     },
     "error": {
@@ -310,6 +339,9 @@
       },
       "quiet": {
         "name": "Quiet"
+      },
+      "night_mode": {
+        "name": "Night mode"
       }
     },
     "number": {
@@ -327,6 +359,15 @@
       },
       "sleep_timer": {
         "name": "Sleep timer"
+      },
+      "night_video_idle_timeout": {
+        "name": "Night: video idle timeout"
+      },
+      "night_display_run_down": {
+        "name": "Night: display run-down"
+      },
+      "night_max_volume": {
+        "name": "Night: maximum volume"
       }
     },
     "button": {
@@ -405,6 +446,9 @@
   "exceptions": {
     "room_off": {
       "message": "{room} is off - a sleep timer needs a running room."
+    },
+    "night_mode_bool": {
+      "message": "night_mode must be true or false."
     }
   }
 }

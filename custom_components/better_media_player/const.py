@@ -114,6 +114,13 @@ CONF_HOST_ON_WAIT = "host_on_wait"  # s
 CONF_AUDIO_ON_WAIT = "audio_on_wait"  # s
 CONF_SLEEP_FADE = "sleep_fade"  # min, default fade of the sleep timer
 
+# --- Night mode ------------------------------------------------------------------
+CONF_NIGHT_VIDEO_IDLE_TIMEOUT = "night_video_idle_timeout"  # min
+CONF_NIGHT_DISPLAY_RUN_DOWN = "night_display_run_down"  # min
+CONF_NIGHT_MAX_VOLUME = "night_max_volume"  # %, 0 = no limit
+CONF_NIGHT_FADE_IN = "night_fade_in"  # min, back to the room volume afterwards
+ATTR_NIGHT_MODE = "night_mode"
+
 # --- Standby (optional, needs power sensors) ----------------------------------
 CONF_DISPLAY_POWER = "display_power"
 CONF_DISPLAY_STANDBY = "display_standby"
@@ -144,6 +151,10 @@ DEFAULTS: dict = {
     CONF_VOLUME_OFFSET: 0,
     CONF_PREWARM: True,
     CONF_SLEEP_FADE: 5,
+    CONF_NIGHT_VIDEO_IDLE_TIMEOUT: 5,
+    CONF_NIGHT_DISPLAY_RUN_DOWN: 1,
+    CONF_NIGHT_MAX_VOLUME: 30,
+    CONF_NIGHT_FADE_IN: 2,
 }
 
 # --- Sleep timer ---------------------------------------------------------------

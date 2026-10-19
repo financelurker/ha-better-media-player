@@ -50,6 +50,8 @@ async def test_full_flow(hass, home):
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     assert result["step_id"] == "standby"
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["step_id"] == "night"
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     assert result["step_id"] == "follow"
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -57,6 +59,7 @@ async def test_full_flow(hass, home):
     assert result["data"] == {CONF_ENTRY_TYPE: ENTRY_TYPE_ROOM}
     assert result["options"][CONF_VIDEO_PLAYER] == KODI
     assert result["options"]["audio_run_down"] == 2
+    assert result["options"]["night_max_volume"] == 30
     await hass.async_block_till_done()
     assert hass.states.get("media_player.wohnzimmer") is not None
 

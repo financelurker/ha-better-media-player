@@ -76,6 +76,7 @@ Settings → Devices & services → Add integration → **Better Media Player** 
 | **Players: special cases** | Only if a player cannot turn itself on/off (on/off action) or its hardware hangs on a plug. |
 | **Times** | Run-down times, video idle timeout, start timeout, waits after switching on, default sleep timer fade-out. |
 | **Wait for standby** | Optional, needs power sensors. |
+| **Night mode** | Volume limit, video times at night, fade back afterwards. |
 | **Follow me** | Occupancy sensors, presence run-down, volume offset, prewarm. Rooms without occupancy sensors do not take part. |
 
 Everything can be changed later via **Configure**.
@@ -185,6 +186,17 @@ A room has one volume, not one per player. It is the volume last chosen in the r
 - Players that cannot set a volume take no part; the setup shows a note for them.
 - The room player shows the room volume in the attribute `room_volume`; `volume_level` is the volume of the active player.
 
+### Night mode
+
+The switch `Night mode` puts the room into night mode until it is turned off again. Turning it on and off is up to you or to other integrations and automations (e.g. at bedtime and in the morning).
+
+- **No subwoofer:** it stays off, also when follow me prewarms the speakers. Turned on during playback, the subwoofer goes off at once; turned off, it comes back if something plays. With automatic power off or in manual mode, nothing is switched.
+- **Video:** still turns the display on, with shorter times: idle timeout 5 min instead of 30, display run-down 1 min (the display still goes after the speakers).
+- **Volume limit** (default 30 %, 0 = none) for both players of the room, whoever sets the volume. What Better Media Player sets itself is limited before it is sent; a higher volume set elsewhere (app, remote) is set back as soon as it is reported, so it may be louder for a moment. A wish above the limit counts as the limit for the room volume.
+- **Groups:** a room's player in a group is limited like any other. The group itself is limited only when all its players belong to rooms in night mode; when the last of them leaves the night mode, the group fades back to the volume follow me remembers for it. A limited volume is never remembered as follow me's volume.
+- **Afterwards:** the volume fades back to the room volume (default over 2 min); a volume change during the fade stops it. If nothing plays, the room volume is set at once.
+- `media_player.play_media` on the room player accepts `extra: {night_mode: true}` (or `false`) to switch the night mode along with the playback; it is not passed on to the player.
+
 ### Sleep timer
 
 The room turns itself off after a set time, whatever plays (video or music). Over the last minutes the volume of the active player fades out; then the normal *room off* runs and the volume from before the fade is set again, so the next playback does not start at zero. A player that is suspended at the end (e.g. Kodi) gets its volume when it is up again.
@@ -227,6 +239,8 @@ With power sensors, a plug is cut only after its device has drawn less than the 
 | `button.<room>_sleep_timer_15_min` | sleep timer +15 min (starts one if none runs) |
 | `sensor.<room>_sleep_timer_end` | when the sleep timer turns the room off |
 | `switch.<room>_quiet` | quiet mode: the room takes no part in follow me |
+| `switch.<room>_night_mode` | night mode (see above) |
+| `number.<room>_night_maximum_volume`, `_night_video_idle_timeout`, `_night_display_run_down` | night mode limit (%) and times (min) |
 | `sensor.<room>_follow` | follow state of the room (with occupancy sensors only) |
 | `sensor.better_media_player_follow_rooms` | central: rooms in the playing follow group |
 | `button.better_media_player_start_follow` | central: continue the last follow queue where someone is |

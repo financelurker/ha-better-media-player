@@ -25,6 +25,7 @@ from homeassistant.const import (
     ATTR_SUPPORTED_FEATURES,
 )
 from homeassistant.core import HomeAssistant, State
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
@@ -33,6 +34,8 @@ from . import BetterMediaPlayerConfigEntry
 from .browser import RoomBrowser, is_own_id
 from .const import (
     ATTR_FADE_MINUTES,
+    ATTR_NIGHT_MODE,
+    DOMAIN,
     ATTR_MINUTES,
     SERVICE_CANCEL_SLEEP_TIMER,
     SERVICE_SET_SLEEP_TIMER,
@@ -183,6 +186,7 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
             "sleep_timer_ends_at": ends.isoformat() if ends else None,
             "sleep_timer_fading": self.ctrl.sleep.fading,
             "room_volume": self.ctrl.volume.value,
+            "night_mode": self.ctrl.night.active,
         }
 
     # -------------------------------------------------------------- media info
@@ -327,6 +331,17 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
 
     async def async_play_media(self, media_type: MediaType | str, media_id: str, **kwargs: Any) -> None:
         enqueue = kwargs.get(ATTR_MEDIA_ENQUEUE)
+        extra = kwargs.get(ATTR_MEDIA_EXTRA)
+        if isinstance(extra, dict) and ATTR_NIGHT_MODE in extra:
+            # ours: switches the room's night mode, not passed on to the player
+            extra = dict(extra)
+            night = extra.pop(ATTR_NIGHT_MODE)
+            if not isinstance(night, bool):
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN, translation_key="night_mode_bool"
+                )
+            kwargs[ATTR_MEDIA_EXTRA] = extra or None
+            await self.ctrl.async_set_night_mode(night)
         if is_own_id(media_id):
             # from the room browser or search: the id names the player
             key, inner_type, inner_id, mode = self._browser.resolve_play(media_id)

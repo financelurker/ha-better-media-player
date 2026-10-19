@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from homeassistant.components.number import NumberEntity, NumberMode
-from homeassistant.const import EntityCategory, UnitOfTime
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -35,6 +35,10 @@ async def async_setup_entry(
         entities.append(MinutesNumber(entry, ctrl, "host_run_down", 0, 120))
     if SOURCE_VIDEO in ctrl.sources:
         entities.append(MinutesNumber(entry, ctrl, "video_idle_timeout", 0, 480))
+        entities.append(MinutesNumber(entry, ctrl, "night_video_idle_timeout", 0, 480))
+    if ROLE_DISPLAY in ctrl.roles:
+        entities.append(MinutesNumber(entry, ctrl, "night_display_run_down", 0, 120))
+    entities.append(PercentNumber(entry, ctrl, "night_max_volume"))
     entities.append(SleepTimerNumber(entry, ctrl, "sleep_timer"))
     async_add_entities(entities)
 
@@ -57,6 +61,20 @@ class MinutesNumber(BetterMediaPlayerEntity, NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         await self.ctrl.async_set_number(self._key, value)
+
+
+class PercentNumber(MinutesNumber):
+    """Night mode volume limit in %; 0 = no limit."""
+
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_icon = "mdi:volume-medium"
+
+    def __init__(self, entry, ctrl, key: str) -> None:
+        super().__init__(entry, ctrl, key, 0, 100)
+
+    async def async_set_native_value(self, value: float) -> None:
+        await self.ctrl.async_set_number(self._key, value)
+        await self.ctrl.night.async_limit_changed()
 
 
 class SleepTimerNumber(BetterMediaPlayerEntity, NumberEntity):

@@ -108,6 +108,7 @@ from .const import (
 )
 from .hub import get_hub, get_rooms
 from .sleep import REASON_ROOM_OFF, SleepTimer
+from .night import NightMode
 from .volume import RoomVolume
 
 _LOGGER = logging.getLogger(__name__)
@@ -278,6 +279,7 @@ class RoomController:
 
         self.sleep = SleepTimer(self)
         self.volume = RoomVolume(self)
+        self.night = NightMode(self)
         self._sleep_off_pending = False
         self.turning_off = False
 
@@ -304,7 +306,15 @@ class RoomController:
         if self.data.get("last_source") not in self.sources:
             self.data["last_source"] = default_source
         # run-down values: option changes win, otherwise keep the number entity value
-        for key in ("display_run_down", "audio_run_down", "host_run_down", "video_idle_timeout"):
+        for key in (
+            "display_run_down",
+            "audio_run_down",
+            "host_run_down",
+            "video_idle_timeout",
+            "night_video_idle_timeout",
+            "night_display_run_down",
+            "night_max_volume",
+        ):
             configured = float(self.opts[key])
             if self.data.get(f"cfg_{key}") != configured or key not in self.data:
                 self.data[key] = configured
@@ -346,6 +356,7 @@ class RoomController:
         self._unsubs.clear()
         self.sleep.async_stop()
         self.volume.async_stop()
+        self.night.async_stop()
         seq = self._seq_task
         self._cancel_sequence()
         if seq is not None:
@@ -399,6 +410,7 @@ class RoomController:
             if entity_id != src.player:
                 continue
             self.volume.async_on_state(src, old, new)
+            self.night.async_on_state(src, new)
             was_playing = old is not None and old.state in PLAYING_STATES
             is_playing = new is not None and new.state in PLAYING_STATES
             if is_playing and not was_playing:
@@ -522,6 +534,8 @@ class RoomController:
         )
 
     def role_demand(self, role: Role) -> bool:
+        if not self.night.role_enabled(role.key):
+            return False  # night mode: no subwoofer
         if self.prewarm and role.key in (ROLE_AUDIO, ROLE_BASS, ROLE_AUDIO_HOST) and not self.quiet:
             return True
         return any(
@@ -626,7 +640,14 @@ class RoomController:
         return self.data.get("last_source", SOURCE_VIDEO)
 
     def run_down(self, role: Role) -> float:
-        return float(self.data.get(role.run_down_key, 0.0)) * 60.0
+        key = role.run_down_key
+        if key == "display_run_down" and self.night.active:
+            key = "night_display_run_down"
+        return float(self.data.get(key, 0.0)) * 60.0
+
+    @property
+    def hub(self):
+        return _hub(self.hass)
 
     @property
     def sequence_running(self) -> bool:
@@ -727,7 +748,8 @@ class RoomController:
             ):
                 if src.idle_since is None:
                     src.idle_since = now
-                timeout = float(self.data.get("video_idle_timeout", 0)) * 60
+                key = "night_video_idle_timeout" if self.night.active else "video_idle_timeout"
+                timeout = float(self.data.get(key, 0)) * 60
                 if (
                     self.auto_power
                     and timeout > 0
@@ -894,6 +916,8 @@ class RoomController:
 
     async def _player(self, src: Source, service: str, extra: dict | None = None) -> bool:
         if service == "volume_set" and extra and "volume_level" in extra:
+            # the night mode's limit holds for everything we set
+            extra = {**extra, "volume_level": self.night.limit(float(extra["volume_level"]))}
             self.volume.note_own(src.player, extra["volume_level"])
         return await self._call(MP_DOMAIN, service, {ATTR_ENTITY_ID: src.player, **(extra or {})})
 
@@ -982,7 +1006,9 @@ class RoomController:
             if src is not None:
                 needed_sources = {src.key}
                 roles = [
-                    r for k in ON_ORDER if (r := self.roles.get(k)) is not None and src.key in r.sources
+                    r
+                    for k in ON_ORDER
+                    if (r := self.roles.get(k)) is not None and src.key in r.sources and self.night.role_enabled(k)
                 ]
             else:
                 needed_sources = set()
@@ -1072,7 +1098,11 @@ class RoomController:
         return (
             not src.suppressed
             and self.source_ready(src)
-            and all(self.role_fully_on(r) for r in self.roles.values() if key in r.sources)
+            and all(
+                self.role_fully_on(r)
+                for r in self.roles.values()
+                if key in r.sources and self.night.role_enabled(r.key)
+            )
         )
 
     async def async_play_on(self, key: str, data: dict, room_mode: str | None = None) -> None:
@@ -1188,6 +1218,9 @@ class RoomController:
         elif (hub := _hub(self.hass)) is not None:
             hub.async_schedule("quiet")
         await self.async_update("quiet")
+
+    async def async_set_night_mode(self, on: bool) -> None:
+        await self.night.async_set(on)
 
     async def async_set_auto_power(self, on: bool) -> None:
         self.data["auto_power"] = on
