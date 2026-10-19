@@ -171,7 +171,7 @@ async def test_player_without_volume_gets_a_note(hass, home):
     assert result["step_id"] == "volume_note"
     assert result["description_placeholders"] == {"players": "Radio"}
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
-    assert result["step_id"] == "devices"
+    assert result["step_id"] == "volume"
 
 
 async def test_player_with_volume_gets_no_note(hass, home):
@@ -179,4 +179,4 @@ async def test_player_with_volume_gets_no_note(hass, home):
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "room"})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"name": "Good"})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"audio_player": MUSIC})
-    assert result["step_id"] == "devices"
+    assert result["step_id"] == "volume"

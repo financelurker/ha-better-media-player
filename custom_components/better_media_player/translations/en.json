@@ -146,6 +146,20 @@
           "night_max_volume": "Limit for both players of the room while the night mode is on. 0 = no limit.",
           "night_fade_in": "When the night mode ends, the volume fades back to the room volume over this time."
         }
+      },
+      "volume": {
+        "title": "Volume presets",
+        "description": "Room volumes by name, chosen with the select Volume preset or the action set_volume_preset. 0 = not offered in this room.",
+        "data": {
+          "preset_quiet": "Quiet",
+          "preset_normal": "Normal",
+          "preset_loud": "Loud",
+          "preset_party": "Party",
+          "power_on_preset": "Power-on preset"
+        },
+        "data_description": {
+          "power_on_preset": "The room's volume whenever the room comes on (e.g. not at last night's party volume)."
+        }
       }
     },
     "error": {
@@ -160,7 +174,8 @@
       "needs_volume_entity": "Choose the volume device.",
       "volume_is_player": "The volume device must not be one of the room's players.",
       "no_volume": "This media player cannot set a volume.",
-      "volume_is_room": "A Better Media Player room cannot be the volume device."
+      "volume_is_room": "A Better Media Player room cannot be the volume device.",
+      "preset_not_offered": "Choose a preset this room offers (a volume above 0)."
     },
     "abort": {
       "hub_exists": "Central settings already exist. Change them via Configure.",
@@ -174,6 +189,7 @@
         "menu_options": {
           "room": "Room",
           "sources": "Media players",
+          "volume": "Volume presets",
           "devices": "Power devices",
           "advanced": "Players: special cases",
           "timing": "Times",
@@ -294,6 +310,20 @@
           "night_max_volume": "Limit for both players of the room while the night mode is on. 0 = no limit.",
           "night_fade_in": "When the night mode ends, the volume fades back to the room volume over this time."
         }
+      },
+      "volume": {
+        "title": "Volume presets",
+        "description": "Room volumes by name, chosen with the select Volume preset or the action set_volume_preset. 0 = not offered in this room.",
+        "data": {
+          "preset_quiet": "Quiet",
+          "preset_normal": "Normal",
+          "preset_loud": "Loud",
+          "preset_party": "Party",
+          "power_on_preset": "Power-on preset"
+        },
+        "data_description": {
+          "power_on_preset": "The room's volume whenever the room comes on (e.g. not at last night's party volume)."
+        }
       }
     },
     "error": {
@@ -308,7 +338,8 @@
       "needs_volume_entity": "Choose the volume device.",
       "volume_is_player": "The volume device must not be one of the room's players.",
       "no_volume": "This media player cannot set a volume.",
-      "volume_is_room": "A Better Media Player room cannot be the volume device."
+      "volume_is_room": "A Better Media Player room cannot be the volume device.",
+      "preset_not_offered": "Choose a preset this room offers (a volume above 0)."
     },
     "abort": {
       "invalid_config": "The settings are not consistent. Check media players and power devices."
@@ -431,6 +462,18 @@
       "follow_stop": {
         "name": "Stop follow me"
       }
+    },
+    "select": {
+      "volume_preset": {
+        "name": "Volume preset",
+        "state": {
+          "quiet": "Quiet",
+          "normal": "Normal",
+          "loud": "Loud",
+          "party": "Party",
+          "manual": "Manual"
+        }
+      }
     }
   },
   "services": {
@@ -466,11 +509,11 @@
         },
         "start_volume": {
           "name": "Start volume",
-          "description": "0-1; default 0.05."
+          "description": "0..1 (e.g. 0.05) or a preset of the room. Default 0.05."
         },
         "target_volume": {
           "name": "Target volume",
-          "description": "0-1; default the room volume."
+          "description": "0..1 or a preset of the room. Default: the room volume."
         },
         "fade_minutes": {
           "name": "Fade-in",
@@ -515,6 +558,16 @@
     "stop_follow": {
       "name": "Stop follow me",
       "description": "End follow me: the music stays in this room if it plays along, else goes back to the room it was started in; the other rooms stop."
+    },
+    "set_volume_preset": {
+      "name": "Set volume preset",
+      "description": "Set the room's volume to one of its presets.",
+      "fields": {
+        "preset": {
+          "name": "Preset",
+          "description": "Quiet, normal, loud or party."
+        }
+      }
     }
   },
   "selector": {
@@ -542,6 +595,23 @@
         "players": "Players",
         "device": "Own device"
       }
+    },
+    "power_on_preset": {
+      "options": {
+        "none": "None",
+        "quiet": "Quiet",
+        "normal": "Normal",
+        "loud": "Loud",
+        "party": "Party"
+      }
+    },
+    "preset": {
+      "options": {
+        "quiet": "Quiet",
+        "normal": "Normal",
+        "loud": "Loud",
+        "party": "Party"
+      }
     }
   },
   "exceptions": {
@@ -568,6 +638,9 @@
     },
     "follow_not_running": {
       "message": "Follow me is not on."
+    },
+    "preset_not_offered": {
+      "message": "The preset {preset} is not offered in {room}."
     }
   }
 }

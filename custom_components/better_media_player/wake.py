@@ -223,6 +223,8 @@ class WakeAlarm:
             await ctrl.sleep.async_cancel()  # a sleep timer would end the wake
         player = ctrl.sources[key].player
         out = ctrl.vol(ctrl.sources[key])
+        if not ctrl.room_on:
+            ctrl.volume.async_power_on()  # the wake turns the room on: its power-on preset
         target = target_volume if target_volume is not None else ctrl.volume.value
         if target is None:
             target = out.level() or 0.25

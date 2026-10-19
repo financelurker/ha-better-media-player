@@ -273,7 +273,7 @@ async def test_setup_validation(hass, home):
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {**base, CONF_VOLUME_CONTROL: VOLUME_DEVICE, CONF_VOLUME_ENTITY: AVR}
     )
-    assert result["step_id"] == "devices"
+    assert result["step_id"] == "volume"
 
 
 async def test_no_volume_note_with_a_device(hass, home):
@@ -285,7 +285,7 @@ async def test_no_volume_note_with_a_device(hass, home):
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"video_player": KODI, CONF_VOLUME_CONTROL: VOLUME_DEVICE, CONF_VOLUME_ENTITY: AVR}
     )
-    assert result["step_id"] == "devices"
+    assert result["step_id"] == "volume"
 
 
 # ------------------------------------------------------ groups and follow me

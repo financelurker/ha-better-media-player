@@ -291,6 +291,7 @@ class RoomController:
         self.wake = WakeAlarm(self)
         self._sleep_off_pending = False
         self.turning_off = False
+        self._was_on: bool | None = None  # None: not looked yet (no power-on after a restart)
 
     # ------------------------------------------------------------------ setup
 
@@ -321,6 +322,10 @@ class RoomController:
             if "cfg_volume" in self.data:
                 self.data.pop("room_volume", None)
                 self.data.pop("player_levels", None)
+                # a chosen preset means the same on the new output
+                preset = self.volume.preset
+                if preset is not None:
+                    self.data["room_volume"] = self.volume.presets[preset]
             self.data["cfg_volume"] = volume_cfg
         if self.data.get("last_source") not in self.sources:
             self.data["last_source"] = default_source
@@ -358,6 +363,7 @@ class RoomController:
             self._spawn(self.async_update("start"))
             self.sleep.async_started()
             self._spawn(self.night.async_started())
+            self._spawn(self.volume.async_started())
             self._spawn(self.wake.async_started())
 
         self._unsubs.append(async_at_started(self.hass, _started))
@@ -760,6 +766,17 @@ class RoomController:
                     await self._auto_on(now)
                 await self._auto_off(now)
             self._update_status()
+            # the room comes on: one of its players is used (plugs alone, e.g. follow
+            # me's prewarm or a plug switched by hand, are no "on"; the player's start
+            # takes the room volume a moment later); off only counts once everything
+            # is off and has reported (no dropout, no restart)
+            on = any(self.source_active(s) for s in self.sources.values())
+            if on and self._was_on is False:
+                self.volume.async_power_on()  # the power-on preset
+            if on:
+                self._was_on = True
+            elif self._fully_off():
+                self._was_on = False
             await self.sleep.async_apply_restores()
             if self.sleep.active and self._started and self._fully_off():
                 # everything went off by itself: the timer has nothing left to do
@@ -1311,6 +1328,9 @@ class RoomController:
                 translation_domain=DOMAIN, translation_key="room_off", translation_placeholders={"room": self.entry.title}
             )
         await self.sleep.async_extend(minutes)
+
+    async def async_set_volume_preset(self, preset: str | None) -> None:
+        await self.volume.async_set_preset(preset)
 
     async def async_media_call(self, service: str, data: dict | None = None) -> None:
         """Forward a media command to the active source."""

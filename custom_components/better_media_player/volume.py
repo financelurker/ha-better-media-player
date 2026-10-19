@@ -1,5 +1,10 @@
 """Room volume: one volume per room, not per media player.
 
+Presets (quiet, normal, loud, party; a volume per room) set the room volume
+by name. A preset stays chosen until the volume is changed otherwise; above
+the night mode's limit it is limited, and comes back after the night. The
+power-on preset (option) is the room volume whenever the room comes on.
+
 The room remembers the volume last chosen for it, wherever it was changed:
 through the room player, or directly on one of its players (Music Assistant
 app, Kodi remote, ...). When a player of the room starts to play on its own
@@ -34,7 +39,10 @@ from typing import TYPE_CHECKING
 
 from homeassistant.components.media_player import MediaPlayerEntityFeature
 from homeassistant.core import CALLBACK_TYPE, State, callback
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.event import async_call_later
+
+from .const import CONF_POWER_ON_PRESET, CONF_PRESET, DOMAIN, PRESET_NONE, PRESETS
 
 if TYPE_CHECKING:
     from .controller import RoomController, Source
@@ -77,6 +85,75 @@ class RoomVolume:
         value = self.ctrl.data.get("room_volume")
         return float(value) if value is not None else None
 
+    # ---------------------------------------------------------------- presets
+
+    @property
+    def presets(self) -> dict[str, float]:
+        """The room's presets (0..1), in their order; empty ones are not offered."""
+        out: dict[str, float] = {}
+        for name in PRESETS:
+            value = self.ctrl.opts.get(CONF_PRESET.format(name))
+            if value not in (None, "") and float(value) > 0:
+                out[name] = max(0.0, min(1.0, float(value) / 100))
+        return out
+
+    @property
+    def preset(self) -> str | None:
+        """The chosen preset (None: the volume was set otherwise)."""
+        name = self.ctrl.data.get("volume_preset")
+        return name if name in self.presets else None
+
+    def preset_value(self, name: str) -> float:
+        presets = self.presets
+        if name not in presets:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="preset_not_offered",
+                translation_placeholders={"preset": name, "room": self.ctrl.entry.title},
+            )
+        return presets[name]
+
+    @callback
+    def _choose(self, name: str | None, volume: float | None = None) -> None:
+        if name is None:
+            if self.ctrl.data.pop("volume_preset", None) is None:
+                return
+        else:
+            self.ctrl.data["volume_preset"] = name
+            # not limited by the night mode: the preset comes back after the night
+            self.ctrl.data["room_volume"] = round(volume, 3)
+        self.ctrl._save()
+        self.ctrl._notify()
+
+    async def async_set_preset(self, name: str | None) -> None:
+        """Choose a preset (None: none, the volume stays as it is)."""
+        if name is None:
+            self._choose(None)
+            return
+        self._choose(name, self.preset_value(name))
+        ctrl = self.ctrl
+        _LOGGER.debug("%s: volume preset %s", ctrl.entry.title, name)
+        if ctrl.volume_device is not None:
+            await self.async_apply_device()
+        else:
+            src = ctrl.active_source
+            if src is not None:
+                await self.async_apply(src)  # in a group: only remembered
+
+    @callback
+    def async_power_on(self) -> None:
+        """The room came on: the power-on preset is its volume (players get it
+        when they start)."""
+        name = self.ctrl.opts.get(CONF_POWER_ON_PRESET)
+        if name and name != PRESET_NONE and name in self.presets:
+            self._choose(name, self.presets[name])
+
+    async def async_started(self) -> None:
+        """HA is up: a chosen preset whose value was changed in the options."""
+        name = self.preset
+        if name is not None and self.value is not None and abs(self.presets[name] - self.value) >= 0.0005:
+            await self.async_set_preset(name)
+
     # ------------------------------------------------------------ own changes
 
     @callback
@@ -108,6 +185,7 @@ class RoomVolume:
         volume = round(max(0.0, min(1.0, self.ctrl.night.limit(float(volume)))), 3)
         if self.value is not None and abs(self.value - volume) < 0.0005:
             return
+        self.ctrl.data.pop("volume_preset", None)  # changed otherwise: no preset any more
         self.ctrl.data["room_volume"] = volume
         self.ctrl._save()
         self.ctrl._notify()

@@ -87,6 +87,7 @@ Settings → Devices & services → Add integration → **Better Media Player** 
 |---|---|
 | **New room** | Name and area. Kodi and Music Assistant players of the area are pre-selected in the next step. |
 | **Media players** | Video player (e.g. Kodi) and/or music player (the room's own player, not a group). Where the room's volume is set: on the players, or on an own device. |
+| **Volume presets** | Volumes for quiet, normal, loud and party; power-on preset. |
 | **Power devices** | Display (TV, projector), speakers (one or more: active speakers, amplifier, AVR), subwoofer. |
 | **Players: special cases** | Only if a player cannot turn itself on/off (on/off action) or its hardware hangs on a plug. |
 | **Times** | Run-down times, video idle timeout, start timeout, waits after switching on, default sleep timer fade-out, snooze time. |
@@ -205,6 +206,23 @@ With an amplifier, AV receiver or soundbar that has its own volume, choose **Roo
 - Switching between players and a device (or to another device) in the options starts the room volume afresh: it is learned from the new output.
 - The note about players that cannot set a volume is not shown: the device sets it.
 
+#### Presets
+
+Room volumes by name: **quiet**, **normal**, **loud** and **party** (default 15 / 30 / 50 / 70 %, set per room in *Volume presets*; 0 = not offered in the room). Choose one with the select `Volume preset` or the action below; this works with players and with a volume device alike.
+
+```yaml
+action: better_media_player.set_volume_preset
+target:
+  entity_id: media_player.living_room
+data:
+  preset: loud
+```
+
+- The preset becomes the room volume and is set right away on what plays. In a group (Music Assistant groups, follow me) it is only remembered: there the group decides; the room gets it with its next playback on its own (with a volume device: right away on the device).
+- It stays chosen until the volume is changed otherwise; then the select shows **manual** (choosing *manual* keeps the volume as it is). The room player shows it in the attribute `volume_preset`.
+- **Night mode:** a preset above the limit is limited, stays chosen and comes back when the night ends.
+- **Power-on preset** (option, default none): the room volume whenever the room comes on (one of its players is used again after everything was off), e.g. not at last night's party volume. Not after a restart of Home Assistant with the room already on, not when a player drops out for a moment, and not for follow me's prewarm.
+
 ### Night mode
 
 The switch `Night mode` puts the room into night mode until it is turned off again. Turning it on and off is up to you or to other integrations and automations (e.g. at bedtime and in the morning).
@@ -229,8 +247,8 @@ target:
 data:
   media_content_id: library://radio/42
   media_content_type: music
-  start_volume: 0.05        # default 0.05
-  target_volume: 0.3        # default: the room volume
+  start_volume: 0.05        # default 0.05; or a preset of the room, e.g. quiet
+  target_volume: 0.3        # default: the room volume (power-on preset if the wake turns the room on); or a preset, e.g. normal
   fade_minutes: 10          # default 10
   max_duration_minutes: 60  # optional: then the sleep timer fades out and turns the room off
   night_mode: false         # optional: switch the night mode before
@@ -320,6 +338,7 @@ With power sensors, a plug is cut only after its device has drawn less than the 
 | `sensor.<room>_wake` | wake state; snooze end, end time and volumes in the attributes |
 | `button.<room>_snooze`, `button.<room>_stop_wake` | wake controls (hidden while no wake runs) |
 | `number.<room>_night_maximum_volume`, `_night_video_idle_timeout`, `_night_display_run_down` | night mode limit (%) and times (min) |
+| `select.<room>_volume_preset` | volume preset (quiet, normal, loud, party, manual); only with at least one preset |
 | `sensor.<room>_follow` | follow state of the room (with occupancy sensors only) |
 | `button.<room>_follow_me`, `button.<room>_stop_follow_me` | start / stop follow me (only the usable one is shown) |
 | `sensor.better_media_player_follow_rooms` | central: rooms in follow me; follow-me player, start room in the attributes |

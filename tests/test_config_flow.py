@@ -40,6 +40,8 @@ async def test_full_flow(hass, home):
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {CONF_VIDEO_PLAYER: KODI, CONF_AUDIO_PLAYER: MUSIC}
     )
+    assert result["step_id"] == "volume"
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     assert result["step_id"] == "devices"
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {CONF_DISPLAY: [TV], CONF_SPEAKERS: [SPEAKERS]}
@@ -76,6 +78,10 @@ async def test_validation(hass, home):
     assert result["errors"] == {CONF_AUDIO_PLAYER: "group_player"}
 
     result = await hass.config_entries.flow.async_configure(flow, {CONF_AUDIO_PLAYER: MUSIC})
+    assert result["step_id"] == "volume"
+    result = await hass.config_entries.flow.async_configure(flow, {"power_on_preset": "party", "preset_party": 0})
+    assert result["errors"] == {"power_on_preset": "preset_not_offered"}
+    result = await hass.config_entries.flow.async_configure(flow, {})
     assert result["step_id"] == "devices"
     result = await hass.config_entries.flow.async_configure(flow, {CONF_DISPLAY: [TV]})
     assert result["errors"] == {CONF_DISPLAY: "display_needs_video"}
