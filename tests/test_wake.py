@@ -230,6 +230,8 @@ async def test_stop_by_hand_ends_wake(hass, home, freezer):
     await _wake_playing(hass, home, freezer)
     home.music("idle")
     await hass.async_block_till_done()
+    assert finished == []  # maybe just between two items
+    await _tick(hass, freezer, 12)
     assert [e.data["reason"] for e in finished] == ["stopped"]
 
 
@@ -280,8 +282,12 @@ async def test_new_wake_replaces(hass, home, freezer):
     await _wake_playing(hass, home, freezer)
     await _wake(hass, start_volume=0.1)
     assert [e.data["reason"] for e in finished] == ["replaced"]
-    assert hass.states.get(WAKE).state == "fading"  # the radio plays on: fades in again
     assert _vol(hass) == 0.1
+    # it played before: only a new playback (or the play check) counts as started
+    assert hass.states.get(WAKE).state == "starting"
+    home.music("playing", media_title="Morning show")
+    await hass.async_block_till_done()
+    assert hass.states.get(WAKE).state == "fading"
 
 
 # -------------------------------------------------------------- night mode

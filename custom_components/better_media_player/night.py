@@ -109,6 +109,7 @@ class NightMode:
                 await self._clamp(src)
         else:
             await self._fade_back()
+        ctrl.wake.async_night_changed()
         if (hub := ctrl.hub) is not None:
             hub.async_schedule("night_mode")
         await ctrl.async_update("night_mode")

@@ -407,6 +407,10 @@ class SleepTimer:
             if src is None:
                 pending.pop(player, None)
                 continue
+            if self.ctrl.wake.owns(player):
+                pending.pop(player, None)  # the wake sets this player's volume
+                self.ctrl._save()
+                continue
             state = self.ctrl.player_state(src)
             if state not in _POWERED:
                 continue

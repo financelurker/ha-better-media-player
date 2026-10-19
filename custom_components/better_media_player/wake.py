@@ -19,6 +19,7 @@ time (play check, snooze end or max duration) plus the fade's own steps.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -31,7 +32,9 @@ from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_NIGHT_FADE_IN,
     CONF_SLEEP_FADE,
+    CONF_START_TIMEOUT,
     CONF_SNOOZE_MINUTES,
     DOMAIN,
     EVENT_WAKE_FAILED,
@@ -46,6 +49,7 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 PLAY_TIMEOUT = 60  # s after the playback was requested
+STOP_SETTLE = 10  # s: a player between two items is idle for a moment, that is no stop
 RESTART_RETRY = 300  # s: a start cut by a restart is tried again within this time
 DEFAULT_START_VOLUME = 0.05
 DEFAULT_FADE_MINUTES = 10
@@ -90,9 +94,9 @@ class WakeAlarm:
         self.hass = ctrl.hass
         self._unsub: CALLBACK_TYPE | None = None
         self._ramp: VolumeRamp | None = None
-        self._task_running = False
-        self._snoozing = False  # our own pause is under way
-        self._task = None
+        self._task: asyncio.Task | None = None
+        self._stop_check: CALLBACK_TYPE | None = None
+        self._before: tuple | None = None  # player before the playback request
 
     # ------------------------------------------------------------------ state
 
@@ -126,6 +130,10 @@ class WakeAlarm:
             "snooze_until": ts(w.get("snooze_until")) if w["phase"] == PHASE_SNOOZED else None,
             "ends_at": ts(ends) if w["phase"] in (PHASE_FADING, PHASE_PLAYING) else None,
         }
+
+    @property
+    def _task_running(self) -> bool:
+        return self._task is not None and not self._task.done()
 
     def _src(self) -> Source | None:
         w = self._w
@@ -167,11 +175,12 @@ class WakeAlarm:
             await self.async_finish(REASON_REPLACED)
         if ctrl.sleep.active:
             await ctrl.sleep.async_cancel()  # a sleep timer would end the wake
-        if night_mode is not None:
-            await ctrl.night.async_set(night_mode)
+        player = ctrl.sources[key].player
         target = target_volume if target_volume is not None else ctrl.volume.value
         if target is None:
-            target = _volume(self.hass.states.get(ctrl.sources[key].player)) or 0.25
+            target = _volume(self.hass.states.get(player)) or 0.25
+        # the wake owns the player from here on: no room volume, no night fade back,
+        # no sleep timer restore on it
         ctrl.data["wake"] = {
             "phase": PHASE_STARTING,
             "source": key,
@@ -183,81 +192,103 @@ class WakeAlarm:
             "max_s": float(max_minutes) * 60 if max_minutes else None,
             "room_was_off": not ctrl.room_on,
             "started_at": _now(),
+            "requested_at": None,
             "playing_since": None,
             "fade_t0": None,
             "snooze_until": None,
-            "replay": False,
+            "user_volume": False,
         }
-        self._changed()
+        if ctrl.data.get("volume_restore", {}).pop(player, None) is not None:
+            ctrl._save()
+        if night_mode is not None:
+            await ctrl.night.async_set(night_mode)
+        ctrl.night.async_cancel_ramp(player)
+        self._changed(now=True)
         self._show_controls(True)
-        _LOGGER.info("%s: wake up on %s", ctrl.entry.title, ctrl.sources[key].player)
-        ctrl.night.async_cancel_ramp(ctrl.sources[key].player)
+        _LOGGER.info("%s: wake up on %s", ctrl.entry.title, player)
         self._spawn_start()
 
     @callback
     def _spawn_start(self) -> None:
-        if self._task_running:
+        w = self._w
+        if w is None or self._task_running:
             return
-        self._task_running = True
         # background: it may wait for a slow player (like the power sequence)
         self._task = self.hass.async_create_background_task(
-            self._start(), f"{DOMAIN}_{self.ctrl.entry.entry_id}_wake", eager_start=False
+            self._start(w), f"{DOMAIN}_{self.ctrl.entry.entry_id}_wake", eager_start=False
         )
 
-    async def _start(self) -> None:
-        """(Re)start the playback at the start volume; the play check follows."""
+    @callback
+    def _cancel_task(self) -> None:
+        task = self._task
+        if task is not None and not task.done() and task is not asyncio.current_task():
+            task.cancel()
+        self._task = None
+
+    def _snapshot(self, src: Source) -> tuple:
+        state = self.hass.states.get(src.player)
+        if state is None:
+            return (None, None, None)
+        return (state.state, state.attributes.get("media_content_id"), state.attributes.get("media_title"))
+
+    async def _start(self, w: dict[str, Any]) -> None:
+        """(Re)start the playback at the start volume; the play check follows.
+
+        Acts only on its own wake: a newer wake, a snooze or an end in the
+        meantime makes it stop."""
         ctrl = self.ctrl
+        src = ctrl.sources[w["source"]]
+        w["phase"] = PHASE_STARTING
+        w["started_at"] = _now()
+        w["seen_new"] = False
+        self._changed()
+        # safety net: also a start that hangs ends in a failed wake
+        self._schedule(_now() + float(ctrl.opts.get(CONF_START_TIMEOUT, 90)) + PLAY_TIMEOUT)
+        resume = w.pop("resume", False) and ctrl.player_state(src) == "paused"
+        self._before = self._snapshot(src)
         try:
-            w = self._w
-            if w is None:
-                return
-            src = ctrl.sources[w["source"]]
-            w["phase"] = PHASE_STARTING
-            w["started_at"] = _now()
-            self._changed()
-            try:
-                if w.get("resume"):
-                    await self._set_volume(src, w["start_volume"])
-                    await ctrl._player(src, "media_play")
-                else:
-                    # the room volume step in async_play_on gives the start volume
-                    await ctrl.async_play_on(w["source"], dict(w["data"]), room_mode=w.get("room_mode"))
-            except HomeAssistantError as err:
-                _LOGGER.warning("%s: wake start failed: %s", ctrl.entry.title, err)
-                await self._fail(FAILED_START)
-                return
-            if self._w is not w:
-                return  # ended meanwhile
-            w.pop("resume", None)
-            if ctrl.source_playing(src):
-                await self._playing()
+            if resume:
+                await self._set_volume(src, ctrl.night.limit(w["start_volume"]))
+                await ctrl._player(src, "media_play")
             else:
-                self._schedule(_now() + PLAY_TIMEOUT)
-        finally:
-            self._task_running = False
+                # the room volume step in async_play_on gives the start volume
+                await ctrl.async_play_on(w["source"], dict(w["data"]), room_mode=w.get("room_mode"))
+        except asyncio.CancelledError:
+            raise
+        except Exception as err:  # noqa: BLE001 - any failure of the start is a failed wake
+            _LOGGER.warning("%s: wake start failed: %s", ctrl.entry.title, err)
+            await self._fail(w, FAILED_START)
+            return
+        if self._w is not w or w["phase"] != PHASE_STARTING:
+            return  # ended, replaced or snoozed meanwhile
+        w["requested_at"] = _now()
+        self._schedule(w["requested_at"] + PLAY_TIMEOUT)
+        if w.get("seen_new") or (ctrl.source_playing(src) and self._before[0] not in _PLAYING):
+            await self._playing(w)
 
     async def _set_volume(self, src: Source, volume: float) -> None:
         if self.ctrl.player_supports(src, MediaPlayerEntityFeature.VOLUME_SET):
             await self.ctrl._player(src, "volume_set", {"volume_level": volume})
 
-    async def _playing(self) -> None:
+    async def _playing(self, w: dict[str, Any]) -> None:
         """It plays: fade in, arm the end."""
         ctrl = self.ctrl
-        w = self._w
-        if w is None or w["phase"] != PHASE_STARTING:
+        if self._w is not w or w["phase"] != PHASE_STARTING:
             return
         src = ctrl.sources[w["source"]]
         ctrl.volume.async_cancel_apply(src.player)  # this start's volume is the wake's
         w["playing_since"] = _now()
         w["fade_t0"] = _now()
+        w["user_volume"] = False
         w["phase"] = PHASE_FADING if w["fade_s"] > 0 else PHASE_PLAYING
         self._changed()
         self._fire(EVENT_WAKE_STARTED, {})
         target = ctrl.night.limit(w["target_volume"])
         if w["fade_s"] > 0:
             current = _volume(self.hass.states.get(src.player))
-            if current is not None and current > w["start_volume"] + 0.011:
-                await self._set_volume(src, ctrl.night.limit(w["start_volume"]))
+            start = ctrl.night.limit(w["start_volume"])
+            if current is not None and current > start + 0.011:
+                await self._set_volume(src, start)
             self._fade(src, target, w["fade_s"])
         else:
             await self._set_volume(src, target)
@@ -284,6 +315,8 @@ class WakeAlarm:
         w = self._w
         if w is not None and w["phase"] == PHASE_FADING:
             w["phase"] = PHASE_PLAYING
+            if self._ramp is not None and self._ramp.aborted:
+                w["user_volume"] = True
             self._changed()
 
     @callback
@@ -294,14 +327,30 @@ class WakeAlarm:
         else:
             self._unschedule()
 
-    async def _fail(self, reason: str) -> None:
-        w = self._w
-        if w is None:
-            return
+    async def _fail(self, w: dict[str, Any], reason: str) -> None:
+        if self._w is not w:
+            return  # an older wake's start: the current one is not affected
         self._clear()
         self._fire(EVENT_WAKE_FAILED, {"reason": reason})
         if w.get("room_was_off"):
             await self.ctrl.async_turn_off()
+
+    @callback
+    def async_night_changed(self) -> None:
+        """The night mode's limit changed: the fade aims at the new target."""
+        w = self._w
+        src = self._src()
+        if w is None or src is None:
+            return
+        target = self.ctrl.night.limit(w["target_volume"])
+        if w["phase"] == PHASE_FADING and w.get("fade_t0"):
+            left = w["fade_t0"] + w["fade_s"] - _now()
+            self._fade(src, target, max(left, 0))
+        elif w["phase"] == PHASE_PLAYING and not w.get("user_volume"):
+            current = _volume(self.hass.states.get(src.player))
+            if current is not None and current < target - 0.011:
+                w["phase"] = PHASE_FADING
+                self._fade(src, target, float(self.ctrl.opts.get(CONF_NIGHT_FADE_IN, 0)) * 60)
 
     # ---------------------------------------------------------------- events
 
@@ -311,44 +360,74 @@ class WakeAlarm:
         if w is None or new is None or old is None or src.key != w["source"]:
             return
         phase = w["phase"]
-        if phase == PHASE_STARTING and new.state in _PLAYING and not self._task_running:
-            self.ctrl._spawn(self._playing())
-        elif phase == PHASE_STARTING and new.state in _PLAYING:
-            pass  # the start task sees it right after play_media
-        elif phase in (PHASE_FADING, PHASE_PLAYING) and old.state in _PLAYING:
-            if new.state == "paused" and not self._snoozing:
+        if phase == PHASE_STARTING:
+            if new.state in _PLAYING and (
+                old.state not in _PLAYING
+                or old.attributes.get("media_content_id") != new.attributes.get("media_content_id")
+                or old.attributes.get("media_title") != new.attributes.get("media_title")
+            ):
+                w["seen_new"] = True  # the new playback runs
+                if w.get("requested_at") is not None:
+                    self.ctrl._spawn(self._playing(w))
+        elif phase in (PHASE_FADING, PHASE_PLAYING):
+            if new.state == "paused" and old.state in _PLAYING:
                 _LOGGER.info("%s: paused during the wake: snooze", self.ctrl.entry.title)
                 self.ctrl._spawn(self.async_snooze(None))
-            elif new.state in ("idle", "off", "standby", "on"):
+            elif new.state not in _PLAYING and new.state != "paused" and old.state in _PLAYING:
+                self._schedule_stop_check(w)
+            elif new.state in _PLAYING:
+                self._cancel_stop_check()
+
+    @callback
+    def _schedule_stop_check(self, w: dict[str, Any]) -> None:
+        """Stopped? Only if it stays so for a moment (not between two items)."""
+        if self._stop_check is not None:
+            return
+
+        @callback
+        def _due(_now_dt) -> None:
+            self._stop_check = None
+            src = self._src()
+            if self._w is w and src is not None and self.ctrl.player_state(src) not in (*_PLAYING, "paused"):
                 self.ctrl._spawn(self.async_finish(REASON_STOPPED))
+
+        self._stop_check = async_track_point_in_utc_time(
+            self.hass, _due, dt_util.utc_from_timestamp(_now() + STOP_SETTLE)
+        )
+
+    @callback
+    def _cancel_stop_check(self) -> None:
+        if self._stop_check is not None:
+            self._stop_check()
+            self._stop_check = None
 
     # ---------------------------------------------------------------- snooze
 
     async def async_snooze(self, minutes: float | None) -> None:
         w = self._w
-        if w is None or w["phase"] not in (PHASE_FADING, PHASE_PLAYING):
+        if w is None or w["phase"] == PHASE_SNOOZED:
             _LOGGER.debug("%s: snooze without a running wake: nothing to do", self.ctrl.entry.title)
             return
         ctrl = self.ctrl
         src = ctrl.sources[w["source"]]
         minutes = float(ctrl.opts.get(CONF_SNOOZE_MINUTES, 9)) if minutes is None else float(minutes)
+        starting = w["phase"] == PHASE_STARTING
+        self._cancel_task()
+        self._cancel_stop_check()
         if self._ramp is not None:
             self._ramp.stop()
         w["phase"] = PHASE_SNOOZED
         w["snooze_until"] = _now() + minutes * 60
         can_pause = ctrl.player_supports(src, MediaPlayerEntityFeature.PAUSE)
-        w["resume"] = can_pause
+        # a start that was still under way is done again from the beginning
+        w["resume"] = can_pause and not starting
         self._changed(now=True)
         self._schedule(w["snooze_until"])
-        self._snoozing = True
-        try:
-            if ctrl.source_playing(src):
-                if can_pause:
-                    await ctrl._player(src, "media_pause")
-                elif ctrl.player_supports(src, MediaPlayerEntityFeature.STOP):
-                    await ctrl._player(src, "media_stop")
-        finally:
-            self._snoozing = False
+        if ctrl.source_playing(src):
+            if can_pause:
+                await ctrl._player(src, "media_pause")
+            elif ctrl.player_supports(src, MediaPlayerEntityFeature.STOP):
+                await ctrl._player(src, "media_stop")
         _LOGGER.info("%s: snooze for %.0f min", ctrl.entry.title, minutes)
 
     # ------------------------------------------------------------------- end
@@ -365,6 +444,8 @@ class WakeAlarm:
     @callback
     def _clear(self) -> None:
         self._unschedule()
+        self._cancel_stop_check()
+        self._cancel_task()
         if self._ramp is not None:
             self._ramp.stop()
         self.ctrl.data.pop("wake", None)
@@ -395,11 +476,22 @@ class WakeAlarm:
         w = self._w
         if w is None or self.ctrl._stopped:
             return
+        ctrl = self.ctrl
         now = _now()
         phase = w["phase"]
         if phase == PHASE_STARTING:
-            if not self._task_running and now - w["started_at"] >= PLAY_TIMEOUT:
-                await self._fail(FAILED_NOT_PLAYING)
+            src = ctrl.sources[w["source"]]
+            if self._task_running:
+                # the start hangs (beyond start timeout + play check)
+                self._cancel_task()
+                await self._fail(w, FAILED_START)
+            elif w.get("requested_at") is not None and now - w["requested_at"] >= PLAY_TIMEOUT - 0.5:
+                if ctrl.source_playing(src):
+                    await self._playing(w)  # plays (the same media as before, maybe)
+                else:
+                    await self._fail(w, FAILED_NOT_PLAYING)
+            else:
+                self._schedule((w.get("requested_at") or now) + PLAY_TIMEOUT)
         elif phase == PHASE_SNOOZED:
             if now >= w["snooze_until"]:
                 self._spawn_start()
@@ -436,10 +528,12 @@ class WakeAlarm:
             self._clear()
             return
         if phase == PHASE_STARTING:
-            if now - w["started_at"] < RESTART_RETRY:
+            if self.ctrl.source_playing(src) and w.get("requested_at") is not None:
+                await self._playing(w)  # it got going before the restart
+            elif now - w["started_at"] < RESTART_RETRY:
                 self._spawn_start()
             else:
-                await self._fail(FAILED_START)
+                await self._fail(w, FAILED_START)
         elif phase == PHASE_SNOOZED:
             self._schedule(w["snooze_until"])
         elif phase == PHASE_FADING:
@@ -454,10 +548,9 @@ class WakeAlarm:
 
     @callback
     def async_stop(self) -> None:
-        if self._task is not None and not self._task.done():
-            self._task.cancel()
-        self._task_running = False
+        self._cancel_task()
         self._unschedule()
+        self._cancel_stop_check()
         if self._ramp is not None:
             self._ramp.stop()
 
@@ -483,16 +576,27 @@ class WakeAlarm:
 
     @callback
     def _show_controls(self, show: bool) -> None:
-        """Snooze / stop buttons: hidden while no wake runs (only if nobody else hid them)."""
+        """Snooze / stop buttons: hidden while no wake runs.
+
+        Never against the user: a button they hid stays hidden, one they showed
+        again while no wake ran is not hidden any more.
+        """
         reg = er.async_get(self.hass)
+        marks: dict[str, str] = self.ctrl.data.setdefault("wake_controls", {})
         for key in CONTROL_KEYS:
             entity_id = reg.async_get_entity_id("button", DOMAIN, f"{self.ctrl.entry.entry_id}_{key}")
-            if entity_id is None:
-                continue
-            entry = reg.async_get(entity_id)
+            entry = reg.async_get(entity_id) if entity_id else None
             if entry is None:
                 continue
-            if show and entry.hidden_by == er.RegistryEntryHider.INTEGRATION:
-                reg.async_update_entity(entity_id, hidden_by=None)
-            elif not show and entry.hidden_by is None:
-                reg.async_update_entity(entity_id, hidden_by=er.RegistryEntryHider.INTEGRATION)
+            mark = marks.get(entry.unique_id)
+            if show:
+                if entry.hidden_by == er.RegistryEntryHider.INTEGRATION:
+                    reg.async_update_entity(entity_id, hidden_by=None)
+                    marks[entry.unique_id] = "shown"
+            elif mark != "user" and entry.hidden_by is None:
+                if mark == "hidden":
+                    marks[entry.unique_id] = "user"  # shown again by the user
+                else:
+                    reg.async_update_entity(entity_id, hidden_by=er.RegistryEntryHider.INTEGRATION)
+                    marks[entry.unique_id] = "hidden"
+        self.ctrl._save()

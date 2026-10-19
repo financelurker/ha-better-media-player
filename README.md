@@ -219,12 +219,14 @@ data:
 
 - **Which player:** media picked through the room player (media selector of an automation) names the player itself, so a film wakes on Kodi and turns the display on. Other media go to the music player, or to `source: video`.
 - **No playback** within 60 s, or a failed start: the event `better_media_player_wake_failed` (`reason`: `start_failed` / `not_playing`) is fired so a different source can be tried, and the room goes off again if it was off before. A successful start fires `better_media_player_wake_started`.
-- **Snooze** (button, `better_media_player.snooze` with optional `minutes`, default 9, or a pause on the player): pauses (or stops, if the player cannot pause), keeps the room powered, then starts again at the start volume and fades in. `max_duration` counts from the last start.
-- A **volume change** by hand ends only the fade.
+- **Snooze** (button, `better_media_player.snooze` with optional `minutes`, default 9, or a pause on the player): pauses (or stops, if the player cannot pause), keeps the room powered, then continues at the start volume and fades in; a player that is no longer paused by then starts the media again. Snoozing during the start starts it again from the beginning afterwards. `max_duration` counts from the last start.
+- A **volume change** by hand ends only the fade. Switching the night mode off during the wake lets the fade (or the volume) go up to the full target.
+- **Already playing:** a wake replaces the playback; it counts as started once the new playback runs (or something plays at the play check).
+- A player that goes idle for a moment (between two items) is no stop; only a stop that lasts 10 s ends the wake.
 - **Ends** (`better_media_player_wake_finished`, `reason`): `stopped` (button / `better_media_player.stop_wake` / a stop on the player; the playback goes on unless stopped), `max_duration`, `room_off`, `sleep_timer` (a sleep timer set during the wake; the playback goes on), `replaced` (a new wake). A wake ends a running sleep timer.
 - What the wake sets is not taken as the room volume; the night mode's limit holds.
 - It survives a restart: the fade and the snooze go on, a start cut by the restart is tried again (within 5 min).
-- The sensor `Wake` shows `idle`, `starting`, `fading`, `playing` or `snoozed`. The buttons *Snooze* and *Stop wake* are hidden and unavailable while no wake runs. Cards that list them explicitly still show them; to show them only during a wake:
+- The sensor `Wake` shows `idle`, `starting`, `fading`, `playing` or `snoozed`. The buttons *Snooze* and *Stop wake* are hidden and unavailable while no wake runs (a button you hid stays hidden; one you show again stays shown). Cards that list them explicitly still show them; to show them only during a wake:
 
 ```yaml
 type: conditional
