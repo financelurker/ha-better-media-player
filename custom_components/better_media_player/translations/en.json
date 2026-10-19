@@ -509,11 +509,11 @@
         },
         "start_volume": {
           "name": "Start volume",
-          "description": "0-1; default 0.05. Or a preset of the room (quiet, normal, loud, party)."
+          "description": "0..1 (e.g. 0.05) or a preset of the room. Default 0.05."
         },
         "target_volume": {
           "name": "Target volume",
-          "description": "0-1; default the room volume. Or a preset of the room (quiet, normal, loud, party)."
+          "description": "0..1 or a preset of the room. Default: the room volume."
         },
         "fade_minutes": {
           "name": "Fade-in",

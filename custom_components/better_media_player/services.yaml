@@ -56,16 +56,24 @@ wake:
         text:
     start_volume:
       selector:
-        number:
-          min: 0
-          max: 1
-          step: 0.01
+        select:
+          custom_value: true
+          translation_key: preset
+          options:
+            - quiet
+            - normal
+            - loud
+            - party
     target_volume:
       selector:
-        number:
-          min: 0
-          max: 1
-          step: 0.01
+        select:
+          custom_value: true
+          translation_key: preset
+          options:
+            - quiet
+            - normal
+            - loud
+            - party
     fade_minutes:
       selector:
         number:

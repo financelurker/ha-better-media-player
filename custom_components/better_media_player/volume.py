@@ -148,6 +148,12 @@ class RoomVolume:
         if name and name != PRESET_NONE and name in self.presets:
             self._choose(name, self.presets[name])
 
+    async def async_started(self) -> None:
+        """HA is up: a chosen preset whose value was changed in the options."""
+        name = self.preset
+        if name is not None and self.value is not None and abs(self.presets[name] - self.value) >= 0.0005:
+            await self.async_set_preset(name)
+
     # ------------------------------------------------------------ own changes
 
     @callback

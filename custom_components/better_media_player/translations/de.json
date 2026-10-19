@@ -509,11 +509,11 @@
         },
         "start_volume": {
           "name": "Startlautstärke",
-          "description": "0-1; Vorgabe 0,05. Oder ein Preset des Raums (quiet, normal, loud, party)."
+          "description": "0..1 (z. B. 0.05) oder ein Preset des Raums. Standard 0.05."
         },
         "target_volume": {
           "name": "Ziellautstärke",
-          "description": "0-1; Vorgabe die Raumlautstärke. Oder ein Preset des Raums (quiet, normal, loud, party)."
+          "description": "0..1 oder ein Preset des Raums. Standard: die Raumlautstärke."
         },
         "fade_minutes": {
           "name": "Einblenden",
