@@ -5,8 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 import voluptuous as vol
+from homeassistant.components.media_player import MediaPlayerEntityFeature
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
-from homeassistant.const import CONF_NAME
+from homeassistant.const import ATTR_FRIENDLY_NAME, ATTR_SUPPORTED_FEATURES, CONF_NAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
@@ -240,6 +241,19 @@ def _validate(hass: HomeAssistant, options: dict) -> dict[str, str]:
     return errors
 
 
+def _without_volume(hass: HomeAssistant, options: dict) -> list[str]:
+    """Chosen players that cannot set a volume (room volume does not work for them)."""
+    out = []
+    for key in (CONF_VIDEO_PLAYER, CONF_AUDIO_PLAYER):
+        state = hass.states.get(options[key]) if options.get(key) else None
+        if state is None:
+            continue  # not known right now: nothing to say
+        features = int(state.attributes.get(ATTR_SUPPORTED_FEATURES, 0) or 0)
+        if not features & MediaPlayerEntityFeature.VOLUME_SET:
+            out.append(str(state.attributes.get(ATTR_FRIENDLY_NAME) or state.entity_id))
+    return out
+
+
 def _area_suggestions(hass: HomeAssistant, area_id: str | None) -> dict[str, str]:
     """Pre-select Kodi / Music Assistant players of the chosen area."""
     if not area_id:
@@ -306,7 +320,16 @@ class BetterMediaPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_sources(self, user_input: dict | None = None) -> ConfigFlowResult:
-        return await self._step("sources", user_input, self.async_step_devices)
+        return await self._step("sources", user_input, self.async_step_volume_note)
+
+    async def async_step_volume_note(self, user_input: dict | None = None) -> ConfigFlowResult:
+        """Only a note: a chosen player cannot set a volume."""
+        players = _without_volume(self.hass, self._options)
+        if user_input is not None or not players:
+            return await self.async_step_devices()
+        return self.async_show_form(
+            step_id="volume_note", data_schema=vol.Schema({}), description_placeholders={"players": ", ".join(players)}
+        )
 
     async def async_step_devices(self, user_input: dict | None = None) -> ConfigFlowResult:
         return await self._step("devices", user_input, self.async_step_advanced)
@@ -392,7 +415,18 @@ class BetterMediaPlayerOptionsFlow(OptionsFlow):
         return await self._section("room", user_input)
 
     async def async_step_sources(self, user_input=None) -> ConfigFlowResult:
-        return await self._section("sources", user_input)
+        result = await self._section("sources", user_input)
+        if user_input is not None and result.get("step_id") == "init" and _without_volume(self.hass, self.options):
+            return await self.async_step_volume_note()
+        return result
+
+    async def async_step_volume_note(self, user_input=None) -> ConfigFlowResult:
+        players = _without_volume(self.hass, self.options)
+        if user_input is not None or not players:
+            return await self.async_step_init()
+        return self.async_show_form(
+            step_id="volume_note", data_schema=vol.Schema({}), description_placeholders={"players": ", ".join(players)}
+        )
 
     async def async_step_devices(self, user_input=None) -> ConfigFlowResult:
         return await self._section("devices", user_input)

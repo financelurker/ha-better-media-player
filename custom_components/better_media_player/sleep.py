@@ -404,7 +404,10 @@ class SleepTimer:
             if not self._unchanged(self._volume(player), item.get("left")):
                 continue  # someone set a volume meanwhile (e.g. follow me's join): it wins
             if self.ctrl.player_supports(src, MediaPlayerEntityFeature.VOLUME_SET):
-                await self.ctrl._player(src, "volume_set", {"volume_level": item["volume"]})
+                # the room's volume is what the player would get next anyway
+                room = self.ctrl.volume.value
+                target = room if room is not None else item["volume"]
+                await self.ctrl._player(src, "volume_set", {"volume_level": target})
 
     # ----------------------------------------------------------------- event
 

@@ -120,6 +120,10 @@
           "volume_offset": "Percentage points relative to the group volume when the room joins, e.g. -10.",
           "prewarm": "Speakers on as soon as follow music plays anywhere, so sound is there instantly when you come in."
         }
+      },
+      "volume_note": {
+        "title": "Note: volume",
+        "description": "{players} cannot set a volume. The room volume (one volume for the whole room, taken along when switching between the players) does not work for it. Everything else works as usual."
       }
     },
     "error": {
@@ -232,6 +236,10 @@
           "volume_offset": "Percentage points relative to the group volume when the room joins, e.g. -10.",
           "prewarm": "Speakers on as soon as follow music plays anywhere, so sound is there instantly when you come in."
         }
+      },
+      "volume_note": {
+        "title": "Note: volume",
+        "description": "{players} cannot set a volume. The room volume (one volume for the whole room, taken along when switching between the players) does not work for it. Everything else works as usual."
       }
     },
     "error": {

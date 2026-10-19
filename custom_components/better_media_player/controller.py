@@ -108,6 +108,7 @@ from .const import (
 )
 from .hub import get_hub, get_rooms
 from .sleep import REASON_ROOM_OFF, SleepTimer
+from .volume import RoomVolume
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -276,6 +277,7 @@ class RoomController:
         self.follow_state = FOLLOW_INACTIVE
 
         self.sleep = SleepTimer(self)
+        self.volume = RoomVolume(self)
         self._sleep_off_pending = False
         self.turning_off = False
 
@@ -343,6 +345,7 @@ class RoomController:
             unsub()
         self._unsubs.clear()
         self.sleep.async_stop()
+        self.volume.async_stop()
         seq = self._seq_task
         self._cancel_sequence()
         if seq is not None:
@@ -395,6 +398,7 @@ class RoomController:
         for src in self.sources.values():
             if entity_id != src.player:
                 continue
+            self.volume.async_on_state(src, old, new)
             was_playing = old is not None and old.state in PLAYING_STATES
             is_playing = new is not None and new.state in PLAYING_STATES
             if is_playing and not was_playing:
@@ -889,6 +893,8 @@ class RoomController:
             await self._call("homeassistant", SERVICE_TURN_ON if on else SERVICE_TURN_OFF, data)
 
     async def _player(self, src: Source, service: str, extra: dict | None = None) -> bool:
+        if service == "volume_set" and extra and "volume_level" in extra:
+            self.volume.note_own(src.player, extra["volume_level"])
         return await self._call(MP_DOMAIN, service, {ATTR_ENTITY_ID: src.player, **(extra or {})})
 
     async def _source_on(self, src: Source) -> None:
@@ -1108,6 +1114,8 @@ class RoomController:
                 # play here, not on the whole group (independent of Music
                 # Assistant's 'play media overrides group' setting)
                 await self._player(src, "unjoin")
+            # played here on its own: with the room's volume from the first second
+            await self.volume.async_apply(src, left_group=True)
         ctx = Context()
         self._own_contexts.append(ctx.id)
         await self.hass.services.async_call(
@@ -1212,6 +1220,8 @@ class RoomController:
         src = self.active_source
         if src is None:
             return
+        if service == "volume_set" and data and "volume_level" in data:
+            self.volume.learn_wish(src, data["volume_level"])
         await self._player(src, service, data)
 
 

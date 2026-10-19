@@ -182,6 +182,7 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
             "room_status": self.ctrl.status,
             "sleep_timer_ends_at": ends.isoformat() if ends else None,
             "sleep_timer_fading": self.ctrl.sleep.fading,
+            "room_volume": self.ctrl.volume.value,
         }
 
     # -------------------------------------------------------------- media info
