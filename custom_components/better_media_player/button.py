@@ -32,17 +32,25 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class AllOffButton(BetterMediaPlayerEntity, ButtonEntity):
+class AllOffButton(ControlEntity, ButtonEntity):
     """Same as turning the room player off: stop sources, power down."""
+
+    @property
+    def usable(self) -> bool:
+        return self.ctrl.room_active or self.ctrl.has_power
 
     async def async_press(self) -> None:
         await self.ctrl.async_turn_off()
 
 
-class SleepPlusButton(BetterMediaPlayerEntity, ButtonEntity):
+class SleepPlusButton(ControlEntity, ButtonEntity):
     """Sleep timer +15 minutes (starts one if none runs)."""
 
     _attr_icon = "mdi:timer-plus-outline"
+
+    @property
+    def usable(self) -> bool:
+        return self.ctrl.room_active or self.ctrl.sleep.active
 
     async def async_press(self) -> None:
         await self.ctrl.async_extend_sleep_timer(15)

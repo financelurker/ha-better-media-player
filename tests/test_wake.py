@@ -318,6 +318,7 @@ async def test_night_mode_off_does_not_fade_back(hass, home, freezer):
 
 async def test_controls_hidden_while_no_wake(hass, home, freezer):
     await _room(hass, home)
+    await _tick(hass, freezer, 5)  # hidden after the start and the hide delay
     reg = er.async_get(hass)
     assert reg.async_get(SNOOZE).hidden_by == er.RegistryEntryHider.INTEGRATION
     await _wake_playing(hass, home, freezer)
@@ -325,6 +326,7 @@ async def test_controls_hidden_while_no_wake(hass, home, freezer):
     assert reg.async_get(STOP).hidden_by is None
     await hass.services.async_call(DOMAIN, "stop_wake", {"entity_id": ROOM}, blocking=True)
     await hass.async_block_till_done()
+    await _tick(hass, freezer, 5)  # hidden after the hide delay (3 s)
     assert reg.async_get(SNOOZE).hidden_by == er.RegistryEntryHider.INTEGRATION
 
 

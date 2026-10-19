@@ -18,7 +18,7 @@ from .const import (
     ROLE_VIDEO_HOST,
     SOURCE_VIDEO,
 )
-from .entity import BetterMediaPlayerEntity
+from .entity import BetterMediaPlayerEntity, ControlEntity
 from .sleep import MAX_MINUTES
 
 
@@ -95,8 +95,12 @@ class PresetNumber(MinutesNumber):
         await self.ctrl.volume.async_preset_changed(self._name)
 
 
-class SleepTimerNumber(BetterMediaPlayerEntity, NumberEntity):
+class SleepTimerNumber(ControlEntity, NumberEntity):
     """Minutes until the room turns itself off; 0 = no timer."""
+
+    @property
+    def usable(self) -> bool:
+        return self.ctrl.room_active or self.ctrl.sleep.active
 
     _attr_icon = "mdi:sleep"
     _attr_mode = NumberMode.BOX

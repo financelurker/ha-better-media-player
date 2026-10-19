@@ -253,6 +253,10 @@ class FollowManager:
     # ------------------------------------------------------------------ state
 
     @property
+    def visibility_ready(self) -> bool:
+        return self._started
+
+    @property
     def active(self) -> bool:
         """Follow me is on."""
         return bool(self.data.get("active")) and self.follow_player is not None
@@ -916,6 +920,10 @@ class FollowManager:
         task = self.hass.async_create_task(coro, eager_start=False)
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
+
+    @callback
+    def _save(self) -> None:
+        self._save_later()
 
     @callback
     def _save_later(self) -> None:

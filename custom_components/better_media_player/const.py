@@ -31,7 +31,10 @@ HUB_PLATFORMS: list[Platform] = [Platform.SENSOR]
 CONF_FOLLOW_PLAYER = "follow_player"  # the follow-me player: an MA group with dynamic members
 CONF_DEFAULT_VOLUME = "default_volume"  # %
 
-HUB_DEFAULTS: dict = {CONF_DEFAULT_VOLUME: 25}
+# controls that make no sense right now are hidden (all rooms), after a delay (s)
+CONF_DYNAMIC_CONTROLS = "dynamic_controls"
+CONF_HIDE_DELAY = "hide_delay"
+HUB_DEFAULTS: dict = {CONF_DEFAULT_VOLUME: 25, CONF_DYNAMIC_CONTROLS: True, CONF_HIDE_DELAY: 3}
 
 SERVICE_FOLLOW_START = "start_follow"
 SERVICE_FOLLOW_STOP = "stop_follow"

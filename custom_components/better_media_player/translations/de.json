@@ -97,19 +97,23 @@
         "description": "Was möchtest du hinzufügen?",
         "menu_options": {
           "room": "Einen Raum",
-          "hub": "Zentrale Einstellungen (Follow-Me)"
+          "hub": "Zentrale Einstellungen (Follow-Me, dynamische Controls)"
         }
       },
       "hub": {
         "title": "Zentrale Einstellungen",
-        "description": "Follow-Me: Die Musik folgt den Personen von Raum zu Raum. Wähle den Follow-Me-Player: einen Music-Assistant-Gruppen-Player mit dynamischen Mitgliedern. Gestartet wird Follow-Me in einem Raum, in dem Musik läuft (Button oder Aktion); jede andere Gruppe spielt einfach.",
+        "description": "Follow-Me: Die Musik folgt den Personen von Raum zu Raum. Wähle den Follow-Me-Player: ein Music-Assistant-Gruppenplayer mit dynamischen Mitgliedern (leer: kein Follow-Me). Follow-Me wird in einem Raum gestartet, in dem Musik läuft (Button oder Aktion); alle anderen Gruppen spielen einfach. Dynamische Controls: Controls eines Raums, die gerade keinen Sinn ergeben, werden ausgeblendet (z. B. der Sleep-Timer, solange nichts läuft) – in allen Räumen.",
         "data": {
           "follow_player": "Follow-Me-Player",
-          "default_volume": "Standard-Lautstärke"
+          "default_volume": "Standard-Lautstärke",
+          "dynamic_controls": "Dynamische Controls",
+          "hide_delay": "Ausblende-Verzögerung"
         },
         "data_description": {
-          "follow_player": "Ein Music-Assistant-Gruppen-Player mit dynamischen Mitgliedern (keine statischen Mitglieder).",
-          "default_volume": "Solange Follow-Me noch keine Lautstärke kennt (es übernimmt die des Raums, in dem es gestartet wird)."
+          "follow_player": "Ein Music-Assistant-Gruppenplayer mit dynamischen Mitgliedern; leer: kein Follow-Me.",
+          "default_volume": "Solange Follow-Me noch keine Lautstärke kennt (es übernimmt die des Raums, in dem es gestartet wird).",
+          "dynamic_controls": "Controls ausblenden, die gerade keinen Sinn ergeben (alle Räume). Aus: alles bleibt sichtbar.",
+          "hide_delay": "Wie lange ein Control bleibt, nachdem es keinen Sinn mehr ergibt (wieder eingeblendet wird sofort)."
         }
       },
       "follow": {
@@ -200,11 +204,15 @@
         },
         "data": {
           "follow_player": "Follow-Me-Player",
-          "default_volume": "Standard-Lautstärke"
+          "default_volume": "Standard-Lautstärke",
+          "dynamic_controls": "Dynamische Controls",
+          "hide_delay": "Ausblende-Verzögerung"
         },
         "data_description": {
-          "follow_player": "Ein Music-Assistant-Gruppen-Player mit dynamischen Mitgliedern (keine statischen Mitglieder).",
-          "default_volume": "Solange Follow-Me noch keine Lautstärke kennt (es übernimmt die des Raums, in dem es gestartet wird)."
+          "follow_player": "Ein Music-Assistant-Gruppenplayer mit dynamischen Mitgliedern; leer: kein Follow-Me.",
+          "default_volume": "Solange Follow-Me noch keine Lautstärke kennt (es übernimmt die des Raums, in dem es gestartet wird).",
+          "dynamic_controls": "Controls ausblenden, die gerade keinen Sinn ergeben (alle Räume). Aus: alles bleibt sichtbar.",
+          "hide_delay": "Wie lange ein Control bleibt, nachdem es keinen Sinn mehr ergibt (wieder eingeblendet wird sofort)."
         }
       },
       "room": {
