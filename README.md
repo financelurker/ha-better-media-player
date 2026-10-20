@@ -363,15 +363,15 @@ With power sensors, a plug is cut only after its device has drawn less than the 
 
 ## Dynamic controls
 
-A room's controls that make no sense right now are hidden (`hidden_by: integration`), so the automatic dashboards only show what can be used. A control is shown at once when it makes sense again and hidden only after the hide delay (default 3 s), so a short stop between two items changes nothing. The room player itself is always shown; settings and diagnostic entities are left alone.
+A room's controls that make no sense right now are hidden (`hidden_by: integration`), so the automatic dashboards only show what can be used. A control is shown at once when it makes sense again and hidden only after the hide delay (default 3 s), so a short stop between two items changes nothing. The room player and the night mode are always shown; settings and diagnostic entities are left alone.
 
 | Control | Shown while |
 |---|---|
 | All off | the room plays or is on, or a device still has power (run-down, manual mode) |
 | Sleep timer, Sleep timer +15 min | the room plays or is on, or a sleep timer runs |
 | Sleep timer end | a sleep timer runs |
-| Night mode | the room plays or is on, it is on, or follow me runs and the room takes part (occupancy sensors and a music player; music may come in: it joins limited) |
-| Quiet | follow me runs and the room takes part, or it is on (it only matters for follow me, also while nothing plays here) |
+| Night mode | always (it is set ahead, also while nothing plays) |
+| Quiet | always in a room that takes part in follow me (occupancy sensors, a music player, a follow-me player in the central settings); elsewhere while it is on |
 | Wake, Snooze, Stop wake | a wake runs |
 | Follow me / Stop follow me | it can be started here / follow me runs |
 | Volume preset | the room plays or is on |

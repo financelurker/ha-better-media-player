@@ -45,12 +45,13 @@ class AutoPowerSwitch(BetterMediaPlayerEntity, SwitchEntity):
 class QuietSwitch(ControlEntity, SwitchEntity):
     """On: follow music leaves this room out (e.g. bedroom at night).
 
-    Only matters for follow me (also while nothing plays here): shown while
-    follow me runs, or while it is on."""
+    Set ahead (also while nothing plays here, before follow me starts):
+    always shown in a room that takes part in follow me; elsewhere only while
+    it is on (it has no effect there)."""
 
     @property
     def usable(self) -> bool:
-        return self.ctrl.follow_running or self.ctrl.quiet
+        return self.ctrl.follow_room or self.ctrl.quiet
 
     _attr_icon = "mdi:sleep"
 
@@ -68,12 +69,12 @@ class QuietSwitch(ControlEntity, SwitchEntity):
 class NightModeSwitch(ControlEntity, SwitchEntity):
     """On: no subwoofer, shorter video times, volume limit. Stays on until turned off.
 
-    Shown while the room plays, while it is on, and while follow me runs
-    (music may come in: it joins limited)."""
+    Always shown: it is set ahead (also while nothing plays, e.g. at bedtime)
+    for what comes later (playback, follow me, a wake)."""
 
     @property
     def usable(self) -> bool:
-        return self.ctrl.room_active or self.ctrl.night.active or self.ctrl.follow_running
+        return True
 
     _attr_icon = "mdi:weather-night"
 

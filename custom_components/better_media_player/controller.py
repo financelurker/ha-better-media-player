@@ -537,10 +537,10 @@ class RoomController:
         return any(self.is_on(e) for e in self.power_entities)
 
     @property
-    def follow_running(self) -> bool:
-        """Follow me runs and this room takes part in it."""
+    def follow_room(self) -> bool:
+        """The room takes part in follow me (follow me is set up)."""
         hub = self.hub
-        return self.follow_capable and hub is not None and hub.active
+        return self.follow_capable and hub is not None and hub.follow_player is not None
 
     def vol(self, src: Source) -> PlayerOutput | DeviceOutput:
         """Where this source's volume is heard (room features act there)."""
