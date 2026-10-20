@@ -19,6 +19,7 @@ from .const import (
     CONF_ENTRY_TYPE,
     CONF_FOLLOW_PLAYER,
     DOMAIN,
+    ENTITY_DEFAULTS,
     ENTRY_TYPE_HUB,
     HUB_PLATFORMS,
     PLATFORMS,
@@ -42,8 +43,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """1 -> 2: the central entry has one follow-me player instead of group policies."""
-    if entry.version > 2:
+    """1 -> 2: the central entry has one follow-me player instead of group policies.
+    2 -> 3: values set on the room device (number entities) are no longer options."""
+    if entry.version > 3:
         return False
     if entry.version == 1:
         options = dict(entry.options)
@@ -57,6 +59,21 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if old := reg.async_get_entity_id("button", DOMAIN, f"{entry.entry_id}_start_follow"):
                 reg.async_remove(old)
         hass.config_entries.async_update_entry(entry, options=options, version=2)
+    if entry.version == 2:
+        options = dict(entry.options)
+        if not is_hub(entry):
+            store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
+            data = await store.async_load() or {}
+            for key in ENTITY_DEFAULTS:
+                if key not in options:
+                    continue
+                value = float(options.pop(key) or 0)
+                # an option change not yet taken by the entity wins (as before)
+                if key not in data or data.get(f"cfg_{key}") != value:
+                    data[key] = value
+                data.pop(f"cfg_{key}", None)
+            await store.async_save(data)
+        hass.config_entries.async_update_entry(entry, options=options, version=3)
     return True
 
 

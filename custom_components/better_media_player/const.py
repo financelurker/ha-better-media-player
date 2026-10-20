@@ -160,11 +160,20 @@ CONF_AUDIO_STANDBY_W = "audio_standby_w"
 CONF_AUDIO_STANDBY_MAX = "audio_standby_max"  # min
 STANDBY_HOLD_SECONDS = 30
 
-DEFAULTS: dict = {
+# set on the room device (number entities), not in the options; first values
+ENTITY_DEFAULTS: dict = {
     CONF_DISPLAY_RUN_DOWN: 10,
     CONF_AUDIO_RUN_DOWN: 2,
     CONF_HOST_RUN_DOWN: 2,
     CONF_VIDEO_IDLE_TIMEOUT: 30,
+    CONF_NIGHT_VIDEO_IDLE_TIMEOUT: 5,
+    CONF_NIGHT_DISPLAY_RUN_DOWN: 1,
+    CONF_NIGHT_MAX_VOLUME: 30,
+    **{CONF_PRESET.format(name): value for name, value in PRESET_DEFAULTS.items()},
+}
+
+# room options
+DEFAULTS: dict = {
     CONF_START_TIMEOUT: 90,
     CONF_DISPLAY_ON_WAIT: 0,
     CONF_HOST_ON_WAIT: 0,
@@ -178,14 +187,10 @@ DEFAULTS: dict = {
     CONF_PRESENCE_RUN_DOWN: 2,
     CONF_VOLUME_OFFSET: 0,
     CONF_VOLUME_CONTROL: VOLUME_PLAYERS,
-    **{CONF_PRESET.format(name): value for name, value in PRESET_DEFAULTS.items()},
     CONF_POWER_ON_PRESET: PRESET_NONE,
     CONF_PREWARM: True,
     CONF_WAKE_DETECT_LEFT: True,
     CONF_SLEEP_FADE: 5,
-    CONF_NIGHT_VIDEO_IDLE_TIMEOUT: 5,
-    CONF_NIGHT_DISPLAY_RUN_DOWN: 1,
-    CONF_NIGHT_MAX_VOLUME: 30,
     CONF_NIGHT_FADE_IN: 2,
     CONF_SNOOZE_MINUTES: 9,
 }

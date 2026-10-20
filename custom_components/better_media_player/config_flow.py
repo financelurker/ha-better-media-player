@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import selector as sel
+from homeassistant.data_entry_flow import section
 
 from .const import (
     ACTION_DOMAINS,
@@ -23,7 +24,6 @@ from .const import (
     CONF_AUDIO_ON_WAIT,
     CONF_AUDIO_PLAYER,
     CONF_AUDIO_POWER,
-    CONF_AUDIO_RUN_DOWN,
     CONF_AUDIO_STANDBY,
     CONF_AUDIO_STANDBY_MAX,
     CONF_AUDIO_STANDBY_W,
@@ -34,33 +34,26 @@ from .const import (
     CONF_DISPLAY,
     CONF_DISPLAY_ON_WAIT,
     CONF_DISPLAY_POWER,
-    CONF_DISPLAY_RUN_DOWN,
     CONF_DISPLAY_STANDBY,
     CONF_DISPLAY_STANDBY_MAX,
     CONF_DISPLAY_STANDBY_W,
     CONF_ENTRY_TYPE,
     CONF_FOLLOW_PLAYER,
     CONF_HOST_ON_WAIT,
-    CONF_HOST_RUN_DOWN,
     CONF_OCCUPANCY,
     CONF_PRESENCE_RUN_DOWN,
     CONF_PREWARM,
     CONF_WAKE_DETECT_LEFT,
-    CONF_NIGHT_DISPLAY_RUN_DOWN,
     CONF_NIGHT_FADE_IN,
-    CONF_NIGHT_MAX_VOLUME,
-    CONF_NIGHT_VIDEO_IDLE_TIMEOUT,
     CONF_SLEEP_FADE,
     CONF_SNOOZE_MINUTES,
     CONF_SPEAKERS,
     CONF_START_TIMEOUT,
     CONF_VIDEO_HOST,
-    CONF_VIDEO_IDLE_TIMEOUT,
     CONF_VIDEO_OFF_ACTION,
     CONF_VIDEO_ON_ACTION,
     CONF_VIDEO_PLAYER,
     CONF_POWER_ON_PRESET,
-    CONF_PRESET,
     CONF_VOLUME_CONTROL,
     CONF_VOLUME_ENTITY,
     CONF_VOLUME_OFFSET,
@@ -105,115 +98,138 @@ def schema_room(with_name: bool) -> vol.Schema:
     return vol.Schema(fields)
 
 
-def schema_sources() -> vol.Schema:
-    return vol.Schema(
-        {
-            vol.Optional(CONF_VIDEO_PLAYER): _entity("media_player"),
-            vol.Optional(CONF_AUDIO_PLAYER): _entity("media_player"),
-            vol.Optional(CONF_VOLUME_CONTROL, default=VOLUME_PLAYERS): sel.SelectSelector(
-                sel.SelectSelectorConfig(
-                    options=[VOLUME_PLAYERS, VOLUME_DEVICE],
-                    translation_key=CONF_VOLUME_CONTROL,
-                    mode=sel.SelectSelectorMode.LIST,
-                )
-            ),
-            vol.Optional(CONF_VOLUME_ENTITY): _entity(VOLUME_ENTITY_DOMAINS),
-        }
-    )
-
-
-def schema_devices() -> vol.Schema:
-    return vol.Schema(
-        {
-            vol.Optional(CONF_DISPLAY): _entity(SWITCH_DOMAINS, multiple=True),
-            vol.Optional(CONF_SPEAKERS): _entity(SWITCH_DOMAINS, multiple=True),
-            vol.Optional(CONF_BASS): _entity(SWITCH_DOMAINS, multiple=True),
-        }
-    )
-
-
-def schema_advanced() -> vol.Schema:
-    return vol.Schema(
-        {
-            vol.Optional(CONF_VIDEO_ON_ACTION): _entity(ACTION_DOMAINS),
-            vol.Optional(CONF_VIDEO_OFF_ACTION): _entity(ACTION_DOMAINS),
-            vol.Optional(CONF_VIDEO_HOST): _entity(SWITCH_DOMAINS),
-            vol.Optional(CONF_AUDIO_ON_ACTION): _entity(ACTION_DOMAINS),
-            vol.Optional(CONF_AUDIO_OFF_ACTION): _entity(ACTION_DOMAINS),
-            vol.Optional(CONF_AUDIO_HOST): _entity(SWITCH_DOMAINS),
-        }
-    )
-
-
-def schema_volume() -> vol.Schema:
-    d = DEFAULTS
-    fields: dict = {
-        vol.Optional(CONF_PRESET.format(name), default=d[CONF_PRESET.format(name)]): _num(0, 100, 1, "%")
-        for name in PRESETS
+def _fields() -> dict[str, Any]:
+    """Every room option: its selector."""
+    action = _entity(ACTION_DOMAINS)
+    plug = _entity(SWITCH_DOMAINS)
+    plugs = _entity(SWITCH_DOMAINS, multiple=True)
+    power = _entity("sensor", "power", multiple=True)
+    return {
+        CONF_VIDEO_PLAYER: _entity("media_player"),
+        CONF_AUDIO_PLAYER: _entity("media_player"),
+        CONF_VIDEO_ON_ACTION: action,
+        CONF_VIDEO_OFF_ACTION: action,
+        CONF_VIDEO_HOST: plug,
+        CONF_AUDIO_ON_ACTION: action,
+        CONF_AUDIO_OFF_ACTION: action,
+        CONF_AUDIO_HOST: plug,
+        CONF_DISPLAY: plugs,
+        CONF_SPEAKERS: plugs,
+        CONF_BASS: plugs,
+        CONF_VOLUME_CONTROL: sel.SelectSelector(
+            sel.SelectSelectorConfig(
+                options=[VOLUME_PLAYERS, VOLUME_DEVICE], translation_key=CONF_VOLUME_CONTROL, mode=sel.SelectSelectorMode.LIST
+            )
+        ),
+        CONF_VOLUME_ENTITY: _entity(VOLUME_ENTITY_DOMAINS),
+        CONF_DISPLAY_POWER: power,
+        CONF_DISPLAY_STANDBY: sel.BooleanSelector(),
+        CONF_DISPLAY_STANDBY_W: _num(0, 200, 0.5, "W"),
+        CONF_DISPLAY_STANDBY_MAX: _num(1, 120, 1, "min"),
+        CONF_AUDIO_POWER: power,
+        CONF_AUDIO_STANDBY: sel.BooleanSelector(),
+        CONF_AUDIO_STANDBY_W: _num(0, 200, 0.5, "W"),
+        CONF_AUDIO_STANDBY_MAX: _num(1, 120, 1, "min"),
+        CONF_START_TIMEOUT: _num(10, 600, 5, "s"),
+        CONF_HOST_ON_WAIT: _num(0, 120, 1, "s"),
+        CONF_DISPLAY_ON_WAIT: _num(0, 120, 1, "s"),
+        CONF_AUDIO_ON_WAIT: _num(0, 120, 1, "s"),
+        CONF_SLEEP_FADE: _num(0, 60, 1, "min"),
+        CONF_SNOOZE_MINUTES: _num(1, 120, 1, "min"),
+        CONF_NIGHT_FADE_IN: _num(0, 30, 1, "min"),
+        CONF_POWER_ON_PRESET: sel.SelectSelector(
+            sel.SelectSelectorConfig(options=[PRESET_NONE, *PRESETS], translation_key=CONF_POWER_ON_PRESET)
+        ),
+        CONF_OCCUPANCY: _entity("binary_sensor", multiple=True),
+        CONF_PRESENCE_RUN_DOWN: _num(0, 60, 0.5, "min"),
+        CONF_VOLUME_OFFSET: _num(-50, 50, 1, "%"),
+        CONF_PREWARM: sel.BooleanSelector(),
+        CONF_WAKE_DETECT_LEFT: sel.BooleanSelector(),
     }
-    fields[vol.Optional(CONF_POWER_ON_PRESET, default=d[CONF_POWER_ON_PRESET])] = sel.SelectSelector(
-        sel.SelectSelectorConfig(options=[PRESET_NONE, *PRESETS], translation_key=CONF_POWER_ON_PRESET)
-    )
-    return vol.Schema(fields)
 
 
-def schema_night() -> vol.Schema:
-    d = DEFAULTS
-    return vol.Schema(
+# step -> its fields, and its (collapsed) sections with their fields
+LAYOUT: dict[str, tuple[list[str], dict[str, list[str]]]] = {
+    "players": (
+        [CONF_VIDEO_PLAYER, CONF_AUDIO_PLAYER],
         {
-            vol.Optional(CONF_NIGHT_MAX_VOLUME, default=d[CONF_NIGHT_MAX_VOLUME]): _num(0, 100, 1, "%"),
-            vol.Optional(CONF_NIGHT_VIDEO_IDLE_TIMEOUT, default=d[CONF_NIGHT_VIDEO_IDLE_TIMEOUT]): _num(0, 480, 1, "min"),
-            vol.Optional(CONF_NIGHT_DISPLAY_RUN_DOWN, default=d[CONF_NIGHT_DISPLAY_RUN_DOWN]): _num(0, 120, 1, "min"),
-            vol.Optional(CONF_NIGHT_FADE_IN, default=d[CONF_NIGHT_FADE_IN]): _num(0, 30, 1, "min"),
-        }
-    )
-
-
-def schema_timing() -> vol.Schema:
-    d = DEFAULTS
-    return vol.Schema(
+            "special": [
+                CONF_VIDEO_ON_ACTION, CONF_VIDEO_OFF_ACTION, CONF_VIDEO_HOST,
+                CONF_AUDIO_ON_ACTION, CONF_AUDIO_OFF_ACTION, CONF_AUDIO_HOST,
+            ]
+        },
+    ),
+    "devices": (
+        [CONF_DISPLAY, CONF_SPEAKERS, CONF_BASS, CONF_VOLUME_CONTROL, CONF_VOLUME_ENTITY],
         {
-            vol.Optional(CONF_DISPLAY_RUN_DOWN, default=d[CONF_DISPLAY_RUN_DOWN]): _num(0, 120, 1, "min"),
-            vol.Optional(CONF_AUDIO_RUN_DOWN, default=d[CONF_AUDIO_RUN_DOWN]): _num(0, 120, 1, "min"),
-            vol.Optional(CONF_HOST_RUN_DOWN, default=d[CONF_HOST_RUN_DOWN]): _num(0, 120, 1, "min"),
-            vol.Optional(CONF_VIDEO_IDLE_TIMEOUT, default=d[CONF_VIDEO_IDLE_TIMEOUT]): _num(0, 480, 5, "min"),
-            vol.Optional(CONF_START_TIMEOUT, default=d[CONF_START_TIMEOUT]): _num(10, 600, 5, "s"),
-            vol.Optional(CONF_HOST_ON_WAIT, default=d[CONF_HOST_ON_WAIT]): _num(0, 120, 1, "s"),
-            vol.Optional(CONF_DISPLAY_ON_WAIT, default=d[CONF_DISPLAY_ON_WAIT]): _num(0, 120, 1, "s"),
-            vol.Optional(CONF_AUDIO_ON_WAIT, default=d[CONF_AUDIO_ON_WAIT]): _num(0, 120, 1, "s"),
-            vol.Optional(CONF_SLEEP_FADE, default=d[CONF_SLEEP_FADE]): _num(0, 60, 1, "min"),
-            vol.Optional(CONF_SNOOZE_MINUTES, default=d[CONF_SNOOZE_MINUTES]): _num(1, 120, 1, "min"),
-        }
-    )
+            "standby": [
+                CONF_DISPLAY_POWER, CONF_DISPLAY_STANDBY, CONF_DISPLAY_STANDBY_W, CONF_DISPLAY_STANDBY_MAX,
+                CONF_AUDIO_POWER, CONF_AUDIO_STANDBY, CONF_AUDIO_STANDBY_W, CONF_AUDIO_STANDBY_MAX,
+            ]
+        },
+    ),
+    "behaviour": (
+        [
+            CONF_START_TIMEOUT, CONF_HOST_ON_WAIT, CONF_DISPLAY_ON_WAIT, CONF_AUDIO_ON_WAIT,
+            CONF_SLEEP_FADE, CONF_SNOOZE_MINUTES, CONF_NIGHT_FADE_IN, CONF_POWER_ON_PRESET,
+        ],
+        {"follow": [CONF_OCCUPANCY, CONF_PRESENCE_RUN_DOWN, CONF_VOLUME_OFFSET, CONF_PREWARM, CONF_WAKE_DETECT_LEFT]},
+    ),
+}
 
 
-def schema_standby() -> vol.Schema:
-    d = DEFAULTS
-    return vol.Schema(
-        {
-            vol.Optional(CONF_DISPLAY_POWER): _entity("sensor", "power", multiple=True),
-            vol.Optional(CONF_DISPLAY_STANDBY, default=d[CONF_DISPLAY_STANDBY]): sel.BooleanSelector(),
-            vol.Optional(CONF_DISPLAY_STANDBY_W, default=d[CONF_DISPLAY_STANDBY_W]): _num(0, 200, 0.5, "W"),
-            vol.Optional(CONF_DISPLAY_STANDBY_MAX, default=d[CONF_DISPLAY_STANDBY_MAX]): _num(1, 120, 1, "min"),
-            vol.Optional(CONF_AUDIO_POWER): _entity("sensor", "power", multiple=True),
-            vol.Optional(CONF_AUDIO_STANDBY, default=d[CONF_AUDIO_STANDBY]): sel.BooleanSelector(),
-            vol.Optional(CONF_AUDIO_STANDBY_W, default=d[CONF_AUDIO_STANDBY_W]): _num(0, 200, 0.5, "W"),
-            vol.Optional(CONF_AUDIO_STANDBY_MAX, default=d[CONF_AUDIO_STANDBY_MAX]): _num(1, 120, 1, "min"),
-        }
-    )
+def _marker(key: str):
+    return vol.Optional(key, default=DEFAULTS[key]) if key in DEFAULTS else vol.Optional(key)
 
 
-def schema_follow() -> vol.Schema:
-    d = DEFAULTS
-    return vol.Schema(
-        {
-            vol.Optional(CONF_OCCUPANCY): _entity("binary_sensor", multiple=True),
-            vol.Optional(CONF_PRESENCE_RUN_DOWN, default=d[CONF_PRESENCE_RUN_DOWN]): _num(0, 60, 0.5, "min"),
-            vol.Optional(CONF_VOLUME_OFFSET, default=d[CONF_VOLUME_OFFSET]): _num(-50, 50, 1, "%"),
-            vol.Optional(CONF_PREWARM, default=d[CONF_PREWARM]): sel.BooleanSelector(),
-            vol.Optional(CONF_WAKE_DETECT_LEFT, default=d[CONF_WAKE_DETECT_LEFT]): sel.BooleanSelector(),
-        }
-    )
+def schema_step(step_id: str) -> vol.Schema:
+    if step_id == "room":
+        return schema_room(False)
+    fields = _fields()
+    main, sections = LAYOUT[step_id]
+    schema: dict = {_marker(k): fields[k] for k in main}
+    for name, keys in sections.items():
+        schema[vol.Required(name)] = section(vol.Schema({_marker(k): fields[k] for k in keys}), {"collapsed": True})
+    return vol.Schema(schema)
+
+
+def _step_keys(step_id: str) -> list[str]:
+    if step_id == "room":
+        return [CONF_AREA]
+    main, sections = LAYOUT[step_id]
+    return [*main, *(k for keys in sections.values() for k in keys)]
+
+
+def _nested(step_id: str, options: dict) -> dict:
+    """Options as the step's form shows them (sections nested)."""
+    if step_id == "room":
+        return dict(options)
+    main, sections = LAYOUT[step_id]
+    out = {k: options[k] for k in main if k in options}
+    for name, keys in sections.items():
+        out[name] = {k: options[k] for k in keys if k in options}
+    return out
+
+
+def _flat(step_id: str, user_input: dict) -> dict:
+    out = dict(user_input)
+    if step_id != "room":
+        for name in LAYOUT[step_id][1]:
+            out.update(out.pop(name, None) or {})
+    return out
+
+
+def _form_errors(step_id: str, errors: dict[str, str]) -> dict[str, str]:
+    """Errors of the step's fields; one in a section is shown at the section."""
+    if step_id == "room":
+        return {k: v for k, v in errors.items() if k in _step_keys(step_id)}
+    main, sections = LAYOUT[step_id]
+    out = {k: v for k, v in errors.items() if k in main}
+    for name, keys in sections.items():
+        for k in keys:
+            if k in errors:
+                out.setdefault(name, errors[k])
+    return out
 
 
 def schema_hub() -> vol.Schema:
@@ -236,27 +252,14 @@ def _validate_hub(hass: HomeAssistant, options: dict) -> dict[str, str]:
     return {}
 
 
-STEPS = {
-    "room": lambda: schema_room(False),
-    "sources": schema_sources,
-    "volume": schema_volume,
-    "devices": schema_devices,
-    "advanced": schema_advanced,
-    "timing": schema_timing,
-    "standby": schema_standby,
-    "night": schema_night,
-    "follow": schema_follow,
-}
+STEPS = ["room", "players", "devices", "behaviour"]
 
 
-def _keys(schema: vol.Schema) -> list[str]:
-    return [str(k.schema) for k in schema.schema]
-
-
-def _merge(options: dict, schema: vol.Schema, user_input: dict) -> dict:
+def _merge(options: dict, step_id: str, user_input: dict) -> dict:
     """Take a step's input; drop optional fields that were cleared."""
-    out = {k: v for k, v in options.items() if k not in _keys(schema)}
-    out.update({k: v for k, v in user_input.items() if v not in (None, "", [])})
+    keys = _step_keys(step_id)
+    out = {k: v for k, v in options.items() if k not in keys}
+    out.update({k: v for k, v in _flat(step_id, user_input).items() if v not in (None, "", [])})
     return out
 
 
@@ -309,11 +312,6 @@ def _validate(hass: HomeAssistant, options: dict) -> dict[str, str]:
         errors[CONF_DISPLAY_STANDBY] = "needs_power"
     if options.get(CONF_AUDIO_STANDBY) and not options.get(CONF_AUDIO_POWER):
         errors[CONF_AUDIO_STANDBY] = "needs_power"
-    power_on = options.get(CONF_POWER_ON_PRESET)
-    if power_on and power_on != PRESET_NONE:
-        value = options.get(CONF_PRESET.format(power_on), DEFAULTS.get(CONF_PRESET.format(power_on)))
-        if not value or float(value) <= 0:
-            errors[CONF_POWER_ON_PRESET] = "preset_not_offered"
     return errors
 
 
@@ -359,7 +357,7 @@ def _area_suggestions(hass: HomeAssistant, area_id: str | None) -> dict[str, str
 
 
 class BetterMediaPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
-    VERSION = 2
+    VERSION = 3
 
     def __init__(self) -> None:
         self._options: dict[str, Any] = {}
@@ -372,10 +370,10 @@ class BetterMediaPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
         schema = schema_room(True)
         if user_input is not None:
             self._title = user_input.pop(CONF_NAME)
-            self._options = _merge(self._options, schema, user_input)
+            self._options = _merge(self._options, "room", user_input)
             for key, value in _area_suggestions(self.hass, self._options.get(CONF_AREA)).items():
                 self._options.setdefault(key, value)
-            return await self.async_step_sources()
+            return await self.async_step_players()
         return self.async_show_form(step_id="room", data_schema=schema)
 
     async def async_step_hub(self, user_input: dict | None = None) -> ConfigFlowResult:
@@ -397,51 +395,36 @@ class BetterMediaPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="hub", data_schema=self.add_suggested_values_to_schema(schema, user_input or {}), errors=errors
         )
 
-    async def async_step_sources(self, user_input: dict | None = None) -> ConfigFlowResult:
-        return await self._step("sources", user_input, self.async_step_volume_note)
+    async def async_step_players(self, user_input: dict | None = None) -> ConfigFlowResult:
+        return await self._step("players", user_input, self.async_step_devices)
+
+    async def async_step_devices(self, user_input: dict | None = None) -> ConfigFlowResult:
+        return await self._step("devices", user_input, self.async_step_volume_note)
 
     async def async_step_volume_note(self, user_input: dict | None = None) -> ConfigFlowResult:
         """Only a note: a chosen player cannot set a volume."""
         players = _without_volume(self.hass, self._options)
         if user_input is not None or not players:
-            return await self.async_step_volume()
+            return await self.async_step_behaviour()
         return self.async_show_form(
             step_id="volume_note", data_schema=vol.Schema({}), description_placeholders={"players": ", ".join(players)}
         )
 
-    async def async_step_volume(self, user_input: dict | None = None) -> ConfigFlowResult:
-        return await self._step("volume", user_input, self.async_step_devices)
-
-    async def async_step_devices(self, user_input: dict | None = None) -> ConfigFlowResult:
-        return await self._step("devices", user_input, self.async_step_advanced)
-
-    async def async_step_advanced(self, user_input: dict | None = None) -> ConfigFlowResult:
-        return await self._step("advanced", user_input, self.async_step_timing)
-
-    async def async_step_timing(self, user_input: dict | None = None) -> ConfigFlowResult:
-        return await self._step("timing", user_input, self.async_step_standby)
-
-    async def async_step_standby(self, user_input: dict | None = None) -> ConfigFlowResult:
-        return await self._step("standby", user_input, self.async_step_night)
-
-    async def async_step_night(self, user_input: dict | None = None) -> ConfigFlowResult:
-        return await self._step("night", user_input, self.async_step_follow)
-
-    async def async_step_follow(self, user_input: dict | None = None) -> ConfigFlowResult:
-        return await self._step("follow", user_input, self._finish)
+    async def async_step_behaviour(self, user_input: dict | None = None) -> ConfigFlowResult:
+        return await self._step("behaviour", user_input, self._finish)
 
     async def _step(self, step_id: str, user_input, next_step) -> ConfigFlowResult:
-        schema = STEPS[step_id]()
+        schema = schema_step(step_id)
         errors: dict[str, str] = {}
         if user_input is not None:
-            candidate = _merge(self._options, schema, user_input)
-            errors = {k: v for k, v in _validate(self.hass, candidate).items() if k in _keys(schema)}
+            candidate = _merge(self._options, step_id, user_input)
+            errors = _form_errors(step_id, _validate(self.hass, candidate))
             if not errors:
                 self._options = candidate
                 return await next_step()
         return self.async_show_form(
             step_id=step_id,
-            data_schema=self.add_suggested_values_to_schema(schema, self._options),
+            data_schema=self.add_suggested_values_to_schema(schema, _nested(step_id, self._options)),
             errors=errors,
         )
 
@@ -481,28 +464,21 @@ class BetterMediaPlayerOptionsFlow(OptionsFlow):
         return self.async_create_entry(data=self.options)
 
     async def _section(self, step_id: str, user_input) -> ConfigFlowResult:
-        schema = STEPS[step_id]()
+        schema = schema_step(step_id)
         errors: dict[str, str] = {}
         if user_input is not None:
-            candidate = _merge(self.options, schema, user_input)
-            errors = {k: v for k, v in _validate(self.hass, candidate).items() if k in _keys(schema)}
+            candidate = _merge(self.options, step_id, user_input)
+            errors = _form_errors(step_id, _validate(self.hass, candidate))
             if not errors:
                 self._options = candidate
+                if step_id in ("players", "devices") and _without_volume(self.hass, self.options):
+                    return await self.async_step_volume_note()
                 return await self.async_step_init()
         return self.async_show_form(
             step_id=step_id,
-            data_schema=self.add_suggested_values_to_schema(schema, self.options),
+            data_schema=self.add_suggested_values_to_schema(schema, _nested(step_id, self.options)),
             errors=errors,
         )
-
-    async def async_step_room(self, user_input=None) -> ConfigFlowResult:
-        return await self._section("room", user_input)
-
-    async def async_step_sources(self, user_input=None) -> ConfigFlowResult:
-        result = await self._section("sources", user_input)
-        if user_input is not None and result.get("step_id") == "init" and _without_volume(self.hass, self.options):
-            return await self.async_step_volume_note()
-        return result
 
     async def async_step_volume_note(self, user_input=None) -> ConfigFlowResult:
         players = _without_volume(self.hass, self.options)
@@ -512,26 +488,17 @@ class BetterMediaPlayerOptionsFlow(OptionsFlow):
             step_id="volume_note", data_schema=vol.Schema({}), description_placeholders={"players": ", ".join(players)}
         )
 
-    async def async_step_volume(self, user_input=None) -> ConfigFlowResult:
-        return await self._section("volume", user_input)
+    async def async_step_room(self, user_input=None) -> ConfigFlowResult:
+        return await self._section("room", user_input)
+
+    async def async_step_players(self, user_input=None) -> ConfigFlowResult:
+        return await self._section("players", user_input)
 
     async def async_step_devices(self, user_input=None) -> ConfigFlowResult:
         return await self._section("devices", user_input)
 
-    async def async_step_advanced(self, user_input=None) -> ConfigFlowResult:
-        return await self._section("advanced", user_input)
-
-    async def async_step_timing(self, user_input=None) -> ConfigFlowResult:
-        return await self._section("timing", user_input)
-
-    async def async_step_standby(self, user_input=None) -> ConfigFlowResult:
-        return await self._section("standby", user_input)
-
-    async def async_step_night(self, user_input=None) -> ConfigFlowResult:
-        return await self._section("night", user_input)
-
-    async def async_step_follow(self, user_input=None) -> ConfigFlowResult:
-        return await self._section("follow", user_input)
+    async def async_step_behaviour(self, user_input=None) -> ConfigFlowResult:
+        return await self._section("behaviour", user_input)
 
 
 class HubOptionsFlow(OptionsFlow):

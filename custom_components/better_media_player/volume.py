@@ -42,7 +42,7 @@ from homeassistant.core import CALLBACK_TYPE, State, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.event import async_call_later
 
-from .const import CONF_POWER_ON_PRESET, CONF_PRESET, DOMAIN, PRESET_NONE, PRESETS
+from .const import CONF_POWER_ON_PRESET, CONF_PRESET, DOMAIN, ENTITY_DEFAULTS, PRESET_NONE, PRESETS
 
 if TYPE_CHECKING:
     from .controller import RoomController, Source
@@ -94,7 +94,7 @@ class RoomVolume:
         out: dict[str, float] = {}
         for name in PRESETS:
             key = CONF_PRESET.format(name)
-            value = self.ctrl.data.get(key, self.ctrl.opts.get(key))
+            value = self.ctrl.data.get(key, ENTITY_DEFAULTS[key])
             if value not in (None, "") and float(value) > 0:
                 out[name] = max(0.0, min(1.0, float(value) / 100))
         return out

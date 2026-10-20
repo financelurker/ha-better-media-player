@@ -78,14 +78,13 @@ from .const import (
     CONF_PREWARM,
     CONF_SPEAKERS,
     CONF_START_TIMEOUT,
-    CONF_PRESET,
     CONF_VOLUME_CONTROL,
     CONF_VOLUME_ENTITY,
     CONF_VOLUME_OFFSET,
     DEFAULTS,
     DOMAIN,
+    ENTITY_DEFAULTS,
     FOLLOW_INACTIVE,
-    PRESETS,
     ROLE_AUDIO,
     ROLE_AUDIO_HOST,
     ROLE_BASS,
@@ -321,21 +320,10 @@ class RoomController:
             self.data["controls"] = self.data.pop("wake_controls")
         if self.data.get("last_source") not in self.sources:
             self.data["last_source"] = default_source
-        # run-down values: option changes win, otherwise keep the number entity value
-        for key in (
-            "display_run_down",
-            "audio_run_down",
-            "host_run_down",
-            "video_idle_timeout",
-            "night_video_idle_timeout",
-            "night_display_run_down",
-            "night_max_volume",
-            *(CONF_PRESET.format(name) for name in PRESETS),
-        ):
-            configured = float(self.opts.get(key) or 0)  # (an empty preset: not offered)
-            if self.data.get(f"cfg_{key}") != configured or key not in self.data:
-                self.data[key] = configured
-                self.data[f"cfg_{key}"] = configured
+        # values set on the device (number entities): first values from the defaults
+        for key, value in ENTITY_DEFAULTS.items():
+            self.data.setdefault(key, float(value))
+            self.data.pop(f"cfg_{key}", None)  # (marker of when the options set them too)
         if self.data.get("volume_preset") is not None and self.data["volume_preset"] not in self.volume.presets:
             self.data.pop("volume_preset")  # no longer offered (options): it does not come back by itself
         # another volume output (players <-> device, another device): the room's
