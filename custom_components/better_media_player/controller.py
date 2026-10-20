@@ -105,6 +105,7 @@ from .const import (
 )
 from .hub import get_hub, get_rooms
 from .sleep import REASON_ROOM_OFF, SleepTimer
+from .music_assistant import MusicAssistant
 from .night import NightMode
 from .source_event import SourceWatch
 from .output import DeviceOutput, PlayerOutput
@@ -247,6 +248,7 @@ class RoomController:
 
         self._store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
         self.data: dict[str, Any] = {}
+        self.ma = MusicAssistant(hass)  # its groups
         self._lock = asyncio.Lock()
         self._changed = asyncio.Event()
         self._unsubs: list[Callable[[], None]] = []
@@ -612,7 +614,7 @@ class RoomController:
     def _group_counts(self, player: str) -> bool:
         """Group playback counts, except follow me in a quiet room (unless it wakes there)."""
         hub = _hub(self.hass)
-        groups = self.groups_of(player)
+        groups = self.ma.groups_of(player)
         if hub is None or not groups or not self.quiet or self.wake.follow_holding:
             return True
         return any(not hub.follows(g) for g in groups)
@@ -736,7 +738,7 @@ class RoomController:
         return (
             src is not None
             and self.source_playing(src)
-            and not self.groups_of(src.player)
+            and not self.ma.groups_of(src.player)
         )
 
     @property
@@ -776,19 +778,6 @@ class RoomController:
         self.prewarm = on
         if self._started:
             self._spawn(self.async_update("prewarm"))
-
-    def groups_of(self, player: str) -> list[str]:
-        """Media players (e.g. Music Assistant groups) that currently contain player."""
-        out = []
-        for state in self.hass.states.async_all(MP_DOMAIN):
-            if state.entity_id == player:
-                continue
-            if state.state not in GROUP_ACTIVE_STATES:
-                continue  # static groups list their members even while off
-            members = state.attributes.get("group_members") or []
-            if player in members:
-                out.append(state.entity_id)
-        return out
 
     # ------------------------------------------------------------- properties
 
@@ -1159,6 +1148,12 @@ class RoomController:
             self.volume.note_own(src.player, extra["volume_level"])
         return await self._call(MP_DOMAIN, service, {ATTR_ENTITY_ID: src.player, **(extra or {})})
 
+    async def _unjoin(self, src: Source) -> None:
+        """Leave the group(s) the player is in."""
+        ctx = Context()
+        self._own_contexts.append(ctx.id)
+        await self.ma.unjoin(src.player, ctx)
+
     async def _source_on(self, src: Source) -> None:
         if self.player_supports(src, MediaPlayerEntityFeature.TURN_ON):
             await self._player(src, SERVICE_TURN_ON)
@@ -1168,14 +1163,14 @@ class RoomController:
     async def _source_off(self, src: Source) -> None:
         """Stop a source: leave groups, stop playback, power it down if possible."""
         if src.key == SOURCE_AUDIO:
-            groups = self.groups_of(src.player)
+            groups = self.ma.groups_of(src.player)
             if (
                 groups
                 and self.player_state(src) in GROUP_ACTIVE_STATES
                 and self.player_supports(src, MediaPlayerEntityFeature.GROUPING)
             ):
                 _LOGGER.info("%s: removing %s from %s", self.entry.title, src.player, groups)
-                await self._player(src, "unjoin")
+                await self._unjoin(src)
             elif self.source_playing(src):
                 if self.player_supports(src, MediaPlayerEntityFeature.STOP):
                     await self._player(src, "media_stop")
@@ -1383,12 +1378,12 @@ class RoomController:
                 self._save()
             if (
                 key == SOURCE_AUDIO
-                and self.groups_of(src.player)
+                and self.ma.groups_of(src.player)
                 and self.player_supports(src, MediaPlayerEntityFeature.GROUPING)
             ):
                 # play here, not on the whole group (independent of Music
                 # Assistant's 'play media overrides group' setting)
-                await self._player(src, "unjoin")
+                await self._unjoin(src)
             # played here on its own: with the room's volume from the first second
             await self.volume.async_apply(src, left_group=True)
         ctx = Context()
@@ -1407,11 +1402,11 @@ class RoomController:
             else:
                 # music: leave a group, otherwise just pause
                 if (
-                    self.groups_of(other.player)
+                    self.ma.groups_of(other.player)
                     and self.player_state(other) in GROUP_ACTIVE_STATES
                     and self.player_supports(other, MediaPlayerEntityFeature.GROUPING)
                 ):
-                    await self._player(other, "unjoin")
+                    await self._unjoin(other)
                 elif self.player_supports(other, MediaPlayerEntityFeature.PAUSE):
                     await self._player(other, "media_pause")
 
@@ -1433,7 +1428,7 @@ class RoomController:
         # flag everything first: state events during the awaits below must not
         # start the room again
         for src in self.sources.values():
-            if self.source_active_raw(src) or self.groups_of(src.player):
+            if self.source_active_raw(src) or self.ma.groups_of(src.player):
                 src.suppressed = True
         for role in self.roles.values():
             if self.role_on(role):

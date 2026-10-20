@@ -40,7 +40,6 @@ from homeassistant.components.media_player import (
 from homeassistant.const import ATTR_ENTITY_ID, ATTR_SUPPORTED_FEATURES
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.translation import async_get_translations
 
 from .const import DOMAIN, SOURCE_AUDIO, SOURCE_VIDEO
@@ -65,7 +64,6 @@ BETTER_KODI_QUEUE_TYPE = "better_kodi_queue"
 # Better Kodi's own play now / next / add / replace entries; read only, so that
 # 'next' and 'add' do not switch the room
 BETTER_KODI_ENQUEUE_PREFIX = "better_kodi://enqueue/"
-MA_PLATFORM = "music_assistant"
 MAX_CHOICE_ITEMS = 1000
 
 
@@ -156,8 +154,7 @@ class RoomBrowser:
         src = self.ctrl.sources.get(key)
         if src is None:
             return False
-        entry = er.async_get(self.hass).async_get(src.player)
-        return entry is not None and entry.platform == MA_PLATFORM
+        return self.ctrl.ma.is_player(src.player)
 
     async def _texts(self) -> dict[str, str]:
         translations = await async_get_translations(self.hass, self.hass.config.language, "selector", [DOMAIN])
@@ -421,14 +418,7 @@ class RoomBrowser:
         texts = await self._texts()
         src = self.ctrl.sources[key]
         children: list[BrowseMedia] = []
-        try:
-            response = await self.hass.services.async_call(
-                MA_PLATFORM, "get_queue", {ATTR_ENTITY_ID: src.player}, blocking=True, return_response=True
-            )
-            queue = (response or {}).get(src.player) or {}
-        except Exception as err:  # noqa: BLE001 - no active queue, MA not available, ...
-            _LOGGER.debug("get_queue for %s failed: %s", src.player, err)
-            queue = {}
+        queue = await self.ctrl.ma.queue(src.player)
         for label, field in (("now_playing", "current_item"), ("up_next", "next_item")):
             entry = queue.get(field)
             if not entry:

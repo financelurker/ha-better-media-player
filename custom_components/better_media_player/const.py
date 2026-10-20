@@ -247,5 +247,3 @@ ROLE_DOMAINS = [*SWITCH_DOMAINS, *DEVICE_DOMAINS]
 ACTION_DOMAINS = ["script", "button", "input_button", "switch", "scene", "automation"]
 
 # Music Assistant attribute names
-ATTR_MASS_PLAYER_TYPE = "mass_player_type"
-MASS_TYPE_GROUP = "group"
