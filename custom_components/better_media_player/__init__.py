@@ -68,14 +68,17 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
         data = await store.async_load() or {}
         for key, default in defaults.items():
+            marker = data.pop(f"cfg_{key}", None)
             if key not in options:
                 continue
             raw = options.pop(key)
-            value = type(default)(raw) if not isinstance(default, (int, float)) else float(raw or 0)
+            if isinstance(default, bool) or not isinstance(default, (int, float)):
+                value = type(default)(raw)
+            else:
+                value = float(raw or 0)
             # an option change not yet taken by the entity wins (as before)
-            if key not in data or data.get(f"cfg_{key}") != value:
+            if key not in data or marker != value:
                 data[key] = value
-            data.pop(f"cfg_{key}", None)
         await store.async_save(data)
         hass.config_entries.async_update_entry(entry, options=options, version=3)
     return True

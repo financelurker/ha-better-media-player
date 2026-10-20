@@ -190,3 +190,33 @@ async def test_central_options_move_to_the_device(hass, home):
     assert float(hass.states.get("number.better_media_player_follow_me_default_volume").state) == 35
     assert hass.states.get("switch.better_media_player_dynamic_controls").state == "off"
     assert float(hass.states.get("number.better_media_player_hide_delay").state) == 7
+
+
+async def test_without_the_standby_switch_the_plug_goes_off_at_once(hass, home, freezer):
+    hass.states.async_set(TV_POWER, "80")
+    await setup_room(hass, display_power=[TV_POWER])
+    assert hass.states.get("switch.wohnzimmer_display_wait_for_standby").state == "off"
+    home.kodi_boots = True
+    await hass.services.async_call("media_player", "turn_on", {"entity_id": ROOM}, blocking=True)
+    await hass.async_block_till_done()
+    await hass.services.async_call("media_player", "turn_off", {"entity_id": ROOM}, blocking=True)
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 5)
+    assert not home.on(TV), "a power sensor alone does not make it wait"
+
+
+async def test_migration_keeps_types_and_drops_old_markers(hass, home, hass_storage):
+    hass_storage[f"{DOMAIN}.room1"] = {
+        "version": 1, "key": f"{DOMAIN}.room1",
+        "data": {"cfg_sleep_fade": 5.0, "cfg_prewarm": True},
+    }
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="Wohnzimmer", entry_id="room1", data={CONF_ENTRY_TYPE: ENTRY_TYPE_ROOM},
+        options=room_options(prewarm=False, occupancy=[LIVING_OCC]), version=2,
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    data = entry.runtime_data.data
+    assert data["prewarm"] is False
+    assert not [k for k in data if k.startswith("cfg_") and k != "cfg_volume"]

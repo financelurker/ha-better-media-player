@@ -305,7 +305,6 @@ class RoomController:
         # values set on the device (config entities): first values from the defaults
         for key, value in ENTITY_DEFAULTS.items():
             self.data.setdefault(key, value)
-            self.data.pop(f"cfg_{key}", None)  # (marker of when the options set them too)
         if self.data.get("volume_preset") is not None and self.data["volume_preset"] not in self.volume.presets:
             self.data.pop("volume_preset")  # no longer offered (options): it does not come back by itself
         # another volume output (players <-> device, another device): the room's
