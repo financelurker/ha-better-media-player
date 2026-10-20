@@ -42,15 +42,14 @@ from .const import (
     ENTRY_TYPE_ROOM,
     ROLE_ACTIONS,
     ROLE_DOMAINS,
+    SOURCE_VIDEO,
     SWITCH_DOMAINS,
     VOLUME_DEVICE,
     VOLUME_ENTITY_DOMAINS,
     VOLUME_PLAYERS,
-
-    SOURCE_VIDEO,)
-from .backend import suggested_role
+)
+from .backend import is_group, suggested_role
 from .music_assistant import MusicAssistant
-
 
 
 def _entity(domain: str | list[str], device_class: str | None = None, multiple: bool = False):
@@ -190,6 +189,7 @@ def schema_hub() -> vol.Schema:
 
 def _validate_hub(hass: HomeAssistant, options: dict) -> dict[str, str]:
     player = options.get(CONF_FOLLOW_PLAYER)
+    # follow me moves queues: a group player of Music Assistant
     if player and hass.states.get(player) is not None and not MusicAssistant(hass).is_group(player):
         return {CONF_FOLLOW_PLAYER: "not_a_group"}
     return {}
@@ -214,9 +214,8 @@ def _validate(hass: HomeAssistant, options: dict) -> dict[str, str]:
         errors[CONF_VIDEO_PLAYER] = "no_player"
     if video and video == audio:
         errors[CONF_AUDIO_PLAYER] = "same_player"
-    ma = MusicAssistant(hass)
     for key in (CONF_VIDEO_PLAYER, CONF_AUDIO_PLAYER):
-        if ma.is_group(options.get(key)):
+        if is_group(hass, options.get(key)):
             errors[key] = "group_player"
     if options.get(CONF_VOLUME_CONTROL) == VOLUME_DEVICE:
         device = options.get(CONF_VOLUME_ENTITY)
@@ -227,7 +226,7 @@ def _validate(hass: HomeAssistant, options: dict) -> dict[str, str]:
             errors[CONF_VOLUME_ENTITY] = "volume_is_player"
         elif (reg := er.async_get(hass).async_get(device)) is not None and reg.platform == DOMAIN:
             errors[CONF_VOLUME_ENTITY] = "volume_is_room"  # a room player (loops)
-        elif ma.is_group(device):
+        elif is_group(hass, device):
             errors[CONF_VOLUME_ENTITY] = "group_player"
         elif (
             state is not None

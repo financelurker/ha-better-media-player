@@ -17,19 +17,21 @@ from __future__ import annotations
 
 from homeassistant.components.media_player import BrowseMedia
 
-from .backend import VideoBackend
+from .backend import ENQUEUE_MODES, VideoBackend
 
 QUEUE_TYPE = "better_kodi_queue"
 ENQUEUE_PREFIX = "better_kodi://enqueue/"
-MODES = ("play", "next", "add", "replace")
 
 
 class Kodi(VideoBackend):
+    """What every video player does (cannot browse while off) is all Kodi needs."""
+
     platform = "kodi"
 
 
 class BetterKodi(Kodi):
     platform = "better_kodi"
+    lifts_queue = True
 
     def queue_entry(self, root: BrowseMedia | None) -> BrowseMedia | None:
         for item in (root.children or []) if root else []:
@@ -40,6 +42,6 @@ class BetterKodi(Kodi):
     def enqueue_mode(self, media_id: str | None) -> str | None:
         if media_id and media_id.startswith(ENQUEUE_PREFIX):
             mode = media_id.removeprefix(ENQUEUE_PREFIX).split("/", 1)[0]
-            if mode in MODES:
+            if mode in ENQUEUE_MODES:
                 return mode
         return None

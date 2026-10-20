@@ -30,7 +30,6 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.util import dt as dt_util
 
-from .backend import groups_of
 from .const import (
     CONF_NIGHT_FADE_IN,
     CONF_SLEEP_FADE,
@@ -647,7 +646,7 @@ class WakeAlarm:
             self._schedule(w["snooze_until"])
         elif (
             w.get("follow")
-            and not groups_of(self.hass, src.player)
+            and not src.backend.groups_of(src.player)
             and self.ctrl.hub is not None
             and self.ctrl.hub.ma.state(self.ctrl.hub.follow_player) not in (None, "unavailable", "unknown")
         ):

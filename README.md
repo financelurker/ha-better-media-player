@@ -575,15 +575,17 @@ Settings ([what they do](#settings-on-the-device)); only those the room can use:
 
 ## Players of other systems
 
-Any media player can be the room's video or music player: the room then uses what Home Assistant offers for every media player (on, off, play, volume, browse while it is on, groups via `media_player.join`). What a particular system does on top, or does differently, lives in a backend of its own (`backend.py`):
+Any media player can be the room's video or music player. The room then uses what Home Assistant offers for every media player: on, off, play, volume and browsing; a video player counts as active while it is on (also in its menu) and is browsed only while it is on (Home Assistant's media sources stand in while it is off); a music player counts as active while it plays and can be browsed while it is off; a player in a group is noticed by the group's members, and turning the room off takes it out with `media_player.unjoin`.
 
-| System | Backend | Quirks it handles |
+What a particular system does on top, or differently, lives in a backend of its own (`backend.py`):
+
+| System | Backend | What it adds |
 |---|---|---|
-| Kodi | `kodi.py` | cannot be browsed while off (the room shows Home Assistant's media sources instead) |
-| Better Kodi | `kodi.py` | as Kodi; its queue is lifted to the room's root; its own play next / add entries are read |
-| Music Assistant | `music_assistant.py` | its group players (follow me), moving a queue with the position of the current track, the queue in the browser |
+| Kodi | `kodi.py` | nothing beyond the video player's defaults |
+| Better Kodi | `kodi.py` | its queue is lifted to the room's root; its own play next / add entries are read |
+| Music Assistant | `music_assistant.py` | its group players (not taken as a room's player), the queue in the browser, moving a queue with the position of the current track |
 
-Another system is one more module with a subclass of `VideoBackend` or `MusicBackend` (contributions welcome). Follow me needs a system that can move a queue: so far Music Assistant.
+Another system is one more module with a subclass of `VideoBackend` or `MusicBackend`, added to the list in `backend.py` (contributions welcome). Follow me works with Music Assistant only: it needs a group player and a system that can move a queue.
 
 ## Releases
 

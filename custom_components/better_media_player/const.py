@@ -246,4 +246,3 @@ ROLE_DOMAINS = [*SWITCH_DOMAINS, *DEVICE_DOMAINS]
 # Domains usable as a custom on/off action
 ACTION_DOMAINS = ["script", "button", "input_button", "switch", "scene", "automation"]
 
-# Music Assistant attribute names

@@ -45,7 +45,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.translation import async_get_translations
 
-from .backend import PlayerBackend
+from .backend import ENQUEUE_MODES
 from .const import DOMAIN
 
 if TYPE_CHECKING:
@@ -60,10 +60,10 @@ KIND_ITEM = "item"  # an item of a player (browse further / play)
 KIND_MEDIA_SOURCE = "media"  # HA media source item, played on a player
 KIND_CHOOSE = "choose"  # play now / next / add / replace folder
 KIND_ENQUEUE = "enqueue"  # one of the choices (kind = enqueue-<mode>)
-KIND_MUSIC_QUEUE = "mqueue"  # Music Assistant queue folder
+KIND_MUSIC_QUEUE = "mqueue"  # queue folder of a player whose backend gives its queue
 KIND_INFO = "info"  # not playable information entry
 
-CHOICES = ("play", "next", "add", "replace")
+CHOICES = ENQUEUE_MODES
 MAX_CHOICE_ITEMS = 1000
 
 
@@ -192,9 +192,7 @@ class RoomBrowser:
                         can_expand=True,
                     )
                 )
-            elif type(src.backend).queue_entry is not PlayerBackend.queue_entry and self.supports(
-                key, MediaPlayerEntityFeature.BROWSE_MEDIA
-            ):
+            elif src.backend.lifts_queue and self.supports(key, MediaPlayerEntityFeature.BROWSE_MEDIA):
                 try:
                     root = await self._child_browse(key, None, None)
                 except BrowseError:
@@ -408,21 +406,18 @@ class RoomBrowser:
         src = self.ctrl.sources[key]
         children: list[BrowseMedia] = []
         queue = await src.backend.queue(src.player)
-        for label, field in (("now_playing", "current_item"), ("up_next", "next_item")):
-            entry = queue.get(field)
-            if not entry:
+        for label, item in (("now_playing", queue.current), ("up_next", queue.next)):
+            if item is None:
                 continue
-            media_item = entry.get("media_item") or {}
-            name = media_item.get("name") or entry.get("name") or ""
             children.append(
                 BrowseMedia(
                     media_class=MediaClass.TRACK,
-                    media_content_id=make_id(KIND_INFO, key, None, entry.get("queue_item_id")),
+                    media_content_id=make_id(KIND_INFO, key, None, item.item_id),
                     media_content_type="track",
-                    title=f"{texts.get(label, label)}: {name}",
+                    title=f"{texts.get(label, label)}: {item.title}",
                     can_play=False,
                     can_expand=False,
-                    thumbnail=media_item.get("image"),
+                    thumbnail=item.image,
                 )
             )
         if not children:
@@ -502,5 +497,4 @@ class RoomBrowser:
     def player_mode(self, key: str, inner_id: str | None) -> str | None:
         """Enqueue mode a player encodes in its own ids (e.g. Better Kodi's choices)."""
         src = self.ctrl.sources.get(key)
-        mode = src.backend.enqueue_mode(inner_id) if src is not None else None
-        return mode if mode in CHOICES else None
+        return src.backend.enqueue_mode(inner_id) if src is not None else None

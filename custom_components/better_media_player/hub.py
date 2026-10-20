@@ -75,6 +75,7 @@ from .const import (
 )
 from .output import MemberOutput
 from .music_assistant import MusicAssistant
+from .position import Position
 from .ramp import VolumeRamp
 
 if TYPE_CHECKING:
@@ -512,12 +513,11 @@ class FollowManager:
         for room in get_rooms(self.hass).values():
             room.notify()
 
-    async def _transfer(self, source: str, target: str, auto_play: bool = True, position=None) -> bool:
+    async def _transfer(
+        self, source: str, target: str, auto_play: bool = True, position: Position | None = None
+    ) -> bool:
         """Move the queue; the track goes on where it was (position, read before)."""
-        ok = await self.ma.transfer(source, target, auto_play, None if self._stopped else position)
-        if not ok:
-            _LOGGER.warning("Moving the queue from %s to %s failed", source, target)
-        return ok
+        return await self.ma.transfer(source, target, auto_play, position)
 
     # -------------------------------------------------------------- evaluation
 

@@ -15,13 +15,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
 
 from homeassistant.components.media_player import DOMAIN as MP_DOMAIN
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 
-from .backend import MusicBackend
+from .backend import MusicBackend, Queue, QueueItem
 from .position import Position, keep_position, last_report
 
 _LOGGER = logging.getLogger(__name__)
@@ -31,23 +30,19 @@ ATTR_PLAYER_TYPE = "mass_player_type"
 TYPE_GROUP = "group"
 
 
-
 class MusicAssistant(MusicBackend):
     platform = PLATFORM
     has_queue = True
-    can_transfer = True
 
     def __init__(self, hass: HomeAssistant) -> None:
         super().__init__(hass)
         self._watch: CALLBACK_TYPE | None = None  # the moved track goes on where it was
         self._tasks: set[asyncio.Task] = set()
+        self._stopped = False
 
     def is_group(self, entity_id: str | None) -> bool:
         state = self.hass.states.get(entity_id) if entity_id else None
         return state is not None and state.attributes.get(ATTR_PLAYER_TYPE) == TYPE_GROUP
-
-    def groups(self) -> list[str]:
-        return [s.entity_id for s in self.hass.states.async_all(MP_DOMAIN) if s.attributes.get(ATTR_PLAYER_TYPE) == TYPE_GROUP]
 
     def position(self, entity_id: str) -> Position | None:
         """Where a player is in its current track (read it before joining or
@@ -64,7 +59,7 @@ class MusicAssistant(MusicBackend):
             PLATFORM, "transfer_queue", {ATTR_ENTITY_ID: target, "source_player": source, "auto_play": auto_play}
         ):
             return False
-        if auto_play and position is not None:
+        if auto_play and position is not None and not self._stopped:
 
             @callback
             def _seek(seconds: float) -> None:
@@ -76,7 +71,7 @@ class MusicAssistant(MusicBackend):
             self._watch = keep_position(self.hass, target, position, _seek, reported)
         return True
 
-    async def queue(self, player: str) -> dict[str, Any]:
+    async def queue(self, player: str) -> Queue:
         """Current and next item (all that Home Assistant exposes)."""
         try:
             response = await self.hass.services.async_call(
@@ -84,11 +79,13 @@ class MusicAssistant(MusicBackend):
             )
         except Exception as err:  # noqa: BLE001 - no active queue, MA not available, ...
             _LOGGER.debug("get_queue for %s failed: %s", player, err)
-            return {}
-        return (response or {}).get(player) or {}
+            return Queue()
+        queue = (response or {}).get(player) or {}
+        return Queue(current=_item(queue.get("current_item")), next=_item(queue.get("next_item")))
 
     @callback
     def async_stop(self) -> None:
+        self._stopped = True
         if self._watch is not None:
             self._watch()
             self._watch = None
@@ -97,6 +94,20 @@ class MusicAssistant(MusicBackend):
 
     @callback
     def _spawn(self, coro) -> None:
+        if self._stopped:
+            coro.close()
+            return
         task = self.hass.async_create_task(coro, eager_start=False)
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
+
+
+def _item(entry: dict | None) -> QueueItem | None:
+    if not entry:
+        return None
+    media_item = entry.get("media_item") or {}
+    return QueueItem(
+        title=media_item.get("name") or entry.get("name") or "",
+        item_id=entry.get("queue_item_id"),
+        image=media_item.get("image"),
+    )

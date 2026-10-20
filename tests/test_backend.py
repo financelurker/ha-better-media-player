@@ -49,8 +49,10 @@ async def test_what_the_systems_can(hass, home):
     assert better.enqueue_mode("better_kodi://enqueue/bogus/abc") is None
     assert not plain_video.room_choices and MusicBackend(hass).room_choices
     assert MusicAssistant(hass).has_queue and not MusicBackend(hass).has_queue
-    assert MusicAssistant(hass).can_transfer and not MusicBackend(hass).can_transfer
     assert await MusicBackend(hass).transfer("a", "b") is False
+    assert not plain_video.lifts_queue and not kodi.lifts_queue and better.lifts_queue
+    assert plain_video.is_active("idle") and not MusicBackend(hass).is_active("idle")
+    assert MusicBackend(hass).is_active("playing") and not MusicBackend(hass).is_active("paused")
 
 
 async def test_groups(hass, home):
@@ -88,3 +90,49 @@ async def test_a_room_takes_its_players_backends(hass, ma_office, home):
     assert type(ctrl.sources[SOURCE_AUDIO].backend) is MusicAssistant
     assert type(ctrl.sources[SOURCE_VIDEO].backend) is VideoBackend  # (media_player.kodi of no known system here)
     assert KODI == ctrl.sources[SOURCE_VIDEO].player
+
+
+
+async def test_better_kodi_lifts_only_its_queue_entry(hass, home):
+    from homeassistant.components.media_player import BrowseMedia, MediaClass
+
+    def item(content_type):
+        return BrowseMedia(
+            media_class=MediaClass.DIRECTORY, media_content_id=content_type, media_content_type=content_type,
+            title=content_type, can_play=False, can_expand=True,
+        )
+
+    root = item("directory")
+    root.children = [item("movies"), item("better_kodi_queue"), item("tvshows")]
+    assert BetterKodi(hass).queue_entry(root).media_content_type == "better_kodi_queue"
+    root.children = [item("movies")]
+    assert BetterKodi(hass).queue_entry(root) is None
+    assert BetterKodi(hass).queue_entry(None) is None
+
+
+async def test_no_position_watch_after_the_stop(hass, home):
+    from custom_components.better_media_player.position import Position
+
+    home.group("idle", [MUSIC], FOLLOW)
+    home.music("playing", media_content_id="t", media_position=10.0)
+    ma = MusicAssistant(hass)
+    ma.async_stop()
+    assert await ma.transfer(MUSIC, FOLLOW, position=Position("t", 10.0))
+    assert ma._watch is None, "unloaded meanwhile: the track is not set any more"
+
+
+async def test_a_group_of_any_known_system_is_no_room_player(hass, home):
+    from custom_components.better_media_player.backend import is_group
+
+    home.group("idle", [], GROUP)
+    assert is_group(hass, GROUP) and not is_group(hass, MUSIC)
+
+
+async def test_unloading_a_room_stops_its_backends(hass, home):
+    from unittest.mock import patch
+
+    entry = await setup_room(hass)
+    with patch.object(MusicBackend, "async_stop") as stop_music, patch.object(VideoBackend, "async_stop") as stop_video:
+        assert await hass.config_entries.async_unload(entry.entry_id)
+    stop_music.assert_called_once()
+    stop_video.assert_called_once()

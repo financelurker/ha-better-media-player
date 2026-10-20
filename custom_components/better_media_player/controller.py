@@ -105,7 +105,7 @@ from .const import (
 )
 from .hub import get_hub, get_rooms
 from .sleep import REASON_ROOM_OFF, SleepTimer
-from .backend import PlayerBackend, backend_for, groups_of
+from .backend import PlayerBackend, backend_for
 from .night import NightMode
 from .source_event import SourceWatch
 from .output import DeviceOutput, PlayerOutput
@@ -374,6 +374,8 @@ class RoomController:
         self.volume.async_stop()
         self.night.async_stop()
         self.wake.async_stop()
+        for src in self.sources.values():
+            src.backend.async_stop()
         self.source_watch.async_stop()
         seq = self._seq_task
         self._cancel_sequence()
@@ -600,22 +602,19 @@ class RoomController:
 
     def source_active_raw(self, src: Source) -> bool:
         """Active from the player's point of view (ignores suppression)."""
-        state = self.player_state(src)
-        if src.key == SOURCE_VIDEO:
-            return state in POWERED_STATES
-        return state in PLAYING_STATES
+        return src.backend.is_active(self.player_state(src))
 
     def source_active(self, src: Source) -> bool:
         if not self.source_active_raw(src) or src.suppressed:
             return False
         if src.key == SOURCE_AUDIO:
-            return self._group_counts(src.player)
+            return self._group_counts(src)
         return True
 
-    def _group_counts(self, player: str) -> bool:
+    def _group_counts(self, src: Source) -> bool:
         """Group playback counts, except follow me in a quiet room (unless it wakes there)."""
         hub = _hub(self.hass)
-        groups = groups_of(self.hass, player)
+        groups = src.backend.groups_of(src.player)
         if hub is None or not groups or not self.quiet or self.wake.follow_holding:
             return True
         return any(not hub.follows(g) for g in groups)
@@ -739,7 +738,7 @@ class RoomController:
         return (
             src is not None
             and self.source_playing(src)
-            and not groups_of(self.hass, src.player)
+            and not src.backend.groups_of(src.player)
         )
 
     @property
@@ -1164,7 +1163,7 @@ class RoomController:
     async def _source_off(self, src: Source) -> None:
         """Stop a source: leave groups, stop playback, power it down if possible."""
         if src.key == SOURCE_AUDIO:
-            groups = groups_of(self.hass, src.player)
+            groups = src.backend.groups_of(src.player)
             if (
                 groups
                 and self.player_state(src) in GROUP_ACTIVE_STATES
@@ -1379,7 +1378,7 @@ class RoomController:
                 self._save()
             if (
                 key == SOURCE_AUDIO
-                and groups_of(self.hass, src.player)
+                and src.backend.groups_of(src.player)
                 and self.player_supports(src, MediaPlayerEntityFeature.GROUPING)
             ):
                 # play here, not on the whole group (independent of Music
@@ -1403,7 +1402,7 @@ class RoomController:
             else:
                 # music: leave a group, otherwise just pause
                 if (
-                    groups_of(self.hass, other.player)
+                    other.backend.groups_of(other.player)
                     and self.player_state(other) in GROUP_ACTIVE_STATES
                     and self.player_supports(other, MediaPlayerEntityFeature.GROUPING)
                 ):
@@ -1429,7 +1428,7 @@ class RoomController:
         # flag everything first: state events during the awaits below must not
         # start the room again
         for src in self.sources.values():
-            if self.source_active_raw(src) or groups_of(self.hass, src.player):
+            if self.source_active_raw(src) or src.backend.groups_of(src.player):
                 src.suppressed = True
         for role in self.roles.values():
             if self.role_on(role):

@@ -42,7 +42,6 @@ from homeassistant.core import CALLBACK_TYPE, State, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.event import async_call_later
 
-from .backend import groups_of
 from .const import CONF_POWER_ON_PRESET, CONF_PRESET, DOMAIN, ENTITY_DEFAULTS, PRESET_NONE, PRESETS
 
 if TYPE_CHECKING:
@@ -213,13 +212,10 @@ class RoomVolume:
         elif self._takes_part(src) and not self._in_group(src):
             self.learn(volume)
 
-    def in_group(self, src: Source) -> bool:
-        return self._in_group(src)
-
     def _in_group(self, src: Source) -> bool:
         """Member of a group, also of one that does not play right now (e.g.
         joined by follow me before the group starts)."""
-        return bool(groups_of(self.hass, src.player, idle=True))
+        return bool(src.backend.groups_of(src.player, idle=True))
 
     def _takes_part(self, src: Source) -> bool:
         return self.ctrl.player_supports(src, MediaPlayerEntityFeature.VOLUME_SET)

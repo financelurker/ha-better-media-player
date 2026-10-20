@@ -34,7 +34,6 @@ from typing import TYPE_CHECKING
 
 from homeassistant.core import State, callback
 
-from .backend import groups_of
 from .const import (
     CONF_NIGHT_FADE_IN,
     EVENT_NIGHT_MODE,
@@ -261,7 +260,7 @@ class NightMode:
         hub = self.ctrl.hub
         if hub is None:
             return False
-        return any(hub.ma.is_group(g) for g in groups_of(self.hass, src.player, idle=True))
+        return any(hub.ma.is_group(g) for g in src.backend.groups_of(src.player, idle=True))
 
     @callback
     def async_cancel_ramp(self, player: str) -> None:
