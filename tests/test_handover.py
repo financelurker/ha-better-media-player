@@ -145,7 +145,17 @@ async def test_follow_me_ends_into_the_destination(hass, rooms, freezer):
     await hass.services.async_call(DOMAIN, "start_follow", {"entity_id": LIVING}, blocking=True)
     await hass.async_block_till_done()
     assert get_hub(hass).active and MUSIC in home.members(FOLLOW)
+    power_at_transfer = []
+    original = home.handle
+
+    def handle(domain, service, entity_id, data, context):
+        if service == "transfer_queue":
+            power_at_transfer.append(home.on(KITCHEN_SPK))
+        return original(domain, service, entity_id, data, context)
+
+    home.handle = handle
     await _handover(hass, LIVING, KROOM)
+    assert power_at_transfer == [True], "the kitchen powered up before the music came"
     assert not get_hub(hass).active, "follow me ended"
     assert home.transferred[-1] == (FOLLOW, KITCHEN), "the music went to the kitchen"
     assert hass.states.get(KITCHEN).state == "playing"
@@ -231,3 +241,20 @@ async def test_destination_playing_something_else_is_replaced(hass, rooms, freez
     await _handover(hass, KROOM, LIVING)
     assert home.transferred[-1] == (KITCHEN, MUSIC)
     assert hass.states.get(KODI).state == "off", "the living room's video stopped for the music"
+
+
+@pytest.fixture
+def ma_living_only(hass):
+    er.async_get(hass).async_get_or_create("media_player", "music_assistant", "office", suggested_object_id="office_player")
+
+
+async def test_not_between_two_systems(hass, ma_living_only, home, freezer):
+    """Music Assistant here, a player of no known system there."""
+    home.kitchen("idle")
+    hass.states.async_set(KITCHEN_SPK, "off")
+    await setup_room(hass)
+    await setup_kitchen(hass)
+    await _music(hass, home, freezer)
+    with pytest.raises(ServiceValidationError) as err:
+        await _handover(hass, LIVING, KROOM)
+    assert err.value.translation_key == "handover_not_supported"
