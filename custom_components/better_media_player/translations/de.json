@@ -1,89 +1,6 @@
 {
   "config": {
     "step": {
-      "sources": {
-        "title": "Media Player",
-        "description": "Mindestens ein Player. Der Video-Player (z. B. Kodi) braucht Bild und Lautsprecher, der Musik-Player (z. B. ein Music-Assistant-/sendspin-Player) nur die Lautsprecher. Keinen Gruppen-Player auswählen. Die Raumlautstärke wird standardmäßig an den Playern gesetzt; mit einem Verstärker, AV-Receiver oder einer Soundbar mit eigener Lautstärke regelt sie dieses Gerät (die Player behalten dann ihren Pegel).",
-        "data": {
-          "video_player": "Video-Player",
-          "audio_player": "Musik-Player",
-          "volume_control": "Raumlautstärke",
-          "volume_entity": "Lautstärke-Gerät"
-        },
-        "data_description": {
-          "video_player": "Wird über sein eigenes Ein/Aus geschaltet (z. B. Kodi mit deiner Wake-on-LAN-Automation).",
-          "audio_player": "Der Player des Raums, keine Music-Assistant-Gruppe.",
-          "volume_control": "Player: am spielenden Player. Eigenes Gerät: das Lautstärke-Gerät unten (die Player behalten ihren Pegel; Gruppen und Follow-Me setzen weiter die Player).",
-          "volume_entity": "Ein Media Player mit Lautstärke oder eine number / input_number (ihr Bereich zählt als 0–100 %)."
-        }
-      },
-      "devices": {
-        "title": "Stromgeräte",
-        "description": "Steckdosen, die nur noch dieser Raum schaltet. Andere Automationen für diese Steckdosen deaktivieren. Die Geräte müssen bei Stromzufuhr selbst starten.",
-        "data": {
-          "display": "Bild (TV, Beamer)",
-          "speakers": "Lautsprecher / Verstärker / AVR",
-          "bass": "Subwoofer"
-        },
-        "data_description": {
-          "display": "Geht zuerst an und zuletzt aus.",
-          "speakers": "Für beide Player gemeinsam. Geht an, wenn der Player bereit ist, und zuerst aus.",
-          "bass": "Geht nach den Lautsprechern an und vor ihnen aus."
-        }
-      },
-      "advanced": {
-        "title": "Player: Sonderfälle",
-        "description": "Nur nötig, wenn ein Player sich nicht selbst ein-/ausschalten lässt oder seine Hardware an einer Steckdose hängt. Sonst leer lassen.",
-        "data": {
-          "video_on_action": "Video-Player: Ein-Aktion",
-          "video_off_action": "Video-Player: Aus-Aktion",
-          "video_host": "Video-Player: Steckdose seiner Hardware",
-          "audio_on_action": "Musik-Player: Ein-Aktion",
-          "audio_off_action": "Musik-Player: Aus-Aktion",
-          "audio_host": "Musik-Player: Steckdose seiner Hardware"
-        },
-        "data_description": {
-          "video_on_action": "Nur verwendet, wenn der Player kein Einschalten unterstützt (Skript, Button, Schalter).",
-          "video_host": "Der Player ist erst verfügbar, nachdem diese Steckdose an ist."
-        }
-      },
-      "timing": {
-        "title": "Zeiten",
-        "data": {
-          "display_run_down": "Nachlauf Bild",
-          "audio_run_down": "Nachlauf Lautsprecher",
-          "host_run_down": "Nachlauf Player-Hardware",
-          "video_idle_timeout": "Untätigen Video-Player abschalten nach",
-          "start_timeout": "Start-Timeout",
-          "host_on_wait": "Warten nach Player-Steckdose an",
-          "display_on_wait": "Warten nach Bild an",
-          "audio_on_wait": "Warten nach Lautsprecher an",
-          "sleep_fade": "Sleep-Timer Ausblenden",
-          "snooze_minutes": "Schlummern"
-        },
-        "data_description": {
-          "display_run_down": "Wie lange das Bild nach dem Ende des Video-Players noch Strom hat.",
-          "audio_run_down": "Wie lange die Lautsprecher nach dem Ende der Wiedergabe noch Strom haben.",
-          "video_idle_timeout": "Video-Player an, aber es läuft nichts (z. B. im Menü). 0 = nie.",
-          "start_timeout": "Ist der Player nach dieser Zeit nicht bereit, wird der Start abgebrochen.",
-          "sleep_fade": "Vorgabe für den Sleep-Timer: Die Lautstärke wird in den letzten Minuten heruntergeregelt. 0 = kein Ausblenden.",
-          "snooze_minutes": "So lange wartet der Schlummer-Button (oder eine Pause während des Weckens)."
-        }
-      },
-      "standby": {
-        "title": "Standby abwarten (optional)",
-        "description": "Mit Leistungssensoren wird die Steckdose erst getrennt, wenn das Gerät selbst in den Standby gegangen ist (z. B. Panelpflege bei OLED). Ohne gilt die Nachlaufzeit.",
-        "data": {
-          "display_power": "Leistungssensoren Bild",
-          "display_standby": "Bild: Standby abwarten",
-          "display_standby_w": "Bild: Standby unter",
-          "display_standby_max": "Bild: höchstens warten",
-          "audio_power": "Leistungssensoren Lautsprecher",
-          "audio_standby": "Lautsprecher: Standby abwarten",
-          "audio_standby_w": "Lautsprecher: Standby unter",
-          "audio_standby_max": "Lautsprecher: höchstens warten"
-        }
-      },
       "room": {
         "title": "Neuer Raum",
         "description": "Ein Better Media Player pro Raum. Wählst du einen Bereich, werden Kodi- und Music-Assistant-Player dieses Bereichs im nächsten Schritt vorausgewählt.",
@@ -102,67 +19,84 @@
       },
       "hub": {
         "title": "Zentrale Einstellungen",
-        "description": "Follow-Me: Die Musik folgt den Personen von Raum zu Raum. Wähle den Follow-Me-Player: ein Music-Assistant-Gruppenplayer mit dynamischen Mitgliedern (leer: kein Follow-Me). Follow-Me wird in einem Raum gestartet, in dem Musik läuft (Button oder Aktion); alle anderen Gruppen spielen einfach. Dynamische Controls: Controls eines Raums, die gerade keinen Sinn ergeben, werden ausgeblendet (z. B. der Sleep-Timer, solange nichts läuft) – in allen Räumen.",
+        "description": "Follow-Me: Die Musik folgt den Personen von Raum zu Raum. Wähle den Follow-Me-Player: ein Music-Assistant-Gruppenplayer mit dynamischen Mitgliedern (leer: kein Follow-Me). Follow-Me wird in einem Raum gestartet, in dem Musik läuft (Button oder Aktion); alle anderen Gruppen spielen einfach. Seine Standardlautstärke, die dynamischen Controls und deren Ausblende-Verzögerung stellst du am zentralen Gerät ein.",
         "data": {
-          "follow_player": "Follow-Me-Player",
-          "default_volume": "Standard-Lautstärke",
-          "dynamic_controls": "Dynamische Controls",
-          "hide_delay": "Ausblende-Verzögerung"
+          "follow_player": "Follow-Me-Player"
         },
         "data_description": {
-          "follow_player": "Ein Music-Assistant-Gruppenplayer mit dynamischen Mitgliedern; leer: kein Follow-Me.",
-          "default_volume": "Solange Follow-Me noch keine Lautstärke kennt (es übernimmt die des Raums, in dem es gestartet wird).",
-          "dynamic_controls": "Controls ausblenden, die gerade keinen Sinn ergeben (alle Räume). Aus: alles bleibt sichtbar.",
-          "hide_delay": "Wie lange ein Control bleibt, nachdem es keinen Sinn mehr ergibt (wieder eingeblendet wird sofort)."
-        }
-      },
-      "follow": {
-        "title": "Follow-Me",
-        "description": "Nur für Räume mit Musik-Player. Ohne Anwesenheitssensoren nimmt der Raum nicht an Follow-Me teil.",
-        "data": {
-          "occupancy": "Anwesenheitssensoren",
-          "presence_run_down": "Verlassen, wenn niemand da ist seit",
-          "volume_offset": "Lautstärke-Offset",
-          "prewarm": "Lautsprecher vorwärmen",
-          "wake_detect_left": "Wecken: Verlassen des Raums erkennen"
-        },
-        "data_description": {
-          "occupancy": "Einer an = jemand ist da. Alle nicht verfügbar = unbekannt, dann ändert sich nichts.",
-          "volume_offset": "Prozentpunkte gegenüber der Gruppenlautstärke beim Beitritt, z. B. -10.",
-          "prewarm": "Lautsprecher an, sobald irgendwo Follow-Musik spielt, damit der Ton beim Betreten sofort da ist.",
-          "wake_detect_left": "Follow-Wecker: Hast du diesen Raum verlassen (und bist in einem anderen Follow-Raum aufgetaucht), ist das Wecken erledigt. Aus: Es endet nur durch Beenden, maximale Dauer, Raum aus oder Sleep-Timer."
+          "follow_player": "Ein Music-Assistant-Gruppenplayer mit dynamischen Mitgliedern; leer: kein Follow-Me."
         }
       },
       "volume_note": {
         "title": "Hinweis: Lautstärke",
         "description": "{players} kann keine Lautstärke setzen. Die Raumlautstärke (eine Lautstärke für den ganzen Raum, die beim Wechsel zwischen den Playern mitgenommen wird) wirkt bei diesem Player nicht. Alles andere funktioniert wie gewohnt."
       },
-      "night": {
-        "title": "Nachtmodus",
-        "description": "Solange der Nachtmodus an ist: kein Subwoofer, kürzere Video-Zeiten und eine Lautstärke-Grenze. Ein- und Ausschalten ist Sache des Anwenders oder anderer Integrationen und Automationen; er bleibt an, bis er ausgeschaltet wird.",
+      "players": {
+        "title": "Media Player",
+        "description": "Mindestens ein Player. Der Video-Player (z. B. Kodi) braucht Bild und Lautsprecher, der Musik-Player (z. B. ein Music-Assistant-/sendspin-Player) nur die Lautsprecher. Keinen Gruppen-Player auswählen. Wie sich der Raum verhält (Zeiten, Wartezeiten, Standby, Follow-Me), stellst du an seinem Gerät ein.",
         "data": {
-          "night_max_volume": "Maximale Lautstärke",
-          "night_video_idle_timeout": "Video-Player im Leerlauf ausschalten nach",
-          "night_display_run_down": "Nachlauf Bild",
-          "night_fade_in": "Danach wieder einblenden über"
+          "video_player": "Video-Player",
+          "audio_player": "Musik-Player"
         },
         "data_description": {
-          "night_max_volume": "Grenze für beide Player des Raums, solange der Nachtmodus an ist. 0 = keine Grenze.",
-          "night_fade_in": "Endet der Nachtmodus, wird die Lautstärke über diese Zeit auf die Raumlautstärke zurückgeblendet."
+          "video_player": "Wird über sein eigenes Ein/Aus geschaltet (z. B. Kodi mit deiner Wake-on-LAN-Automation).",
+          "audio_player": "Der Player des Raums, keine Music-Assistant-Gruppe."
+        },
+        "sections": {
+          "special": {
+            "name": "Sonderfälle",
+            "description": "Nur nötig, wenn sich ein Player nicht selbst ein-/ausschalten lässt oder seine Hardware an einer Steckdose hängt. Sonst leer lassen.",
+            "data": {
+              "video_on_action": "Video-Player: Ein-Aktion",
+              "video_off_action": "Video-Player: Aus-Aktion",
+              "video_host": "Video-Player: Steckdose seiner Hardware",
+              "audio_on_action": "Musik-Player: Ein-Aktion",
+              "audio_off_action": "Musik-Player: Aus-Aktion",
+              "audio_host": "Musik-Player: Steckdose seiner Hardware"
+            },
+            "data_description": {
+              "video_on_action": "Nur verwendet, wenn der Player kein Einschalten unterstützt (Skript, Button, Schalter).",
+              "video_host": "Der Player ist erst verfügbar, nachdem diese Steckdose an ist."
+            }
+          }
         }
       },
-      "volume": {
-        "title": "Lautstärke-Presets",
-        "description": "Raumlautstärken mit Namen, gewählt über das Select „Lautstärke-Preset“ oder die Aktion set_volume_preset. 0 = in diesem Raum nicht angeboten.",
+      "devices": {
+        "title": "Geräte und Lautstärke",
+        "description": "Steckdosen, die nur noch dieser Raum schaltet. Andere Automationen für diese Steckdosen deaktivieren. Die Geräte müssen bei Stromzufuhr selbst starten.",
         "data": {
-          "preset_quiet": "Leise",
-          "preset_normal": "Normal",
-          "preset_loud": "Laut",
-          "preset_party": "Party",
-          "power_on_preset": "Einschalt-Preset"
+          "display": "Bild (TV, Beamer)",
+          "speakers": "Lautsprecher / Verstärker / AVR",
+          "bass": "Subwoofer",
+          "volume_control": "Raumlautstärke",
+          "volume_entity": "Lautstärke-Gerät"
         },
         "data_description": {
-          "power_on_preset": "Die Raumlautstärke, wann immer der Raum angeht (z. B. nicht mit der Party-Lautstärke von gestern)."
+          "display": "Geht zuerst an und zuletzt aus.",
+          "speakers": "Für beide Player gemeinsam. Geht an, wenn der Player bereit ist, und zuerst aus.",
+          "bass": "Geht nach den Lautsprechern an und vor ihnen aus.",
+          "volume_control": "Player: am spielenden Player. Eigenes Gerät: das Lautstärke-Gerät unten (die Player behalten ihren Pegel; Gruppen und Follow-Me setzen weiter die Player).",
+          "volume_entity": "Ein Media Player mit Lautstärke oder eine number / input_number (ihr Bereich zählt als 0–100 %)."
+        },
+        "sections": {
+          "standby": {
+            "name": "Auf Standby warten (Leistungssensoren)",
+            "description": "Mit Leistungssensoren wird eine Steckdose erst getrennt, wenn das Gerät von selbst in den Standby gegangen ist (z. B. OLED-Pflege); einschalten mit „Auf Standby warten“ am Gerät. Ohne gilt der Nachlauf.",
+            "data": {
+              "display_power": "Leistungssensoren Bild",
+              "audio_power": "Leistungssensoren Lautsprecher"
+            }
+          },
+          "follow": {
+            "name": "Follow-Me (Präsenzsensoren)",
+            "description": "Nur für Räume mit Musik-Player. Ohne Präsenzsensoren nimmt der Raum nicht an Follow-Me teil.",
+            "data": {
+              "occupancy": "Anwesenheitssensoren"
+            },
+            "data_description": {
+              "occupancy": "Einer an = jemand ist da. Alle nicht verfügbar = unbekannt, dann ändert sich nichts."
+            }
+          }
         }
       }
     },
@@ -173,13 +107,11 @@
       "display_needs_video": "Ein Bild-Gerät braucht einen Video-Player.",
       "duplicate_device": "Ein Gerät darf nur einmal verwendet werden.",
       "needs_player": "Braucht den zugehörigen Player.",
-      "needs_power": "Braucht einen Leistungssensor.",
       "not_a_group": "Das ist kein Music-Assistant-Gruppen-Player.",
       "needs_volume_entity": "Bitte das Lautstärke-Gerät wählen.",
       "volume_is_player": "Das Lautstärke-Gerät darf keiner der Player des Raums sein.",
       "no_volume": "Dieser Media Player kann keine Lautstärke setzen.",
-      "volume_is_room": "Ein Better-Media-Player-Raum kann nicht das Lautstärke-Gerät sein.",
-      "preset_not_offered": "Bitte ein Preset wählen, das dieser Raum anbietet (Lautstärke über 0)."
+      "volume_is_room": "Ein Better-Media-Player-Raum kann nicht das Lautstärke-Gerät sein."
     },
     "abort": {
       "hub_exists": "Zentrale Einstellungen gibt es schon. Ändern über Konfigurieren.",
@@ -192,27 +124,15 @@
         "title": "Einstellungen",
         "menu_options": {
           "room": "Raum",
-          "sources": "Media Player",
-          "volume": "Lautstärke-Presets",
-          "devices": "Stromgeräte",
-          "advanced": "Player: Sonderfälle",
-          "timing": "Zeiten",
-          "standby": "Standby abwarten",
-          "follow": "Follow-Me",
-          "save": "Speichern",
-          "night": "Nachtmodus"
+          "players": "Media Player",
+          "devices": "Geräte und Lautstärke",
+          "save": "Speichern"
         },
         "data": {
-          "follow_player": "Follow-Me-Player",
-          "default_volume": "Standard-Lautstärke",
-          "dynamic_controls": "Dynamische Controls",
-          "hide_delay": "Ausblende-Verzögerung"
+          "follow_player": "Follow-Me-Player"
         },
         "data_description": {
-          "follow_player": "Ein Music-Assistant-Gruppenplayer mit dynamischen Mitgliedern; leer: kein Follow-Me.",
-          "default_volume": "Solange Follow-Me noch keine Lautstärke kennt (es übernimmt die des Raums, in dem es gestartet wird).",
-          "dynamic_controls": "Controls ausblenden, die gerade keinen Sinn ergeben (alle Räume). Aus: alles bleibt sichtbar.",
-          "hide_delay": "Wie lange ein Control bleibt, nachdem es keinen Sinn mehr ergibt (wieder eingeblendet wird sofort)."
+          "follow_player": "Ein Music-Assistant-Gruppenplayer mit dynamischen Mitgliedern; leer: kein Follow-Me."
         }
       },
       "room": {
@@ -221,116 +141,76 @@
           "area": "Bereich"
         }
       },
-      "sources": {
-        "title": "Media Player",
-        "data": {
-          "video_player": "Video-Player",
-          "audio_player": "Musik-Player",
-          "volume_control": "Raumlautstärke",
-          "volume_entity": "Lautstärke-Gerät"
-        },
-        "data_description": {
-          "volume_control": "Player: am spielenden Player. Eigenes Gerät: das Lautstärke-Gerät unten (die Player behalten ihren Pegel; Gruppen und Follow-Me setzen weiter die Player).",
-          "volume_entity": "Ein Media Player mit Lautstärke oder eine number / input_number (ihr Bereich zählt als 0–100 %)."
-        }
-      },
-      "devices": {
-        "title": "Stromgeräte",
-        "data": {
-          "display": "Bild (TV, Beamer)",
-          "speakers": "Lautsprecher / Verstärker / AVR",
-          "bass": "Subwoofer"
-        }
-      },
-      "advanced": {
-        "title": "Player: Sonderfälle",
-        "data": {
-          "video_on_action": "Video-Player: Ein-Aktion",
-          "video_off_action": "Video-Player: Aus-Aktion",
-          "video_host": "Video-Player: Steckdose seiner Hardware",
-          "audio_on_action": "Musik-Player: Ein-Aktion",
-          "audio_off_action": "Musik-Player: Aus-Aktion",
-          "audio_host": "Musik-Player: Steckdose seiner Hardware"
-        }
-      },
-      "timing": {
-        "title": "Zeiten",
-        "data": {
-          "display_run_down": "Nachlauf Bild",
-          "audio_run_down": "Nachlauf Lautsprecher",
-          "host_run_down": "Nachlauf Player-Hardware",
-          "video_idle_timeout": "Untätigen Video-Player abschalten nach",
-          "start_timeout": "Start-Timeout",
-          "host_on_wait": "Warten nach Player-Steckdose an",
-          "display_on_wait": "Warten nach Bild an",
-          "audio_on_wait": "Warten nach Lautsprecher an",
-          "sleep_fade": "Sleep-Timer Ausblenden",
-          "snooze_minutes": "Schlummern"
-        },
-        "data_description": {
-          "sleep_fade": "Vorgabe für den Sleep-Timer: Die Lautstärke wird in den letzten Minuten heruntergeregelt. 0 = kein Ausblenden.",
-          "snooze_minutes": "So lange wartet der Schlummer-Button (oder eine Pause während des Weckens)."
-        }
-      },
-      "standby": {
-        "title": "Standby abwarten",
-        "data": {
-          "display_power": "Leistungssensoren Bild",
-          "display_standby": "Bild: Standby abwarten",
-          "display_standby_w": "Bild: Standby unter",
-          "display_standby_max": "Bild: höchstens warten",
-          "audio_power": "Leistungssensoren Lautsprecher",
-          "audio_standby": "Lautsprecher: Standby abwarten",
-          "audio_standby_w": "Lautsprecher: Standby unter",
-          "audio_standby_max": "Lautsprecher: höchstens warten"
-        }
-      },
-      "follow": {
-        "title": "Follow-Me",
-        "data": {
-          "occupancy": "Anwesenheitssensoren",
-          "presence_run_down": "Verlassen, wenn niemand da ist seit",
-          "volume_offset": "Lautstärke-Offset",
-          "prewarm": "Lautsprecher vorwärmen",
-          "wake_detect_left": "Wecken: Verlassen des Raums erkennen"
-        },
-        "data_description": {
-          "occupancy": "Einer an = jemand ist da. Alle nicht verfügbar = unbekannt, dann ändert sich nichts.",
-          "volume_offset": "Prozentpunkte gegenüber der Gruppenlautstärke beim Beitritt, z. B. -10.",
-          "prewarm": "Lautsprecher an, sobald irgendwo Follow-Musik spielt, damit der Ton beim Betreten sofort da ist.",
-          "wake_detect_left": "Follow-Wecker: Hast du diesen Raum verlassen (und bist in einem anderen Follow-Raum aufgetaucht), ist das Wecken erledigt. Aus: Es endet nur durch Beenden, maximale Dauer, Raum aus oder Sleep-Timer."
-        }
-      },
       "volume_note": {
         "title": "Hinweis: Lautstärke",
         "description": "{players} kann keine Lautstärke setzen. Die Raumlautstärke (eine Lautstärke für den ganzen Raum, die beim Wechsel zwischen den Playern mitgenommen wird) wirkt bei diesem Player nicht. Alles andere funktioniert wie gewohnt."
       },
-      "night": {
-        "title": "Nachtmodus",
-        "description": "Solange der Nachtmodus an ist: kein Subwoofer, kürzere Video-Zeiten und eine Lautstärke-Grenze. Ein- und Ausschalten ist Sache des Anwenders oder anderer Integrationen und Automationen; er bleibt an, bis er ausgeschaltet wird.",
+      "players": {
+        "title": "Media Player",
+        "description": "Mindestens ein Player. Der Video-Player (z. B. Kodi) braucht Bild und Lautsprecher, der Musik-Player (z. B. ein Music-Assistant-/sendspin-Player) nur die Lautsprecher. Keinen Gruppen-Player auswählen. Wie sich der Raum verhält (Zeiten, Wartezeiten, Standby, Follow-Me), stellst du an seinem Gerät ein.",
         "data": {
-          "night_max_volume": "Maximale Lautstärke",
-          "night_video_idle_timeout": "Video-Player im Leerlauf ausschalten nach",
-          "night_display_run_down": "Nachlauf Bild",
-          "night_fade_in": "Danach wieder einblenden über"
+          "video_player": "Video-Player",
+          "audio_player": "Musik-Player"
         },
         "data_description": {
-          "night_max_volume": "Grenze für beide Player des Raums, solange der Nachtmodus an ist. 0 = keine Grenze.",
-          "night_fade_in": "Endet der Nachtmodus, wird die Lautstärke über diese Zeit auf die Raumlautstärke zurückgeblendet."
+          "video_player": "Wird über sein eigenes Ein/Aus geschaltet (z. B. Kodi mit deiner Wake-on-LAN-Automation).",
+          "audio_player": "Der Player des Raums, keine Music-Assistant-Gruppe."
+        },
+        "sections": {
+          "special": {
+            "name": "Sonderfälle",
+            "description": "Nur nötig, wenn sich ein Player nicht selbst ein-/ausschalten lässt oder seine Hardware an einer Steckdose hängt. Sonst leer lassen.",
+            "data": {
+              "video_on_action": "Video-Player: Ein-Aktion",
+              "video_off_action": "Video-Player: Aus-Aktion",
+              "video_host": "Video-Player: Steckdose seiner Hardware",
+              "audio_on_action": "Musik-Player: Ein-Aktion",
+              "audio_off_action": "Musik-Player: Aus-Aktion",
+              "audio_host": "Musik-Player: Steckdose seiner Hardware"
+            },
+            "data_description": {
+              "video_on_action": "Nur verwendet, wenn der Player kein Einschalten unterstützt (Skript, Button, Schalter).",
+              "video_host": "Der Player ist erst verfügbar, nachdem diese Steckdose an ist."
+            }
+          }
         }
       },
-      "volume": {
-        "title": "Lautstärke-Presets",
-        "description": "Raumlautstärken mit Namen, gewählt über das Select „Lautstärke-Preset“ oder die Aktion set_volume_preset. 0 = in diesem Raum nicht angeboten.",
+      "devices": {
+        "title": "Geräte und Lautstärke",
+        "description": "Steckdosen, die nur noch dieser Raum schaltet. Andere Automationen für diese Steckdosen deaktivieren. Die Geräte müssen bei Stromzufuhr selbst starten.",
         "data": {
-          "preset_quiet": "Leise",
-          "preset_normal": "Normal",
-          "preset_loud": "Laut",
-          "preset_party": "Party",
-          "power_on_preset": "Einschalt-Preset"
+          "display": "Bild (TV, Beamer)",
+          "speakers": "Lautsprecher / Verstärker / AVR",
+          "bass": "Subwoofer",
+          "volume_control": "Raumlautstärke",
+          "volume_entity": "Lautstärke-Gerät"
         },
         "data_description": {
-          "power_on_preset": "Die Raumlautstärke, wann immer der Raum angeht (z. B. nicht mit der Party-Lautstärke von gestern)."
+          "display": "Geht zuerst an und zuletzt aus.",
+          "speakers": "Für beide Player gemeinsam. Geht an, wenn der Player bereit ist, und zuerst aus.",
+          "bass": "Geht nach den Lautsprechern an und vor ihnen aus.",
+          "volume_control": "Player: am spielenden Player. Eigenes Gerät: das Lautstärke-Gerät unten (die Player behalten ihren Pegel; Gruppen und Follow-Me setzen weiter die Player).",
+          "volume_entity": "Ein Media Player mit Lautstärke oder eine number / input_number (ihr Bereich zählt als 0–100 %)."
+        },
+        "sections": {
+          "standby": {
+            "name": "Auf Standby warten (Leistungssensoren)",
+            "description": "Mit Leistungssensoren wird eine Steckdose erst getrennt, wenn das Gerät von selbst in den Standby gegangen ist (z. B. OLED-Pflege); einschalten mit „Auf Standby warten“ am Gerät. Ohne gilt der Nachlauf.",
+            "data": {
+              "display_power": "Leistungssensoren Bild",
+              "audio_power": "Leistungssensoren Lautsprecher"
+            }
+          },
+          "follow": {
+            "name": "Follow-Me (Präsenzsensoren)",
+            "description": "Nur für Räume mit Musik-Player. Ohne Präsenzsensoren nimmt der Raum nicht an Follow-Me teil.",
+            "data": {
+              "occupancy": "Anwesenheitssensoren"
+            },
+            "data_description": {
+              "occupancy": "Einer an = jemand ist da. Alle nicht verfügbar = unbekannt, dann ändert sich nichts."
+            }
+          }
         }
       }
     },
@@ -341,13 +221,11 @@
       "display_needs_video": "Ein Bild-Gerät braucht einen Video-Player.",
       "duplicate_device": "Ein Gerät darf nur einmal verwendet werden.",
       "needs_player": "Braucht den zugehörigen Player.",
-      "needs_power": "Braucht einen Leistungssensor.",
       "not_a_group": "Das ist kein Music-Assistant-Gruppen-Player.",
       "needs_volume_entity": "Bitte das Lautstärke-Gerät wählen.",
       "volume_is_player": "Das Lautstärke-Gerät darf keiner der Player des Raums sein.",
       "no_volume": "Dieser Media Player kann keine Lautstärke setzen.",
-      "volume_is_room": "Ein Better-Media-Player-Raum kann nicht das Lautstärke-Gerät sein.",
-      "preset_not_offered": "Bitte ein Preset wählen, das dieser Raum anbietet (Lautstärke über 0)."
+      "volume_is_room": "Ein Better-Media-Player-Raum kann nicht das Lautstärke-Gerät sein."
     },
     "abort": {
       "invalid_config": "Die Einstellungen passen nicht zusammen. Bitte Media Player und Stromgeräte prüfen."
@@ -423,6 +301,21 @@
       },
       "night_mode": {
         "name": "Nachtmodus"
+      },
+      "display_standby": {
+        "name": "Display: auf Standby warten"
+      },
+      "audio_standby": {
+        "name": "Lautsprecher: auf Standby warten"
+      },
+      "prewarm": {
+        "name": "Follow-Me: Lautsprecher vorwärmen"
+      },
+      "wake_detect_left": {
+        "name": "Wecker: Verlassen des Raums erkennen"
+      },
+      "dynamic_controls": {
+        "name": "Dynamische Controls"
       }
     },
     "number": {
@@ -461,6 +354,51 @@
       },
       "preset_party": {
         "name": "Preset: Party"
+      },
+      "start_timeout": {
+        "name": "Start-Timeout"
+      },
+      "display_on_wait": {
+        "name": "Warten nach Display an"
+      },
+      "audio_on_wait": {
+        "name": "Warten nach Lautsprecher an"
+      },
+      "host_on_wait": {
+        "name": "Warten nach Player-Steckdose an"
+      },
+      "display_standby_w": {
+        "name": "Display-Standby unter"
+      },
+      "display_standby_max": {
+        "name": "Display: höchstens auf Standby warten"
+      },
+      "audio_standby_w": {
+        "name": "Lautsprecher-Standby unter"
+      },
+      "audio_standby_max": {
+        "name": "Lautsprecher: höchstens auf Standby warten"
+      },
+      "sleep_fade": {
+        "name": "Sleep-Timer ausblenden"
+      },
+      "snooze_minutes": {
+        "name": "Snooze-Dauer"
+      },
+      "night_fade_in": {
+        "name": "Nacht: Lautstärke zurückfaden"
+      },
+      "presence_run_down": {
+        "name": "Follow-Me: verlassen nach"
+      },
+      "volume_offset": {
+        "name": "Follow-Me: Lautstärke-Offset"
+      },
+      "default_volume": {
+        "name": "Follow-Me: Standardlautstärke"
+      },
+      "hide_delay": {
+        "name": "Ausblende-Verzögerung"
       }
     },
     "button": {
@@ -492,6 +430,16 @@
           "loud": "Laut",
           "party": "Party",
           "manual": "Manuell"
+        }
+      },
+      "power_on_preset": {
+        "name": "Einschalt-Preset",
+        "state": {
+          "none": "Keins",
+          "quiet": "Leise",
+          "normal": "Normal",
+          "loud": "Laut",
+          "party": "Party"
         }
       }
     }

@@ -6,9 +6,9 @@ from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import CoreState
 from homeassistant.helpers import entity_registry as er
 
-from custom_components.better_media_player.const import DOMAIN
+from custom_components.better_media_player.const import CONF_ENTRY_TYPE, DOMAIN, ENTRY_TYPE_HUB
 
-from .conftest import KITCHEN_OCC, MUSIC, SPEAKERS, setup_hub, setup_room
+from .conftest import KITCHEN_OCC, SPEAKERS, setup_hub, setup_room
 from .test_dynamic_controls import NIGHT, PRESET, ROOM, SLEEP, SLEEP_PLUS, _hidden, _music, _shown, _tick
 
 MUSIC_ONLY = {"video_player": None, "display": None, "speakers": None, "bass": None}
@@ -60,12 +60,12 @@ async def test_restart_without_hide_delay_hides_nothing_before_the_players_repor
 async def test_rooms_before_the_central_entry_with_dynamic_controls_off(hass, home, freezer):
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-    from custom_components.better_media_player.const import CONF_ENTRY_TYPE, ENTRY_TYPE_HUB, HUB_DEFAULTS
+    from custom_components.better_media_player.const import CONF_ENTRY_TYPE, ENTRY_TYPE_HUB
 
     # the central entry exists (but is not set up yet) when the room loads
     hub = MockConfigEntry(
         domain=DOMAIN, title="Better Media Player", data={CONF_ENTRY_TYPE: ENTRY_TYPE_HUB},
-        options={**HUB_DEFAULTS, "dynamic_controls": False}, version=2,
+        options={"dynamic_controls": False}, version=2,  # (moved to the device by the migration)
     )
     hub.add_to_hass(hass)
     log = _registry_log(hass)
@@ -102,14 +102,16 @@ async def test_paused_music_after_a_reload_stays_shown(hass, home, freezer):
 
 
 async def test_a_new_hide_delay_also_for_a_pending_hide(hass, home, freezer):
-    hub = await setup_hub(hass, hide_delay=60)
+    await setup_hub(hass, hide_delay=60)
     await setup_room(hass)
     await _music(hass, home, freezer)
     await _tick(hass, freezer, 5)
     await hass.services.async_call("media_player", "turn_off", {"entity_id": ROOM}, blocking=True)
     await hass.async_block_till_done()
     await _tick(hass, freezer, 5)  # the hide waits 60 s
-    hass.config_entries.async_update_entry(hub, options={**hub.options, "hide_delay": 2})
+    await hass.services.async_call(
+        "number", "set_value", {"entity_id": "number.better_media_player_hide_delay", "value": 2}, blocking=True
+    )
     await hass.async_block_till_done()
     await _tick(hass, freezer, 4)
     assert PRESET not in _shown(hass)
@@ -165,3 +167,42 @@ async def test_night_mode_stays_while_follow_me_runs(hass, house, freezer):
     await follow_from(hass, house, player="media_player.kitchen_player", room="media_player.kitchen")
     await _tick(hass, freezer, 10)
     assert not _hidden(hass, NIGHT)
+
+
+async def test_disabled_central_settings_use_the_defaults(hass, home, freezer):
+    from homeassistant.config_entries import ConfigEntryDisabler
+
+    hub = await setup_hub(hass, dynamic_controls=False)
+    await setup_room(hass)
+    await _tick(hass, freezer, 5)
+    assert PRESET in _shown(hass), "dynamic controls off: everything shown"
+    await hass.config_entries.async_set_disabled_by(hub.entry_id, ConfigEntryDisabler.USER)
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 5)
+    assert _hidden(hass, PRESET), "without central settings: dynamic controls on (default)"
+    await _music(hass, home, freezer)
+    await _tick(hass, freezer, 2)
+    assert PRESET in _shown(hass), "and they keep working"
+
+
+async def test_failed_central_settings_use_the_defaults(hass, home, freezer):
+    from unittest.mock import patch
+
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from homeassistant.config_entries import ConfigEntryState
+
+    hub = MockConfigEntry(
+        domain=DOMAIN, title="Better Media Player", data={CONF_ENTRY_TYPE: ENTRY_TYPE_HUB}, options={}, version=3
+    )
+    hub.add_to_hass(hass)
+    with patch("custom_components.better_media_player.hub.FollowManager.async_start", side_effect=RuntimeError):
+        await hass.config_entries.async_setup(hub.entry_id)
+        await hass.async_block_till_done()
+    assert hub.state is ConfigEntryState.SETUP_ERROR
+    await setup_room(hass)
+    await _tick(hass, freezer, 5)
+    assert _hidden(hass, PRESET)
+    await _music(hass, home, freezer)
+    await _tick(hass, freezer, 2)
+    assert PRESET in _shown(hass)

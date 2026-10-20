@@ -11,7 +11,7 @@ from homeassistant.util import dt as dt_util
 
 from custom_components.better_media_player.const import DOMAIN
 
-from .conftest import LIVING_OCC, MUSIC, SPEAKERS, setup_hub, setup_room
+from .conftest import LIVING_OCC, SPEAKERS, setup_hub, setup_room
 
 ROOM = "media_player.wohnzimmer"
 ALL_OFF = "button.wohnzimmer_all_off"
@@ -197,10 +197,34 @@ async def test_hub_without_follow_player(hass, home, freezer):
 
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "hub"})
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"dynamic_controls": False})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     assert result["type"].value == "create_entry"
-    assert result["options"]["dynamic_controls"] is False
-    assert "follow_player" not in result["options"]
+    assert result["options"] == {}
+    await hass.async_block_till_done()
+    # the central settings are on its device
+    await hass.services.async_call(
+        "switch", "turn_off", {"entity_id": "switch.better_media_player_dynamic_controls"}, blocking=True
+    )
+    await hass.async_block_till_done()
+    await setup_room(hass)
+    await _tick(hass, freezer, 5)
+    assert _shown(hass) == set(ROOM_CONTROLS)
+
+
+async def test_hide_delay_on_the_central_device(hass, home, freezer):
+    await setup_hub(hass)
+    await hass.services.async_call(
+        "number", "set_value", {"entity_id": "number.better_media_player_hide_delay", "value": 10}, blocking=True
+    )
+    await setup_room(hass)
+    await _music(hass, home, freezer)
+    await _tick(hass, freezer, 5)
+    await hass.services.async_call("media_player", "turn_off", {"entity_id": ROOM}, blocking=True)
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 6)
+    assert PRESET in _shown(hass)
+    await _tick(hass, freezer, 8)
+    assert PRESET not in _shown(hass)
 
 
 async def test_user_shown_control_stays_shown(hass, home, freezer):

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import callback
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import entity_registry as er
@@ -19,7 +19,7 @@ from .const import (
     CONF_HIDE_DELAY,
     DOMAIN,
     ENTRY_TYPE_HUB,
-    HUB_DEFAULTS,
+    HUB_ENTITY_DEFAULTS,
     NAME,
     SOURCE_AUDIO,
     SOURCE_VIDEO,
@@ -70,16 +70,36 @@ class BetterMediaPlayerEntity(Entity):
         self.async_on_remove(self.ctrl.async_add_listener(self.async_write_ha_state))
 
 
-def controls_settings(hass) -> tuple[bool, float]:
-    """Dynamic controls on (central settings, default on) and the hide delay (s).
+_PENDING = (ConfigEntryState.SETUP_IN_PROGRESS, ConfigEntryState.UNLOAD_IN_PROGRESS)
 
-    Read from the central entry's options: right whatever loads first, also
-    while the central entry reloads."""
-    opts = next(
-        (e.options for e in hass.config_entries.async_entries(DOMAIN) if e.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_HUB),
-        HUB_DEFAULTS,
+
+def controls_settings(hass) -> tuple[bool, float] | None:
+    """Dynamic controls on (central device, default on) and the hide delay (s).
+
+    None while the central settings are on their way (start, reload): nothing
+    changes until their values are known. Without them (none, disabled, failed)
+    the defaults apply."""
+    entry = next(
+        (e for e in hass.config_entries.async_entries(DOMAIN) if e.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_HUB), None
     )
-    return bool(opts.get(CONF_DYNAMIC_CONTROLS, True)), float(opts.get(CONF_HIDE_DELAY, 3) or 0)
+    hub = hass.data.get(DOMAIN, {}).get("hub")
+    if entry is not None and entry.state is ConfigEntryState.LOADED and hub is not None:
+        return bool(hub.setting(CONF_DYNAMIC_CONTROLS)), float(hub.setting(CONF_HIDE_DELAY) or 0)
+    if entry is not None and entry.disabled_by is None and (
+        entry.state in _PENDING or (entry.state is ConfigEntryState.NOT_LOADED and not hass.is_running)
+    ):
+        return None
+    return bool(HUB_ENTITY_DEFAULTS[CONF_DYNAMIC_CONTROLS]), float(HUB_ENTITY_DEFAULTS[CONF_HIDE_DELAY])
+
+
+def prune_entities(hass, entry: ConfigEntry, domain: str, entities: list[Entity]) -> None:
+    """Remove the entry's entities of this platform that are no longer created
+    (e.g. a standby setting after its power sensor was removed)."""
+    keep = {e.unique_id for e in entities}
+    reg = er.async_get(hass)
+    for item in er.async_entries_for_config_entry(reg, entry.entry_id):
+        if item.domain == domain and item.unique_id not in keep:
+            reg.async_remove(item.entity_id)
 
 
 class Visibility:
@@ -135,7 +155,10 @@ class Visibility:
         entry = reg.async_get(self.entity_id) if self.entity_id else None
         if entry is None:
             return
-        enabled, delay = controls_settings(self.hass)
+        settings = controls_settings(self.hass)
+        if settings is None:
+            return  # the central settings are loading: nothing changes yet
+        enabled, delay = settings
         owner = self._visibility_owner()
         uid = entry.unique_id
         mark = owner.data.get("controls", {}).get(uid)

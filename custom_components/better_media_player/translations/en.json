@@ -1,89 +1,6 @@
 {
   "config": {
     "step": {
-      "sources": {
-        "title": "Media players",
-        "description": "At least one player. The video player (e.g. Kodi) needs display and speakers, the music player (e.g. a Music Assistant / sendspin player) only the speakers. Do not select a group player. The room's volume is set on the players by default; with an amplifier, AV receiver or soundbar that has its own volume, let that device set it (the players then keep their level).",
-        "data": {
-          "video_player": "Video player",
-          "audio_player": "Music player",
-          "volume_control": "Room volume",
-          "volume_entity": "Volume device"
-        },
-        "data_description": {
-          "video_player": "Turned on/off via its own turn on/off (e.g. Kodi with your Wake-on-LAN automation).",
-          "audio_player": "A single room player, not a Music Assistant group.",
-          "volume_control": "Players: set on the playing player. Own device: the volume device below (players keep their level; groups and follow me still set the players).",
-          "volume_entity": "A media player with volume, or a number / input_number (its range counts as 0-100 %)."
-        }
-      },
-      "devices": {
-        "title": "Power devices",
-        "description": "Plugs that are switched by this room only. Disable other automations for these plugs. Devices must start by themselves when they get power.",
-        "data": {
-          "display": "Display (TV, projector)",
-          "speakers": "Speakers / amplifier / AVR",
-          "bass": "Subwoofer"
-        },
-        "data_description": {
-          "display": "On first, off last.",
-          "speakers": "Shared by both players. On after the player is ready, off first.",
-          "bass": "On after the speakers, off before them."
-        }
-      },
-      "advanced": {
-        "title": "Players: special cases",
-        "description": "Only needed if a player cannot be turned on/off by itself, or if its hardware hangs on a plug. Leave empty otherwise.",
-        "data": {
-          "video_on_action": "Video player: on action",
-          "video_off_action": "Video player: off action",
-          "video_host": "Video player: power plug of its hardware",
-          "audio_on_action": "Music player: on action",
-          "audio_off_action": "Music player: off action",
-          "audio_host": "Music player: power plug of its hardware"
-        },
-        "data_description": {
-          "video_on_action": "Used only if the player does not support turn on (script, button, switch).",
-          "video_host": "The player only becomes available after this plug is on."
-        }
-      },
-      "timing": {
-        "title": "Times",
-        "data": {
-          "display_run_down": "Display run-down",
-          "audio_run_down": "Speaker run-down",
-          "host_run_down": "Player hardware run-down",
-          "video_idle_timeout": "Turn off idle video player after",
-          "start_timeout": "Start timeout",
-          "host_on_wait": "Wait after player plug on",
-          "display_on_wait": "Wait after display on",
-          "audio_on_wait": "Wait after speakers on",
-          "sleep_fade": "Sleep timer fade-out",
-          "snooze_minutes": "Snooze"
-        },
-        "data_description": {
-          "display_run_down": "How long the display stays powered after the video player stopped.",
-          "audio_run_down": "How long the speakers stay powered after playback stopped.",
-          "video_idle_timeout": "Video player on but nothing playing (e.g. in the menu). 0 = never.",
-          "start_timeout": "If the player is not ready after this time, the start is aborted.",
-          "sleep_fade": "Default for the sleep timer: the volume goes down over the last minutes. 0 = no fade.",
-          "snooze_minutes": "How long the snooze button (or a pause during the wake) waits."
-        }
-      },
-      "standby": {
-        "title": "Wait for standby (optional)",
-        "description": "With power sensors the plug is only cut after the device went to standby by itself (e.g. OLED panel care). Without, the run-down time is used.",
-        "data": {
-          "display_power": "Display power sensors",
-          "display_standby": "Display: wait for standby",
-          "display_standby_w": "Display standby below",
-          "display_standby_max": "Display: wait at most",
-          "audio_power": "Speaker power sensors",
-          "audio_standby": "Speakers: wait for standby",
-          "audio_standby_w": "Speakers standby below",
-          "audio_standby_max": "Speakers: wait at most"
-        }
-      },
       "room": {
         "title": "New room",
         "description": "One Better Media Player per room. If you pick an area, Kodi and Music Assistant players of that area are pre-selected in the next step.",
@@ -102,67 +19,84 @@
       },
       "hub": {
         "title": "Central settings",
-        "description": "Follow me: the music follows the people from room to room. Choose the follow-me player: a Music Assistant group player with dynamic members (empty: no follow me). Follow me is started in a room where music plays (button or action); every other group simply plays. Dynamic controls: a room's controls that make no sense right now are hidden (e.g. the sleep timer while nothing plays), in every room.",
+        "description": "Follow me: the music follows the people from room to room. Choose the follow-me player: a Music Assistant group player with dynamic members (empty: no follow me). Follow me is started in a room where music plays (button or action); every other group simply plays. Its default volume, the dynamic controls and their hide delay are set on the central device.",
         "data": {
-          "follow_player": "Follow-me player",
-          "default_volume": "Default volume",
-          "dynamic_controls": "Dynamic controls",
-          "hide_delay": "Hide delay"
+          "follow_player": "Follow-me player"
         },
         "data_description": {
-          "follow_player": "A Music Assistant group player with dynamic members; empty: no follow me.",
-          "default_volume": "Until follow me knows a volume (it takes the one of the room it is started in).",
-          "dynamic_controls": "Hide the controls that make no sense right now (all rooms). Off: everything stays visible.",
-          "hide_delay": "How long a control stays after it no longer makes sense (shown again at once)."
-        }
-      },
-      "follow": {
-        "title": "Follow me",
-        "description": "Only for rooms with a music player. Without occupancy sensors the room does not take part in follow me.",
-        "data": {
-          "occupancy": "Occupancy sensors",
-          "presence_run_down": "Leave after nobody is there for",
-          "volume_offset": "Volume offset",
-          "prewarm": "Prewarm speakers",
-          "wake_detect_left": "Wake: detect leaving the room"
-        },
-        "data_description": {
-          "occupancy": "Any of them on = someone is there. All unavailable = unknown, nothing changes.",
-          "volume_offset": "Percentage points relative to the group volume when the room joins, e.g. -10.",
-          "prewarm": "Speakers on as soon as follow music plays anywhere, so sound is there instantly when you come in.",
-          "wake_detect_left": "Follow wake: once you left this room (and turned up in another follow room), the wake is done. Off: it ends only by stop, maximum duration, room off or sleep timer."
+          "follow_player": "A Music Assistant group player with dynamic members; empty: no follow me."
         }
       },
       "volume_note": {
         "title": "Note: volume",
         "description": "{players} cannot set a volume. The room volume (one volume for the whole room, taken along when switching between the players) does not work for it. Everything else works as usual."
       },
-      "night": {
-        "title": "Night mode",
-        "description": "While the night mode is on: no subwoofer, shorter video times and a volume limit. Turning it on and off is up to you or to other integrations and automations; it stays on until turned off.",
+      "players": {
+        "title": "Media players",
+        "description": "At least one player. The video player (e.g. Kodi) needs display and speakers, the music player (e.g. a Music Assistant / sendspin player) only the speakers. Do not select a group player. How each room behaves (times, waits, standby, follow me) is set on its device.",
         "data": {
-          "night_max_volume": "Maximum volume",
-          "night_video_idle_timeout": "Turn off idle video player after",
-          "night_display_run_down": "Display run-down",
-          "night_fade_in": "Fade back up afterwards"
+          "video_player": "Video player",
+          "audio_player": "Music player"
         },
         "data_description": {
-          "night_max_volume": "Limit for both players of the room while the night mode is on. 0 = no limit.",
-          "night_fade_in": "When the night mode ends, the volume fades back to the room volume over this time."
+          "video_player": "Turned on/off via its own turn on/off (e.g. Kodi with your Wake-on-LAN automation).",
+          "audio_player": "A single room player, not a Music Assistant group."
+        },
+        "sections": {
+          "special": {
+            "name": "Special cases",
+            "description": "Only needed if a player cannot be turned on/off by itself, or if its hardware hangs on a plug. Leave empty otherwise.",
+            "data": {
+              "video_on_action": "Video player: on action",
+              "video_off_action": "Video player: off action",
+              "video_host": "Video player: power plug of its hardware",
+              "audio_on_action": "Music player: on action",
+              "audio_off_action": "Music player: off action",
+              "audio_host": "Music player: power plug of its hardware"
+            },
+            "data_description": {
+              "video_on_action": "Used only if the player does not support turn on (script, button, switch).",
+              "video_host": "The player only becomes available after this plug is on."
+            }
+          }
         }
       },
-      "volume": {
-        "title": "Volume presets",
-        "description": "Room volumes by name, chosen with the select Volume preset or the action set_volume_preset. 0 = not offered in this room.",
+      "devices": {
+        "title": "Devices and volume",
+        "description": "Plugs that are switched by this room only. Disable other automations for these plugs. Devices must start by themselves when they get power.",
         "data": {
-          "preset_quiet": "Quiet",
-          "preset_normal": "Normal",
-          "preset_loud": "Loud",
-          "preset_party": "Party",
-          "power_on_preset": "Power-on preset"
+          "display": "Display (TV, projector)",
+          "speakers": "Speakers / amplifier / AVR",
+          "bass": "Subwoofer",
+          "volume_control": "Room volume",
+          "volume_entity": "Volume device"
         },
         "data_description": {
-          "power_on_preset": "The room's volume whenever the room comes on (e.g. not at last night's party volume)."
+          "display": "On first, off last.",
+          "speakers": "Shared by both players. On after the player is ready, off first.",
+          "bass": "On after the speakers, off before them.",
+          "volume_control": "Players: set on the playing player. Own device: the volume device below (players keep their level; groups and follow me still set the players).",
+          "volume_entity": "A media player with volume, or a number / input_number (its range counts as 0-100 %)."
+        },
+        "sections": {
+          "standby": {
+            "name": "Wait for standby (power sensors)",
+            "description": "With power sensors a plug is only cut after its device went to standby by itself (e.g. OLED panel care); switch it on with the device's Wait for standby. Without, the run-down time is used.",
+            "data": {
+              "display_power": "Display power sensors",
+              "audio_power": "Speaker power sensors"
+            }
+          },
+          "follow": {
+            "name": "Follow me (occupancy sensors)",
+            "description": "Only for rooms with a music player. Without occupancy sensors the room does not take part in follow me.",
+            "data": {
+              "occupancy": "Occupancy sensors"
+            },
+            "data_description": {
+              "occupancy": "Any of them on = someone is there. All unavailable = unknown, nothing changes."
+            }
+          }
         }
       }
     },
@@ -173,13 +107,11 @@
       "display_needs_video": "A display needs a video player.",
       "duplicate_device": "A device may only be used once.",
       "needs_player": "Needs the corresponding player.",
-      "needs_power": "Needs a power sensor.",
       "not_a_group": "That is no Music Assistant group player.",
       "needs_volume_entity": "Choose the volume device.",
       "volume_is_player": "The volume device must not be one of the room's players.",
       "no_volume": "This media player cannot set a volume.",
-      "volume_is_room": "A Better Media Player room cannot be the volume device.",
-      "preset_not_offered": "Choose a preset this room offers (a volume above 0)."
+      "volume_is_room": "A Better Media Player room cannot be the volume device."
     },
     "abort": {
       "hub_exists": "Central settings already exist. Change them via Configure.",
@@ -192,27 +124,15 @@
         "title": "Settings",
         "menu_options": {
           "room": "Room",
-          "sources": "Media players",
-          "volume": "Volume presets",
-          "devices": "Power devices",
-          "advanced": "Players: special cases",
-          "timing": "Times",
-          "standby": "Wait for standby",
-          "follow": "Follow me",
-          "save": "Save",
-          "night": "Night mode"
+          "players": "Media players",
+          "devices": "Devices and volume",
+          "save": "Save"
         },
         "data": {
-          "follow_player": "Follow-me player",
-          "default_volume": "Default volume",
-          "dynamic_controls": "Dynamic controls",
-          "hide_delay": "Hide delay"
+          "follow_player": "Follow-me player"
         },
         "data_description": {
-          "follow_player": "A Music Assistant group player with dynamic members; empty: no follow me.",
-          "default_volume": "Until follow me knows a volume (it takes the one of the room it is started in).",
-          "dynamic_controls": "Hide the controls that make no sense right now (all rooms). Off: everything stays visible.",
-          "hide_delay": "How long a control stays after it no longer makes sense (shown again at once)."
+          "follow_player": "A Music Assistant group player with dynamic members; empty: no follow me."
         }
       },
       "room": {
@@ -221,116 +141,76 @@
           "area": "Area"
         }
       },
-      "sources": {
-        "title": "Media players",
-        "data": {
-          "video_player": "Video player",
-          "audio_player": "Music player",
-          "volume_control": "Room volume",
-          "volume_entity": "Volume device"
-        },
-        "data_description": {
-          "volume_control": "Players: set on the playing player. Own device: the volume device below (players keep their level; groups and follow me still set the players).",
-          "volume_entity": "A media player with volume, or a number / input_number (its range counts as 0-100 %)."
-        }
-      },
-      "devices": {
-        "title": "Power devices",
-        "data": {
-          "display": "Display (TV, projector)",
-          "speakers": "Speakers / amplifier / AVR",
-          "bass": "Subwoofer"
-        }
-      },
-      "advanced": {
-        "title": "Players: special cases",
-        "data": {
-          "video_on_action": "Video player: on action",
-          "video_off_action": "Video player: off action",
-          "video_host": "Video player: power plug of its hardware",
-          "audio_on_action": "Music player: on action",
-          "audio_off_action": "Music player: off action",
-          "audio_host": "Music player: power plug of its hardware"
-        }
-      },
-      "timing": {
-        "title": "Times",
-        "data": {
-          "display_run_down": "Display run-down",
-          "audio_run_down": "Speaker run-down",
-          "host_run_down": "Player hardware run-down",
-          "video_idle_timeout": "Turn off idle video player after",
-          "start_timeout": "Start timeout",
-          "host_on_wait": "Wait after player plug on",
-          "display_on_wait": "Wait after display on",
-          "audio_on_wait": "Wait after speakers on",
-          "sleep_fade": "Sleep timer fade-out",
-          "snooze_minutes": "Snooze"
-        },
-        "data_description": {
-          "sleep_fade": "Default for the sleep timer: the volume goes down over the last minutes. 0 = no fade.",
-          "snooze_minutes": "How long the snooze button (or a pause during the wake) waits."
-        }
-      },
-      "standby": {
-        "title": "Wait for standby",
-        "data": {
-          "display_power": "Display power sensors",
-          "display_standby": "Display: wait for standby",
-          "display_standby_w": "Display standby below",
-          "display_standby_max": "Display: wait at most",
-          "audio_power": "Speaker power sensors",
-          "audio_standby": "Speakers: wait for standby",
-          "audio_standby_w": "Speakers standby below",
-          "audio_standby_max": "Speakers: wait at most"
-        }
-      },
-      "follow": {
-        "title": "Follow me",
-        "data": {
-          "occupancy": "Occupancy sensors",
-          "presence_run_down": "Leave after nobody is there for",
-          "volume_offset": "Volume offset",
-          "prewarm": "Prewarm speakers",
-          "wake_detect_left": "Wake: detect leaving the room"
-        },
-        "data_description": {
-          "occupancy": "Any of them on = someone is there. All unavailable = unknown, nothing changes.",
-          "volume_offset": "Percentage points relative to the group volume when the room joins, e.g. -10.",
-          "prewarm": "Speakers on as soon as follow music plays anywhere, so sound is there instantly when you come in.",
-          "wake_detect_left": "Follow wake: once you left this room (and turned up in another follow room), the wake is done. Off: it ends only by stop, maximum duration, room off or sleep timer."
-        }
-      },
       "volume_note": {
         "title": "Note: volume",
         "description": "{players} cannot set a volume. The room volume (one volume for the whole room, taken along when switching between the players) does not work for it. Everything else works as usual."
       },
-      "night": {
-        "title": "Night mode",
-        "description": "While the night mode is on: no subwoofer, shorter video times and a volume limit. Turning it on and off is up to you or to other integrations and automations; it stays on until turned off.",
+      "players": {
+        "title": "Media players",
+        "description": "At least one player. The video player (e.g. Kodi) needs display and speakers, the music player (e.g. a Music Assistant / sendspin player) only the speakers. Do not select a group player. How each room behaves (times, waits, standby, follow me) is set on its device.",
         "data": {
-          "night_max_volume": "Maximum volume",
-          "night_video_idle_timeout": "Turn off idle video player after",
-          "night_display_run_down": "Display run-down",
-          "night_fade_in": "Fade back up afterwards"
+          "video_player": "Video player",
+          "audio_player": "Music player"
         },
         "data_description": {
-          "night_max_volume": "Limit for both players of the room while the night mode is on. 0 = no limit.",
-          "night_fade_in": "When the night mode ends, the volume fades back to the room volume over this time."
+          "video_player": "Turned on/off via its own turn on/off (e.g. Kodi with your Wake-on-LAN automation).",
+          "audio_player": "A single room player, not a Music Assistant group."
+        },
+        "sections": {
+          "special": {
+            "name": "Special cases",
+            "description": "Only needed if a player cannot be turned on/off by itself, or if its hardware hangs on a plug. Leave empty otherwise.",
+            "data": {
+              "video_on_action": "Video player: on action",
+              "video_off_action": "Video player: off action",
+              "video_host": "Video player: power plug of its hardware",
+              "audio_on_action": "Music player: on action",
+              "audio_off_action": "Music player: off action",
+              "audio_host": "Music player: power plug of its hardware"
+            },
+            "data_description": {
+              "video_on_action": "Used only if the player does not support turn on (script, button, switch).",
+              "video_host": "The player only becomes available after this plug is on."
+            }
+          }
         }
       },
-      "volume": {
-        "title": "Volume presets",
-        "description": "Room volumes by name, chosen with the select Volume preset or the action set_volume_preset. 0 = not offered in this room.",
+      "devices": {
+        "title": "Devices and volume",
+        "description": "Plugs that are switched by this room only. Disable other automations for these plugs. Devices must start by themselves when they get power.",
         "data": {
-          "preset_quiet": "Quiet",
-          "preset_normal": "Normal",
-          "preset_loud": "Loud",
-          "preset_party": "Party",
-          "power_on_preset": "Power-on preset"
+          "display": "Display (TV, projector)",
+          "speakers": "Speakers / amplifier / AVR",
+          "bass": "Subwoofer",
+          "volume_control": "Room volume",
+          "volume_entity": "Volume device"
         },
         "data_description": {
-          "power_on_preset": "The room's volume whenever the room comes on (e.g. not at last night's party volume)."
+          "display": "On first, off last.",
+          "speakers": "Shared by both players. On after the player is ready, off first.",
+          "bass": "On after the speakers, off before them.",
+          "volume_control": "Players: set on the playing player. Own device: the volume device below (players keep their level; groups and follow me still set the players).",
+          "volume_entity": "A media player with volume, or a number / input_number (its range counts as 0-100 %)."
+        },
+        "sections": {
+          "standby": {
+            "name": "Wait for standby (power sensors)",
+            "description": "With power sensors a plug is only cut after its device went to standby by itself (e.g. OLED panel care); switch it on with the device's Wait for standby. Without, the run-down time is used.",
+            "data": {
+              "display_power": "Display power sensors",
+              "audio_power": "Speaker power sensors"
+            }
+          },
+          "follow": {
+            "name": "Follow me (occupancy sensors)",
+            "description": "Only for rooms with a music player. Without occupancy sensors the room does not take part in follow me.",
+            "data": {
+              "occupancy": "Occupancy sensors"
+            },
+            "data_description": {
+              "occupancy": "Any of them on = someone is there. All unavailable = unknown, nothing changes."
+            }
+          }
         }
       }
     },
@@ -341,13 +221,11 @@
       "display_needs_video": "A display needs a video player.",
       "duplicate_device": "A device may only be used once.",
       "needs_player": "Needs the corresponding player.",
-      "needs_power": "Needs a power sensor.",
       "not_a_group": "That is no Music Assistant group player.",
       "needs_volume_entity": "Choose the volume device.",
       "volume_is_player": "The volume device must not be one of the room's players.",
       "no_volume": "This media player cannot set a volume.",
-      "volume_is_room": "A Better Media Player room cannot be the volume device.",
-      "preset_not_offered": "Choose a preset this room offers (a volume above 0)."
+      "volume_is_room": "A Better Media Player room cannot be the volume device."
     },
     "abort": {
       "invalid_config": "The settings are not consistent. Check media players and power devices."
@@ -423,6 +301,21 @@
       },
       "night_mode": {
         "name": "Night mode"
+      },
+      "display_standby": {
+        "name": "Display: wait for standby"
+      },
+      "audio_standby": {
+        "name": "Speakers: wait for standby"
+      },
+      "prewarm": {
+        "name": "Follow me: prewarm speakers"
+      },
+      "wake_detect_left": {
+        "name": "Wake: detect leaving the room"
+      },
+      "dynamic_controls": {
+        "name": "Dynamic controls"
       }
     },
     "number": {
@@ -461,6 +354,51 @@
       },
       "preset_party": {
         "name": "Preset: Party"
+      },
+      "start_timeout": {
+        "name": "Start timeout"
+      },
+      "display_on_wait": {
+        "name": "Wait after display on"
+      },
+      "audio_on_wait": {
+        "name": "Wait after speakers on"
+      },
+      "host_on_wait": {
+        "name": "Wait after player plug on"
+      },
+      "display_standby_w": {
+        "name": "Display standby below"
+      },
+      "display_standby_max": {
+        "name": "Display: wait for standby at most"
+      },
+      "audio_standby_w": {
+        "name": "Speakers standby below"
+      },
+      "audio_standby_max": {
+        "name": "Speakers: wait for standby at most"
+      },
+      "sleep_fade": {
+        "name": "Sleep timer fade-out"
+      },
+      "snooze_minutes": {
+        "name": "Snooze time"
+      },
+      "night_fade_in": {
+        "name": "Night: fade back up"
+      },
+      "presence_run_down": {
+        "name": "Follow me: leave after"
+      },
+      "volume_offset": {
+        "name": "Follow me: volume offset"
+      },
+      "default_volume": {
+        "name": "Follow me: default volume"
+      },
+      "hide_delay": {
+        "name": "Hide delay"
       }
     },
     "button": {
@@ -492,6 +430,16 @@
           "loud": "Loud",
           "party": "Party",
           "manual": "Manual"
+        }
+      },
+      "power_on_preset": {
+        "name": "Power-on preset",
+        "state": {
+          "none": "None",
+          "quiet": "Quiet",
+          "normal": "Normal",
+          "loud": "Loud",
+          "party": "Party"
         }
       }
     }

@@ -16,7 +16,8 @@ from custom_components.better_media_player.const import (
     CONF_FOLLOW_PLAYER,
     CONF_OCCUPANCY,
     ENTRY_TYPE_HUB,
-    HUB_DEFAULTS,
+    ENTITY_DEFAULTS,
+    HUB_ENTITY_DEFAULTS,
     CONF_AUDIO_PLAYER,
     CONF_BASS,
     CONF_DISPLAY,
@@ -302,13 +303,20 @@ def room_options(**overrides: Any) -> dict:
     return {k: v for k, v in opts.items() if v is not None}
 
 
+def _version(options: dict, device_keys: dict) -> int:
+    """Values set on the device in a test come as options of the version before:
+    the migration moves them to the device (as for an upgrade)."""
+    return 2 if any(k in options for k in device_keys) else 3
+
+
 async def setup_room(hass: HomeAssistant, **overrides: Any) -> MockConfigEntry:
+    options = room_options(**overrides)
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Wohnzimmer",
         data={CONF_ENTRY_TYPE: ENTRY_TYPE_ROOM},
-        options=room_options(**overrides),
-        version=2,
+        options=options,
+        version=_version(options, ENTITY_DEFAULTS),
     )
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
@@ -323,8 +331,8 @@ async def setup_hub(hass: HomeAssistant, **overrides) -> MockConfigEntry:
         domain=DOMAIN,
         title="Better Media Player",
         data={CONF_ENTRY_TYPE: ENTRY_TYPE_HUB},
-        options={**HUB_DEFAULTS, CONF_FOLLOW_PLAYER: FOLLOW, **overrides},
-        version=2,
+        options={k: v for k, v in {CONF_FOLLOW_PLAYER: FOLLOW, **overrides}.items() if v is not None},
+        version=_version(overrides, HUB_ENTITY_DEFAULTS),
     )
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
@@ -338,7 +346,7 @@ async def setup_kitchen(hass: HomeAssistant) -> MockConfigEntry:
         title="Kitchen",
         data={CONF_ENTRY_TYPE: ENTRY_TYPE_ROOM},
         options={**DEFAULTS, CONF_AUDIO_PLAYER: KITCHEN, CONF_SPEAKERS: [KITCHEN_SPK], CONF_OCCUPANCY: [KITCHEN_OCC]},
-        version=2,
+        version=3,
     )
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)

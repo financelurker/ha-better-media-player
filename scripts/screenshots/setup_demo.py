@@ -61,13 +61,15 @@ async def main() -> None:
 
         r = await s.post(f"{BASE}/api/config/config_entries/flow", json={"handler": "better_media_player"}, headers=h)
         fid = (await r.json())["flow_id"]
+        await flow(fid, {"next_step_id": "room"})
         await flow(fid, {"name": "Family Room", "area": area_id})
-        await flow(fid, {"video_player": "media_player.lounge_room", "audio_player": "media_player.walkman"})
-        await flow(fid, {"display": ["switch.tv_plug"], "speakers": ["switch.speaker_plug"],
-                         "bass": ["switch.subwoofer_plug"]})
-        await flow(fid, {})
-        await flow(fid, {})
-        res = await flow(fid, {"display_power": ["sensor.tv_power"], "audio_power": ["sensor.speaker_power"]})
+        await flow(fid, {"video_player": "media_player.lounge_room", "audio_player": "media_player.walkman", "special": {}})
+        res = await flow(fid, {"display": ["switch.tv_plug"], "speakers": ["switch.speaker_plug"],
+                               "bass": ["switch.subwoofer_plug"],
+                               "standby": {"display_power": ["sensor.tv_power"], "audio_power": ["sensor.speaker_power"]},
+                               "follow": {}})
+        if res.get("step_id") == "volume_note":
+            res = await flow(fid, {})
         print("entry", res.get("result", {}).get("entry_id"))
 
         devices = await call({"type": "config/device_registry/list"})

@@ -267,14 +267,14 @@ async def test_a_room_player_cannot_be_the_volume_device(hass, home):
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "room"})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"name": "Kitchen"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"audio_player": KITCHEN, "special": {}})
+    sections = {"standby": {}, "follow": {}}
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"],
-        {"audio_player": KITCHEN, CONF_VOLUME_CONTROL: VOLUME_DEVICE, CONF_VOLUME_ENTITY: ROOM},
+        result["flow_id"], {CONF_VOLUME_CONTROL: VOLUME_DEVICE, CONF_VOLUME_ENTITY: ROOM, **sections}
     )
     assert result["errors"] == {CONF_VOLUME_ENTITY: "volume_is_room"}
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"],
-        {"audio_player": KITCHEN, CONF_VOLUME_CONTROL: VOLUME_DEVICE, CONF_VOLUME_ENTITY: FOLLOW},
+        result["flow_id"], {CONF_VOLUME_CONTROL: VOLUME_DEVICE, CONF_VOLUME_ENTITY: FOLLOW, **sections}
     )
     assert result["errors"] == {CONF_VOLUME_ENTITY: "group_player"}
 

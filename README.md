@@ -43,15 +43,15 @@ Taken from the Home Assistant demo integration: two demo players stand in for Ko
 
 <img src="docs/images/more-info.png" alt="More-info dialog of the room player" width="420">
 
-**Device page:** status, demand sensors, automatic power, run-down times and the *All off* button.
+**Device page:** status, demand sensors, automatic power, the *All off* button and, under *Configuration*, everything about how the room behaves ([settings on the device](#settings-on-the-device)).
 
 ![Device page](docs/images/device.png)
 
-**Settings:** every part of the setup can be changed later via **Configure**.
+**Settings:** what is connected can be changed later via **Configure**.
 
-| Menu | Media players | Power devices | Times |
-|---|---|---|---|
-| ![Options menu](docs/images/options-menu.png) | ![Media players](docs/images/options-players.png) | ![Power devices](docs/images/options-devices.png) | ![Times](docs/images/options-times.png) |
+| Menu | Media players | Devices and volume |
+|---|---|---|
+| ![Options menu](docs/images/options-menu.png) | ![Media players](docs/images/options-players.png) | ![Devices and volume](docs/images/options-devices.png) |
 
 **Mobile:**
 
@@ -83,19 +83,33 @@ Without the button: HACS → ⋮ → **Custom repositories** → add `https://gi
 
 Settings → Devices & services → Add integration → **Better Media Player** → **A room**, once per room. For follow me, or to change the [dynamic controls](#dynamic-controls), add **Central settings** once as well.
 
+The setup only asks what is connected:
+
 | Step | What you enter |
 |---|---|
 | **New room** | Name and area. Kodi and Music Assistant players of the area are pre-selected in the next step. |
-| **Media players** | Video player (e.g. Kodi) and/or music player (the room's own player, not a group). Where the room's volume is set: on the players, or on an own device. |
-| **Volume presets** | Volumes for quiet, normal, loud and party; power-on preset. |
-| **Power devices** | Display (TV, projector), speakers (one or more: active speakers, amplifier, AVR), subwoofer. |
-| **Players: special cases** | Only if a player cannot turn itself on/off (on/off action) or its hardware hangs on a plug. |
-| **Times** | Run-down times, video idle timeout, start timeout, waits after switching on, default sleep timer fade-out, snooze time. |
-| **Wait for standby** | Optional, needs power sensors. |
-| **Night mode** | Volume limit, video times at night, fade back afterwards. |
-| **Follow me** | Occupancy sensors, presence run-down, volume offset, prewarm. Rooms without occupancy sensors do not take part. |
+| **Media players** | Video player (e.g. Kodi) and/or music player (the room's own player, not a group). *Special cases* (collapsed): on/off actions for a player that cannot turn itself on/off, plugs its hardware hangs on. |
+| **Devices and volume** | Display (TV, projector), speakers (one or more: active speakers, amplifier, AVR), subwoofer. Where the room's volume is set: on the players, or on an own device. *Wait for standby* (collapsed): power sensors. *Follow me* (collapsed): occupancy sensors; rooms without them do not take part. |
 
-Everything can be changed later via **Configure**.
+Everything can be changed later via **Configure**. How the room behaves is set on its device.
+
+### Settings on the device
+
+Times, waits, standby, night mode, volume presets and follow me are configuration entities of the room's device (Settings → Devices & services → device → *Configuration*). They take effect at once, can be set by automations and do not show up on auto-generated dashboards. A room only has the ones it can use:
+
+| Entity | Default | Present |
+|---|---|---|
+| Display run-down, Speaker run-down, Player hardware run-down | 10 / 2 / 2 min | with that device |
+| Video idle timeout | 30 min | with a video player |
+| Start timeout | 90 s | always |
+| Wait after display on, Wait after speakers on, Wait after player plug on | 0 s | with that device |
+| Display / Speakers: wait for standby, … standby below, … wait for standby at most | off; 5 / 3 W; 20 / 5 min | with power sensors for it |
+| Night: maximum volume, Night: video idle timeout, Night: display run-down, Night: fade back up | | see [night mode](#night-mode) |
+| Preset: Quiet / Normal / Loud / Party, Power-on preset | 15 / 30 / 50 / 70 %, none | see [presets](#presets) |
+| Sleep timer fade-out, Snooze time | 5 / 9 min | always |
+| Follow me: leave after, Follow me: volume offset, Follow me: prewarm speakers, Wake: detect leaving the room | | in follow rooms, see [follow me](#follow-me) |
+
+The **Central settings** device has *Follow me: default volume*, *Dynamic controls* and *Hide delay*; its **Configure** only asks for the follow-me player.
 
 > **Before you start:** every plug belongs to exactly one controller. Disable automations, scripts or helpers that switch the same plugs (Settings → Entities → plug → **Related** shows them). Devices must start by themselves when they get power.
 
@@ -251,7 +265,7 @@ With an amplifier, AV receiver or soundbar that has its own volume, choose **Roo
 
 #### Presets
 
-Room volumes by name: **quiet**, **normal**, **loud** and **party** (default 15 / 30 / 50 / 70 %; 0 = not offered in the room). Their volumes are number entities of the room (`Preset: Quiet` etc., like `Night: maximum volume`); *Volume presets* in the options sets them too. Changing the chosen preset's volume sets it right away; a preset set to 0 is no longer offered (the volume stays). Choose one with the select `Volume preset` or the action below; this works with players and with a volume device alike.
+Room volumes by name: **quiet**, **normal**, **loud** and **party** (default 15 / 30 / 50 / 70 %; 0 = not offered in the room). Their volumes are number entities of the room (`Preset: Quiet` etc., like `Night: maximum volume`). Changing the chosen preset's volume sets it right away; a preset set to 0 is no longer offered (the volume stays). Choose one with the select `Volume preset` or the action below; this works with players and with a volume device alike.
 
 ```yaml
 action: better_media_player.set_volume_preset
@@ -264,7 +278,7 @@ data:
 - The preset becomes the room volume and is set right away on what plays. In a group (Music Assistant groups, follow me) it is only remembered: there the group decides; the room gets it with its next playback on its own (with a volume device: right away on the device).
 - It stays chosen until the volume is changed otherwise; then the select shows **manual** (choosing *manual* keeps the volume as it is). The room player shows it in the attribute `volume_preset`.
 - **Night mode:** a preset above the limit is limited, stays chosen and comes back when the night ends.
-- **Power-on preset** (option, default none; skipped while its volume is 0): the room volume whenever the room comes on (one of its players is used again after everything was off), e.g. not at last night's party volume. Not after a restart of Home Assistant with the room already on, not when a player drops out for a moment, and not for follow me's prewarm.
+- **Power-on preset** (select on the device, default none; skipped while its volume is 0): the room volume whenever the room comes on (one of its players is used again after everything was off), e.g. not at last night's party volume. Not after a restart of Home Assistant with the room already on, not when a player drops out for a moment, and not for follow me's prewarm.
 
 ### Night mode
 
@@ -276,7 +290,7 @@ The switch `Night mode` puts the room into night mode until it is turned off aga
 - **Groups:** a room's player in a group is limited like any other. The group itself is limited only when all its players belong to rooms in night mode. When a room leaves the night mode, its player fades back to the group's volume (follow me: the remembered volume plus the room's offset; other groups: the group's volume from before the night); the group volume itself is not raised, as that would raise the players still in night mode too. A limited volume is never remembered as follow me's volume.
 - **Afterwards:** the volume fades back to the room volume (default over 2 min); a volume change during the fade stops it. If nothing plays, the room volume is set at once. A restart during the fade continues it.
 - **Sleep timer:** turning the night mode on during the sleep timer's fade keeps the fade going, below the limit.
-- After a restart, or when the limit is lowered (number or options), the limit holds at once.
+- After a restart, or when the limit is lowered (number), the limit holds at once.
 - `media_player.play_media` on the room player accepts `extra: {night_mode: true}` (or `false`) to switch the night mode along with the playback; it is not passed on to the player.
 
 ### Wake up
@@ -330,7 +344,7 @@ With `follow: true` the music follows you out of the wake room: the wake starts 
 - **The wake room** joins the follow-me player at its start volume and fades in its own player. Only it fades: rooms that join later get follow me's normal volume. Its quiet mode does not keep it out while it wakes.
 - **Follow me off or running:** if follow me is off, the wake starts it with the wake's media; players left in the group from before (e.g. paused last night) leave it. Rooms that are occupied at that moment (someone already in the kitchen) stay out until their presence went and came again. If follow me already runs (or was just started by another wake), the wake room joins it and its media goes on.
 - If Music Assistant drops the wake room from the group, it is taken back in; a group stopped in the app ends the wake. After a restart with the group stopped, the wake room joins again.
-- **Left = woken up:** the wake is done (`wake_finished`, reason `left`) when presence was seen in the wake room after the wake started, the room then ran empty (presence run-down), **and** someone turned up in another follow room — from 2 min before the wake room was last occupied on (the sensor there may switch on first). The room leaves the group like any follow room; the music plays on where you are. A sensor that loses a sleeper for a while (mmWave) is no "left", nor is someone who got up much earlier. As long as no presence was seen, the wake room stays until the wake ends otherwise. The room option *Wake: detect leaving the room* switches this off; then a follow wake there ends only by stop, maximum duration, room off or a sleep timer.
+- **Left = woken up:** the wake is done (`wake_finished`, reason `left`) when presence was seen in the wake room after the wake started, the room then ran empty (presence run-down), **and** someone turned up in another follow room — from 2 min before the wake room was last occupied on (the sensor there may switch on first). The room leaves the group like any follow room; the music plays on where you are. A sensor that loses a sleeper for a while (mmWave) is no "left", nor is someone who got up much earlier. As long as no presence was seen, the wake room stays until the wake ends otherwise. The switch *Wake: detect leaving the room* on the room's device switches this off; then a follow wake there ends only by stop, maximum duration, room off or a sleep timer.
 - **Snooze** only snoozes the wake room: it leaves the group meanwhile (the others play on; as the only member the group pauses) and comes back at the start volume. Follow me does not take it back in during the snooze.
 - **Ends:** `stop_wake` makes it a normal follow room; `max_duration` fades out only the wake room, which then leaves the group; room off takes only this room out.
 - Night mode is per room as always: a room in night mode joins without subwoofer and limited.
@@ -359,7 +373,7 @@ data:
 
 ### Wait for standby
 
-With power sensors, a plug is cut only after its device has drawn less than the threshold for 30 s, at most after the maximum wait. Useful for OLED TVs that run panel care in standby. A TV that never goes to standby on its own (no CEC) gains nothing from this; then only the run-down applies.
+With power sensors (and the device's switch *Display: wait for standby* / *Speakers: wait for standby* on), a plug is cut only after its device has drawn less than the threshold for 30 s, at most after the maximum wait. Useful for OLED TVs that run panel care in standby. A TV that never goes to standby on its own (no CEC) gains nothing from this; then only the run-down applies.
 
 ## Dynamic controls
 
@@ -380,7 +394,7 @@ A room's controls that make no sense right now are hidden (`hidden_by: integrati
 - "Plays or is on": one of its players is used (video player on, music playing or paused, or turned on with a source), or the room is being turned on.
 - A hidden control still works through actions and automations; a hidden button gives an error or does nothing.
 - A control you hid stays hidden; one you show again stays shown.
-- **Central settings:** *Dynamic controls* (default on; off: nothing is hidden, in every room) and *Hide delay* (default 3 s). The follow-me player is optional there.
+- **Central settings:** the switch *Dynamic controls* (default on; off: nothing is hidden, in every room) and the number *Hide delay* (default 3 s) on its device. The follow-me player is optional there. Without central settings (none, disabled), the defaults apply.
 
 ## Entities
 

@@ -7,10 +7,12 @@ A central entry adds "follow me" with a Music Assistant group player.
 
 from __future__ import annotations
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import SIGNAL_CONFIG_ENTRY_CHANGED, ConfigEntry, ConfigEntryChange
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
@@ -19,7 +21,9 @@ from .const import (
     CONF_ENTRY_TYPE,
     CONF_FOLLOW_PLAYER,
     DOMAIN,
+    ENTITY_DEFAULTS,
     ENTRY_TYPE_HUB,
+    HUB_ENTITY_DEFAULTS,
     HUB_PLATFORMS,
     PLATFORMS,
     STORAGE_VERSION,
@@ -42,8 +46,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """1 -> 2: the central entry has one follow-me player instead of group policies."""
-    if entry.version > 2:
+    """1 -> 2: the central entry has one follow-me player instead of group policies.
+    2 -> 3: values set on the room device (number entities) are no longer options."""
+    if entry.version > 3:
         return False
     if entry.version == 1:
         options = dict(entry.options)
@@ -57,6 +62,27 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if old := reg.async_get_entity_id("button", DOMAIN, f"{entry.entry_id}_start_follow"):
                 reg.async_remove(old)
         hass.config_entries.async_update_entry(entry, options=options, version=2)
+    if entry.version == 2:
+        # how a room (or follow me) behaves is set on its device now: the
+        # values move from the options to the device's stored values
+        options = dict(entry.options)
+        defaults = HUB_ENTITY_DEFAULTS if is_hub(entry) else ENTITY_DEFAULTS
+        store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
+        data = await store.async_load() or {}
+        for key, default in defaults.items():
+            marker = data.pop(f"cfg_{key}", None)
+            if key not in options:
+                continue
+            raw = options.pop(key)
+            if isinstance(default, bool) or not isinstance(default, (int, float)):
+                value = type(default)(raw)
+            else:
+                value = float(raw or 0)
+            # an option change not yet taken by the entity wins (as before)
+            if key not in data or marker != value:
+                data[key] = value
+        await store.async_save(data)
+        hass.config_entries.async_update_entry(entry, options=options, version=3)
     return True
 
 
@@ -70,11 +96,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: BetterMediaPlayerConfigE
         await hub.async_start()
         entry.runtime_data = hub
         await hass.config_entries.async_forward_entry_setups(entry, HUB_PLATFORMS)
+
     else:
         controller = RoomController(hass, entry)
         await controller.async_start()
         entry.runtime_data = controller
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+        @callback
+        def _central_changed(change: ConfigEntryChange, changed: ConfigEntry) -> None:
+            if is_hub(changed):  # loaded, disabled, failed, removed: the dynamic controls' settings
+                controller.notify()
+
+        entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_CONFIG_ENTRY_CHANGED, _central_changed))
+        @callback
+        def _started(_event: Event) -> None:
+            controller.notify()  # a central entry that is never set up (disabled): its defaults count from now
+
+        if not hass.is_running:
+            entry.async_on_unload(hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _started))
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
 

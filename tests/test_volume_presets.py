@@ -155,10 +155,11 @@ async def test_preset_set_to_zero_is_no_longer_offered(hass, home, freezer):
     assert hass.states.get(SELECT).state == "manual", "a preset dropped once is not chosen again by itself"
 
 
-async def test_a_preset_dropped_in_the_options_does_not_come_back(hass, home, freezer):
+async def test_a_dropped_preset_does_not_come_back_after_a_reload(hass, home, freezer):
     entry = await _music_at(hass, home, freezer)
     await _select(hass, "party")
-    hass.config_entries.async_update_entry(entry, options={**entry.options, "preset_party": 0})
+    await _number(hass, "party", 0)
+    assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
     await _number(hass, "party", 90)
     assert hass.states.get(SELECT).state == "manual"
@@ -173,23 +174,12 @@ async def test_another_preset_set_to_zero_leaves_the_select(hass, home, freezer)
     assert hass.states.get(SELECT).state == "normal"
 
 
-async def test_number_value_survives_a_reload_and_options_win(hass, home, freezer):
+async def test_number_value_survives_a_reload(hass, home, freezer):
     entry = await _music_at(hass, home, freezer)
     await _number(hass, "quiet", 10)
     assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
     assert float(hass.states.get("number.wohnzimmer_preset_quiet").state) == 10
-    hass.config_entries.async_update_entry(entry, options={**entry.options, "preset_quiet": 12})
-    await hass.async_block_till_done()
-    assert float(hass.states.get("number.wohnzimmer_preset_quiet").state) == 12
-
-
-async def test_removed_preset_counts_as_manual(hass, home, freezer):
-    entry = await _music_at(hass, home, freezer)
-    await _select(hass, "party")
-    hass.config_entries.async_update_entry(entry, options={**entry.options, "preset_party": 0})
-    await hass.async_block_till_done()
-    assert hass.states.get(SELECT).state == "manual"
 
 
 # ---------------------------------------------------------- night / groups

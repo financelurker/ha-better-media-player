@@ -212,10 +212,12 @@ async def test_one_volume_command_on_switch(hass, home, freezer):
     assert _sent(home, MUSIC)[n:] == [0.3]
 
 
-async def test_lower_limit_from_options_holds(hass, home, freezer):
-    entry = await _music_at(hass, home, freezer, 0.5)
+async def test_lower_limit_holds_at_once(hass, home, freezer):
+    await _music_at(hass, home, freezer, 0.5)
     await _night(hass)
-    hass.config_entries.async_update_entry(entry, options={**entry.options, "night_max_volume": 15})
+    await hass.services.async_call(
+        "number", "set_value", {"entity_id": "number.wohnzimmer_night_maximum_volume", "value": 15}, blocking=True
+    )
     await hass.async_block_till_done()
     await _tick(hass, freezer, 5)
     assert _vol(hass) == 0.15

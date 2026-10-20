@@ -402,6 +402,14 @@ async def test_entity_ids_match_readme(hass, home):
         "number.wohnzimmer_preset_normal",
         "number.wohnzimmer_preset_loud",
         "number.wohnzimmer_preset_party",
+        "number.wohnzimmer_start_timeout",
+        "number.wohnzimmer_wait_after_display_on",
+        "number.wohnzimmer_wait_after_speakers_on",
+        "number.wohnzimmer_wait_after_player_plug_on",
+        "number.wohnzimmer_sleep_timer_fade_out",
+        "number.wohnzimmer_snooze_time",
+        "number.wohnzimmer_night_fade_back_up",
+        "select.wohnzimmer_power_on_preset",
     }
 
 

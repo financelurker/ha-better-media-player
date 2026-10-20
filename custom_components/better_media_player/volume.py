@@ -42,7 +42,7 @@ from homeassistant.core import CALLBACK_TYPE, State, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.event import async_call_later
 
-from .const import CONF_POWER_ON_PRESET, CONF_PRESET, DOMAIN, PRESET_NONE, PRESETS
+from .const import CONF_POWER_ON_PRESET, CONF_PRESET, DOMAIN, ENTITY_DEFAULTS, PRESET_NONE, PRESETS
 
 if TYPE_CHECKING:
     from .controller import RoomController, Source
@@ -90,11 +90,11 @@ class RoomVolume:
     @property
     def presets(self) -> dict[str, float]:
         """The room's presets (0..1), in their order; 0 is not offered. The
-        values are the number entities' (set from the options)."""
+        values are the number entities'."""
         out: dict[str, float] = {}
         for name in PRESETS:
             key = CONF_PRESET.format(name)
-            value = self.ctrl.data.get(key, self.ctrl.opts.get(key))
+            value = self.ctrl.data.get(key, ENTITY_DEFAULTS[key])
             if value not in (None, "") and float(value) > 0:
                 out[name] = max(0.0, min(1.0, float(value) / 100))
         return out
@@ -146,7 +146,7 @@ class RoomVolume:
     def async_power_on(self) -> None:
         """The room came on: the power-on preset is its volume (players get it
         when they start)."""
-        name = self.ctrl.opts.get(CONF_POWER_ON_PRESET)
+        name = self.ctrl.setting(CONF_POWER_ON_PRESET)
         if not name or name == PRESET_NONE:
             return
         if name not in self.presets:
@@ -164,7 +164,7 @@ class RoomVolume:
             self._choose(None)  # no longer offered: the volume stays
 
     async def async_started(self) -> None:
-        """HA is up: a chosen preset whose value was changed in the options."""
+        """HA is up: a chosen preset whose value no longer matches the room volume."""
         name = self.preset
         if name is not None and self.value is not None and abs(self.presets[name] - self.value) >= 0.0005:
             await self.async_set_preset(name)

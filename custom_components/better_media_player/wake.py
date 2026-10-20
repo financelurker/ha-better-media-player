@@ -294,7 +294,7 @@ class WakeAlarm:
         w["seen_new"] = False
         self._changed()
         # safety net: also a start that hangs ends in a failed wake
-        self._schedule(_now() + float(ctrl.opts.get(CONF_START_TIMEOUT, 90)) + PLAY_TIMEOUT)
+        self._schedule(_now() + float(ctrl.setting(CONF_START_TIMEOUT)) + PLAY_TIMEOUT)
         resume = w.pop("resume", False) and ctrl.player_state(src) == "paused"
         self._before = self._snapshot(src)
         try:
@@ -450,7 +450,7 @@ class WakeAlarm:
             current = out.level()
             if current is not None and current < target - out.tolerance:
                 w["phase"] = PHASE_FADING
-                self._fade(src, target, float(self.ctrl.opts.get(CONF_NIGHT_FADE_IN, 0)) * 60)
+                self._fade(src, target, float(self.ctrl.setting(CONF_NIGHT_FADE_IN)) * 60)
 
     # ---------------------------------------------------------------- events
 
@@ -518,7 +518,7 @@ class WakeAlarm:
             return
         ctrl = self.ctrl
         src = ctrl.sources[w["source"]]
-        minutes = float(ctrl.opts.get(CONF_SNOOZE_MINUTES, 9)) if minutes is None else float(minutes)
+        minutes = float(ctrl.setting(CONF_SNOOZE_MINUTES)) if minutes is None else float(minutes)
         starting = w["phase"] == PHASE_STARTING
         self._cancel_task()
         self._cancel_stop_check()
@@ -617,7 +617,7 @@ class WakeAlarm:
         """Played long enough: the sleep timer fades out and turns the room off."""
         ctrl = self.ctrl
         await self.async_finish(REASON_MAX_DURATION)
-        fade = float(ctrl.opts.get(CONF_SLEEP_FADE, 0))
+        fade = float(ctrl.setting(CONF_SLEEP_FADE))
         if fade > 0 and ctrl.room_on:
             await ctrl.sleep.async_set(fade, fade)
         else:

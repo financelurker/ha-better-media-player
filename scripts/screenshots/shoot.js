@@ -16,11 +16,12 @@ async function login(page) {
   await page.locator('input[name="username"]').fill('demo');
   await page.locator('input[name="password"]').fill('demo-pass-2026');
   await page.keyboard.press('Enter');
-  await page.waitForURL(/lovelace|home|overview/, { timeout: 30000 });
+  await page.waitForURL((u) => !/auth/.test(u.toString()), { timeout: 30000 }); await settle(page, 3000);
 }
 
 async function settle(page, ms = 2500) {
   await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForSelector('home-assistant-main', { timeout: 60000 }).catch(() => console.log('no main'));
   await page.waitForTimeout(ms);
 }
 
@@ -90,7 +91,7 @@ async function shotDialog(page, file) {
   }
 
   if (want('options')) {
-    await page.setViewportSize({ width: 1400, height: 1000 });
+    await page.setViewportSize({ width: 1400, height: 1500 });
     await page.goto(`${BASE}/config/integrations/integration/better_media_player`);
     await settle(page, 3000);
     await page.screenshot({ path: `${OUT}/_integration.png` });
@@ -103,7 +104,11 @@ async function shotDialog(page, file) {
     }
     await settle(page, 2500);
     await shotDialog(page, 'options-menu.png');
-    for (const [label, file] of [['Power devices', 'options-devices.png'], ['Media players', 'options-players.png'], ['Times', 'options-times.png']]) {
+    for (const [label, file] of [['Media players', 'options-players.png'], ['Devices and volume', 'options-devices.png']]) {
+      if (!(await page.getByText(label, { exact: true }).count())) {  // the volume note in between
+        await page.getByRole('button', { name: /^(submit|next|ok)$/i }).first().click({ force: true });
+        await settle(page, 2000);
+      }
       await page.getByText(label, { exact: true }).first().click({ force: true });
       await settle(page, 2500);
       await shotDialog(page, file);
