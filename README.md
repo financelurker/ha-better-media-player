@@ -1,6 +1,6 @@
 # Better Media Player
 
-One smart media player per room: your room's media players and the power plugs of TV, speakers and subwoofer, combined into a single Home Assistant entity.
+One smart media player per room: your room's media players and the TV, speakers and subwoofer (on plugs, turning themselves on and off, or both), combined into a single Home Assistant entity.
 
 Better Media Player is a custom integration in the spirit of Better Thermostat. Each room gets one `media_player` entity that knows which of its players is active, powers the right devices in a safe order and switches them off again when nothing needs them.
 
@@ -8,7 +8,7 @@ Better Media Player is a custom integration in the spirit of Better Thermostat. 
 - **Shared speakers:** one set of speakers (plus subwoofer) serves both a video player such as Kodi and a music player such as Music Assistant.
 - **Auto-on:** music that starts on the room player, also as part of a Music Assistant group, powers the speakers by itself.
 - **Room off:** leaves a Music Assistant group, stops playback, turns the video player off and powers everything down.
-- **Manual override:** switch a plug by hand and the room steps back until all plugs are off again.
+- **Manual override:** switch a plug (or turn a device on) by hand and the room steps back until everything is off again.
 - **Follow me:** start it in a room and the music moves with you from room to room, using the rooms' occupancy sensors and one Music Assistant group player.
 - **Media browser and search:** browse and search all of the room's players in one place, with their queues on top; picking a movie powers up TV and Kodi first.
 
@@ -17,15 +17,14 @@ Better Media Player is a custom integration in the spirit of Better Thermostat. 
 **It fits if**
 
 - a room has a video player (e.g. Kodi) and/or a music player (e.g. a Music Assistant player);
-- TV, speakers or subwoofer hang on switchable plugs and start by themselves when they get power;
+- TV, speakers or subwoofer hang on switchable plugs (and start by themselves when they get power), turn on and off by themselves (a media player or a remote, e.g. a TV via webOS or CEC, an AV receiver, a Harmony hub), are switched by your own scripts (e.g. IR), or a mix of these;
+- an AV receiver or TV switches between the players: with an automation on the [source change event](#source-changes);
 - the room's volume is set on the players, or on an amplifier, AV receiver or soundbar with its own volume (a media player or a number);
 - for follow me: occupancy sensors in the rooms and one Music Assistant group player with dynamic members.
 
 **It does not fit (yet) if**
 
-- an AV receiver switches between the players (input selection);
-- several rooms (zones) hang on one device;
-- devices cannot be powered by a plug and are only turned on and off by IR or CEC.
+- several rooms (zones) hang on one device.
 
 ## Screenshots
 
@@ -89,7 +88,7 @@ The setup only asks what is connected:
 |---|---|
 | **New room** | Name and area. Kodi and Music Assistant players of the area are pre-selected in the next step. |
 | **Media players** | Video player (e.g. Kodi) and/or music player (the room's own player, not a group). *Special cases* (collapsed): on/off actions for a player that cannot turn itself on/off, plugs its hardware hangs on. |
-| **Devices and volume** | Display (TV, projector), speakers (one or more: active speakers, amplifier, AVR), subwoofer. Where the room's volume is set: on the players, or on an own device. *Wait for standby* (collapsed): power sensors. *Follow me* (collapsed): occupancy sensors; rooms without them do not take part. |
+| **Devices and volume** | Display (TV, projector), speakers (one or more: active speakers, amplifier, AVR), subwoofer: plugs and/or [devices](#devices-instead-of-plugs). Where the room's volume is set: on the players, or on an own device. *Own on/off actions* (collapsed): scripts or buttons for a device only they switch. *Wait for standby* (collapsed): power sensors. *Follow me* (collapsed): occupancy sensors; rooms without them do not take part. |
 
 Everything can be changed later via **Configure**. How the room behaves is set on its device.
 
@@ -103,7 +102,7 @@ Times, waits, standby, night mode, volume presets and follow me are configuratio
 | Video idle timeout | 30 min | with a video player |
 | Start timeout | 90 s | always |
 | Wait after display on, Wait after speakers on, Wait after player plug on | 0 s | with that device |
-| Display / Speakers: wait for standby, … standby below, … wait for standby at most | off; 5 / 3 W; 20 / 5 min | with power sensors for it |
+| Display / Speakers: wait for standby, … standby below, … wait for standby at most | off; 5 / 3 W; 20 / 5 min | with power sensors and a plug for it |
 | Night: maximum volume, Night: video idle timeout, Night: display run-down, Night: fade back up | | see [night mode](#night-mode) |
 | Preset: Quiet / Normal / Loud / Party, Power-on preset | 15 / 30 / 50 / 70 %, none | see [presets](#presets) |
 | Sleep timer fade-out, Snooze time | 5 / 9 min | always |
@@ -111,7 +110,7 @@ Times, waits, standby, night mode, volume presets and follow me are configuratio
 
 The **Central settings** device has *Follow me: default volume*, *Dynamic controls* and *Hide delay*; its **Configure** only asks for the follow-me player.
 
-> **Before you start:** every plug belongs to exactly one controller. Disable automations, scripts or helpers that switch the same plugs (Settings → Entities → plug → **Related** shows them). Devices must start by themselves when they get power.
+> **Before you start:** every plug and device belongs to exactly one controller. Disable automations, scripts or helpers that switch the same plugs or devices (Settings → Entities → plug → **Related** shows them). Devices on a plug alone must start by themselves when they get power.
 
 > **Kodi:** `turn_on` / `turn_off` only fire Kodi's device triggers. Keep your Wake-on-LAN and suspend automations for these triggers; they do the actual work.
 
@@ -134,6 +133,23 @@ The **Central settings** device has *Follow me: default volume*, *Dynamic contro
 
 If the player is not ready within the start timeout (90 s), everything switched on is switched off again and the room reports an error.
 
+### Devices instead of plugs
+
+Display, speakers and subwoofer can also be devices that turn themselves on and off, alone or together with plugs (the player hardware stays a plug):
+
+| Kind | Switched with | On when |
+|---|---|---|
+| Plug (`switch`, `light`, `input_boolean`) | `turn_on` / `turn_off` | `on` |
+| Media player (TV, AV receiver, soundbar) | `media_player.turn_on` / `turn_off` | on, idle, playing, paused |
+| Remote (e.g. a Harmony activity) | `remote.turn_on` / `turn_off` | `on` |
+| Own on/off actions (script, button, scene, automation) | the on / the off action | what was sent last (no feedback) |
+
+- **Plug and device in one role:** on: the plug, then the device once it is there (at most the start timeout; a device that does not come is left out until the next start); off: the device first, the plug once the device reports off (at most 60 s), after the standby wait if switched on (only a role with a plug waits for standby).
+- **One device in two roles** (e.g. a TV with its own speakers as display and speakers): it goes off only when no role needs it any more.
+- **Turned off by hand** while it is needed (e.g. the TV with its own remote): it stays off until the next start; everything else goes on automatically. **Turned on by hand** while nothing needs it (e.g. live TV): manual mode, as with a plug switched by hand; while it is needed (e.g. woken by another device over HDMI-CEC) it simply counts as on.
+- **TV inputs and AV receiver inputs** are not switched by the room: use an automation on the [source change event](#source-changes).
+- **A TV that only an automation can turn on** (e.g. webOS with Wake-on-LAN): keep that automation for its turn-on trigger, as with Kodi.
+
 ### Demand and run-down
 
 | Device | Needed while … | Run-down |
@@ -148,7 +164,7 @@ Paused music is not demand: the speakers switch off after the run-down and on ag
 
 - **On** starts the last used source; the first time after setup that is the video player. The last source survives restarts.
 - **Source** selects video or music explicitly. The other source is stopped (Kodi off, music leaves its group or is paused).
-- **Off** (or **All off**): leave a Music Assistant group with `media_player.unjoin` (if it was the last member, Music Assistant pauses the group), otherwise stop direct playback; turn the video player off; switch all plugs off in order. A player that takes a while to stop does not switch the room back on; only new playback does.
+- **Off** (or **All off**): leave a Music Assistant group with `media_player.unjoin` (if it was the last member, Music Assistant pauses the group), otherwise stop direct playback; turn the video player off; switch all plugs and devices off in order. A player that takes a while to stop does not switch the room back on; only new playback does.
 - **Volume and transport** go to the player that is currently active.
 
 #### Source changes
@@ -373,7 +389,7 @@ data:
 
 ### Wait for standby
 
-With power sensors (and the device's switch *Display: wait for standby* / *Speakers: wait for standby* on), a plug is cut only after its device has drawn less than the threshold for 30 s, at most after the maximum wait. Useful for OLED TVs that run panel care in standby. A TV that never goes to standby on its own (no CEC) gains nothing from this; then only the run-down applies.
+With power sensors and a plug in the role (and the device's switch *Display: wait for standby* / *Speakers: wait for standby* on), a plug is cut only after its device has drawn less than the threshold for 30 s, at most after the maximum wait. Useful for OLED TVs that run panel care in standby. A TV that never goes to standby on its own (no CEC) gains nothing from this; then only the run-down applies.
 
 ## Dynamic controls
 
@@ -428,9 +444,9 @@ A room's controls that make no sense right now are hidden (`hidden_by: integrati
 | `starting` | power-on sequence running |
 | `on` | a source is active but not playing |
 | `playing` | a source is playing |
-| `run_down` | plugs still on, no demand |
+| `run_down` | plugs or devices still on, no demand |
 | `stopping` | waiting for a device to reach standby |
-| `manual` | a plug was switched by hand; automatic switching paused |
+| `manual` | a plug was switched (or a device turned on) by hand; automatic switching paused |
 | `error` | start failed |
 | `disabled` | automatic power is off |
 

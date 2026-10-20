@@ -61,7 +61,7 @@ async def async_setup_entry(
         if role is None:
             continue
         entities.append(SettingNumber(entry, ctrl, f"{prefix}_on_wait", 0, 120, 1, s))
-        if role.power:
+        if ctrl.can_standby(role):
             entities.append(SettingNumber(entry, ctrl, f"{prefix}_standby_w", 0, 200, 0.5, UnitOfPower.WATT))
             entities.append(SettingNumber(entry, ctrl, f"{prefix}_standby_max", 1, 120, 1, mins))
     if ROLE_VIDEO_HOST in ctrl.roles or ROLE_AUDIO_HOST in ctrl.roles:

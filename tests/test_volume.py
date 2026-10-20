@@ -169,7 +169,7 @@ async def test_player_without_volume_gets_a_note(hass, home):
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"audio_player": "media_player.radio", "special": {}}
     )
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"standby": {}, "follow": {}})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"actions": {}, "standby": {}, "follow": {}})
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "volume_note"
     assert result["description_placeholders"] == {"players": "Radio"}
@@ -182,5 +182,5 @@ async def test_player_with_volume_gets_no_note(hass, home):
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "room"})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"name": "Good"})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"audio_player": MUSIC, "special": {}})
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"standby": {}, "follow": {}})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"actions": {}, "standby": {}, "follow": {}})
     assert result["type"] is FlowResultType.CREATE_ENTRY

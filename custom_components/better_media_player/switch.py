@@ -30,7 +30,7 @@ async def async_setup_entry(
     # how the room behaves (set on the device, not in the options)
     for role_key, prefix in ((ROLE_DISPLAY, "display"), (ROLE_AUDIO, "audio")):
         role = ctrl.roles.get(role_key)
-        if role is not None and role.power:
+        if role is not None and ctrl.can_standby(role):
             entities.append(SettingSwitch(entry, ctrl, f"{prefix}_standby", "mdi:power-sleep"))
     if ctrl.follow_capable:
         entities.append(SettingSwitch(entry, ctrl, "prewarm", "mdi:speaker-wireless"))

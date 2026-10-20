@@ -268,7 +268,7 @@ async def test_a_room_player_cannot_be_the_volume_device(hass, home):
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "room"})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"name": "Kitchen"})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"audio_player": KITCHEN, "special": {}})
-    sections = {"standby": {}, "follow": {}}
+    sections = {"actions": {}, "standby": {}, "follow": {}}
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {CONF_VOLUME_CONTROL: VOLUME_DEVICE, CONF_VOLUME_ENTITY: ROOM, **sections}
     )

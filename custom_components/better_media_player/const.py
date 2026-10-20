@@ -122,6 +122,18 @@ ROLE_AUDIO_HOST = "audio_host"
 CONF_DISPLAY = "display"
 CONF_SPEAKERS = "speakers"
 CONF_BASS = "bass"
+# own on/off actions of a role's device (e.g. an IR script), besides plugs and devices
+CONF_DISPLAY_ON_ACTION = "display_on_action"
+CONF_DISPLAY_OFF_ACTION = "display_off_action"
+CONF_SPEAKERS_ON_ACTION = "speakers_on_action"
+CONF_SPEAKERS_OFF_ACTION = "speakers_off_action"
+CONF_BASS_ON_ACTION = "bass_on_action"
+CONF_BASS_OFF_ACTION = "bass_off_action"
+ROLE_ACTIONS = {
+    CONF_DISPLAY: (CONF_DISPLAY_ON_ACTION, CONF_DISPLAY_OFF_ACTION),
+    CONF_SPEAKERS: (CONF_SPEAKERS_ON_ACTION, CONF_SPEAKERS_OFF_ACTION),
+    CONF_BASS: (CONF_BASS_ON_ACTION, CONF_BASS_OFF_ACTION),
+}
 
 # --- Timing ------------------------------------------------------------------
 CONF_DISPLAY_RUN_DOWN = "display_run_down"  # min
@@ -228,6 +240,8 @@ STATUSES = [
 
 # Domains that can be switched as power devices
 SWITCH_DOMAINS = ["switch", "light", "input_boolean"]
+DEVICE_DOMAINS = ["media_player", "remote"]  # devices that turn themselves on/off
+ROLE_DOMAINS = [*SWITCH_DOMAINS, *DEVICE_DOMAINS]
 # Domains usable as a custom on/off action
 ACTION_DOMAINS = ["script", "button", "input_button", "switch", "scene", "automation"]
 

@@ -264,7 +264,7 @@ async def test_setup_validation(hass, home):
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"video_player": KODI, "audio_player": MUSIC, "special": {}}
     )
-    base = {"standby": {}, "follow": {}}
+    base = {"actions": {}, "standby": {}, "follow": {}}
     for data, error in (
         ({CONF_VOLUME_CONTROL: VOLUME_DEVICE}, "needs_volume_entity"),
         ({CONF_VOLUME_CONTROL: VOLUME_DEVICE, CONF_VOLUME_ENTITY: MUSIC}, "volume_is_player"),
@@ -287,7 +287,7 @@ async def test_no_volume_note_with_a_device(hass, home):
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"name": "Wohnzimmer"})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"video_player": KODI, "special": {}})
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_VOLUME_CONTROL: VOLUME_DEVICE, CONF_VOLUME_ENTITY: AVR, "standby": {}, "follow": {}}
+        result["flow_id"], {CONF_VOLUME_CONTROL: VOLUME_DEVICE, CONF_VOLUME_ENTITY: AVR, "actions": {}, "standby": {}, "follow": {}}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY, "no note: the device sets the volume"
 

@@ -63,7 +63,7 @@
       },
       "devices": {
         "title": "Devices and volume",
-        "description": "Plugs that are switched by this room only. Disable other automations for these plugs. Devices must start by themselves when they get power.",
+        "description": "What this room switches: plugs, or devices that turn themselves on/off (a TV or AVR as media player, a remote), or both (the plug first, then the device). Disable other automations for them. Devices on a plug alone must start by themselves when they get power.",
         "data": {
           "display": "Display (TV, projector)",
           "speakers": "Speakers / amplifier / AVR",
@@ -79,6 +79,18 @@
           "volume_entity": "A media player with volume, or a number / input_number (its range counts as 0-100 %)."
         },
         "sections": {
+          "actions": {
+            "name": "Own on/off actions",
+            "description": "For a device that only your own script or button switches (e.g. by IR). Both actions are needed; its state is what was sent last.",
+            "data": {
+              "display_on_action": "Display: on action",
+              "display_off_action": "Display: off action",
+              "speakers_on_action": "Speakers: on action",
+              "speakers_off_action": "Speakers: off action",
+              "bass_on_action": "Subwoofer: on action",
+              "bass_off_action": "Subwoofer: off action"
+            }
+          },
           "standby": {
             "name": "Wait for standby (power sensors)",
             "description": "With power sensors a plug is only cut after its device went to standby by itself (e.g. OLED panel care); switch it on with the device's Wait for standby. Without, the run-down time is used.",
@@ -105,13 +117,16 @@
       "same_player": "Video and music player must be different.",
       "group_player": "This is a Music Assistant group. Select the room's own player.",
       "display_needs_video": "A display needs a video player.",
-      "duplicate_device": "A device may only be used once.",
+      "duplicate_device": "A player hardware plug must not be a device of a role.",
       "needs_player": "Needs the corresponding player.",
       "not_a_group": "That is no Music Assistant group player.",
       "needs_volume_entity": "Choose the volume device.",
       "volume_is_player": "The volume device must not be one of the room's players.",
       "no_volume": "This media player cannot set a volume.",
-      "volume_is_room": "A Better Media Player room cannot be the volume device."
+      "volume_is_room": "A Better Media Player room cannot be the volume device.",
+      "needs_both_actions": "Choose both the on and the off action.",
+      "device_is_player": "A device must not be one of the room's players.",
+      "device_is_room": "A Better Media Player room cannot be a device of a role."
     },
     "abort": {
       "hub_exists": "Central settings already exist. Change them via Configure.",
@@ -177,7 +192,7 @@
       },
       "devices": {
         "title": "Devices and volume",
-        "description": "Plugs that are switched by this room only. Disable other automations for these plugs. Devices must start by themselves when they get power.",
+        "description": "What this room switches: plugs, or devices that turn themselves on/off (a TV or AVR as media player, a remote), or both (the plug first, then the device). Disable other automations for them. Devices on a plug alone must start by themselves when they get power.",
         "data": {
           "display": "Display (TV, projector)",
           "speakers": "Speakers / amplifier / AVR",
@@ -193,6 +208,18 @@
           "volume_entity": "A media player with volume, or a number / input_number (its range counts as 0-100 %)."
         },
         "sections": {
+          "actions": {
+            "name": "Own on/off actions",
+            "description": "For a device that only your own script or button switches (e.g. by IR). Both actions are needed; its state is what was sent last.",
+            "data": {
+              "display_on_action": "Display: on action",
+              "display_off_action": "Display: off action",
+              "speakers_on_action": "Speakers: on action",
+              "speakers_off_action": "Speakers: off action",
+              "bass_on_action": "Subwoofer: on action",
+              "bass_off_action": "Subwoofer: off action"
+            }
+          },
           "standby": {
             "name": "Wait for standby (power sensors)",
             "description": "With power sensors a plug is only cut after its device went to standby by itself (e.g. OLED panel care); switch it on with the device's Wait for standby. Without, the run-down time is used.",
@@ -219,13 +246,16 @@
       "same_player": "Video and music player must be different.",
       "group_player": "This is a Music Assistant group. Select the room's own player.",
       "display_needs_video": "A display needs a video player.",
-      "duplicate_device": "A device may only be used once.",
+      "duplicate_device": "A player hardware plug must not be a device of a role.",
       "needs_player": "Needs the corresponding player.",
       "not_a_group": "That is no Music Assistant group player.",
       "needs_volume_entity": "Choose the volume device.",
       "volume_is_player": "The volume device must not be one of the room's players.",
       "no_volume": "This media player cannot set a volume.",
-      "volume_is_room": "A Better Media Player room cannot be the volume device."
+      "volume_is_room": "A Better Media Player room cannot be the volume device.",
+      "needs_both_actions": "Choose both the on and the off action.",
+      "device_is_player": "A device must not be one of the room's players.",
+      "device_is_room": "A Better Media Player room cannot be a device of a role."
     },
     "abort": {
       "invalid_config": "The settings are not consistent. Check media players and power devices."
