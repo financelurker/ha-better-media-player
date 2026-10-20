@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import timedelta
 from typing import Any
 from unittest.mock import patch
 
@@ -11,6 +12,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from homeassistant.components.media_player import MediaPlayerEntityFeature as F
 from homeassistant.core import HomeAssistant, ServiceRegistry
+from homeassistant.util import dt as dt_util
 
 from custom_components.better_media_player.const import (
     CONF_FOLLOW_PLAYER,
@@ -104,6 +106,14 @@ def auto_enable_custom_integrations(enable_custom_integrations):
     yield
 
 
+def _live_position(state) -> float:
+    position = float(state.attributes.get("media_position") or 0)
+    updated = state.attributes.get("media_position_updated_at")
+    if state.state == "playing" and updated is not None:
+        position += (dt_util.utcnow() - updated).total_seconds()
+    return position
+
+
 @dataclass
 class FakeHome:
     hass: HomeAssistant
@@ -114,6 +124,14 @@ class FakeHome:
     kodi_suspends: bool = True  # turn_off makes Kodi off immediately
     avr_memory: float = 0.4  # the AVR's own volume when its power comes back
     avr_steps: int = 0  # >0: the AVR reports its volume in 1/avr_steps steps
+    transfer_restarts: bool = False  # a moved queue starts its track from the beginning
+    transfer_reports: bool = True  # the target reports its position right away
+    transfer_track: str | None = None  # the target is at another track by then
+    clock_skew: float = 0.0  # s the clock of Music Assistant's server is ahead of HA's
+
+    def now(self):
+        """The time on Music Assistant's server."""
+        return dt_util.utcnow() + timedelta(seconds=self.clock_skew)
 
     def avr(self, state: str, **attrs: Any) -> None:
         self.set(AVR, state, supported_features=AVR_FEATURES, friendly_name="AV Receiver", **attrs)
@@ -211,14 +229,24 @@ class FakeHome:
             # the queue moves: the target plays it (or holds it paused), the source stops
             source = data.get("source_player")
             self.transferred.append((source, entity_id))
+            track = {}
+            if source and (src := self.hass.states.get(source)) and src.attributes.get("media_content_id"):
+                position = 0.0 if self.transfer_restarts else _live_position(src)
+                track = {
+                    "media_content_id": self.transfer_track or src.attributes["media_content_id"],
+                    "media_duration": src.attributes.get("media_duration"),
+                }
+                if self.transfer_reports:
+                    track.update(media_position=position, media_position_updated_at=self.now())
             if source:
                 self.set(source, "idle")
             state = "playing" if data.get("auto_play", True) else "paused"
             if entity_id in GROUPS:
                 if self.members(entity_id):
+                    self.set(entity_id, self.hass.states.get(entity_id).state, **track)
                     self.group(state, self.members(entity_id), entity_id)
             else:
-                self.set(entity_id, state)
+                self.set(entity_id, state, **track)
             return True
         if domain == "media_player":
             if entity_id == KODI and service == "turn_on" and self.kodi_boots:
@@ -242,6 +270,9 @@ class FakeHome:
             elif service in ("media_play", "play_media") and entity_id in GROUPS:
                 if self.members(entity_id):
                     self.group("playing", self.members(entity_id), entity_id)
+            elif service == "media_seek":
+                self.set(entity_id, st.state, media_position=float(data["seek_position"]),
+                         media_position_updated_at=self.now())
             elif service == "media_stop":
                 self.set(entity_id, "idle")
             elif service == "media_pause":

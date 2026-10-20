@@ -76,6 +76,7 @@ from .const import (
     WAKE_ARRIVAL_WINDOW,
 )
 from .output import MemberOutput
+from .position import Position, keep_position, last_report
 from .ramp import VolumeRamp
 
 if TYPE_CHECKING:
@@ -151,6 +152,7 @@ class FollowManager:
         self._lock = asyncio.Lock()
         self._unsubs: list[Callable[[], None]] = []
         self._track_unsub: Callable[[], None] | None = None
+        self._position_watch: Callable[[], None] | None = None  # the track goes on where it was
         self._listeners: list[Callable[[], None]] = []
         self._tasks: set[asyncio.Task] = set()
         self._queued = False
@@ -208,6 +210,9 @@ class FollowManager:
         if self._track_unsub:
             self._track_unsub()
             self._track_unsub = None
+        if self._position_watch is not None:
+            self._position_watch()
+            self._position_watch = None
         for ramp in self._group_ramps.values():
             ramp.stop()
         for task in list(self._tasks):
@@ -469,8 +474,9 @@ class FollowManager:
                 # join first: an empty group cannot play; then the queue moves over
                 # (also as a member left in the idle follow-me player from before)
                 self._commands.pop((player, f"join:{group}"), None)
+                position = Position.of(self.hass, player)  # (joining may stop the player)
                 ok = await self._join(room, group, keep_volume=True)
-                ok = ok and await self._transfer(player, group)
+                ok = ok and await self._transfer(player, group, position=position)
                 if not ok:
                     self._commands.pop((player, "unjoin"), None)
                     await self._unjoin(player, "follow me could not start")
@@ -491,11 +497,12 @@ class FollowManager:
             for wake_room in get_rooms(self.hass).values():
                 if wake_room.wake.follows and wake_room.wake.active:
                     await wake_room.wake.async_finish("stopped")
+            position = Position.of(self.hass, group)  # (the group stops with its last member)
             for member in members:
                 await self._unjoin(member, "follow me stopped")
             moved = True
             if target is not None and target.audio_player:
-                moved = await self._transfer(group, target.audio_player, auto_play=playing)
+                moved = await self._transfer(group, target.audio_player, auto_play=playing, position=position)
             await self._deactivate(f"stopped in {room.entry.title}" if room else "stopped")
             if not moved:
                 raise HomeAssistantError(f"Could not move the queue of {group} to {target.audio_player}")
@@ -529,7 +536,11 @@ class FollowManager:
         for room in get_rooms(self.hass).values():
             room.notify()
 
-    async def _transfer(self, source: str, target: str, auto_play: bool = True) -> bool:
+    async def _transfer(
+        self, source: str, target: str, auto_play: bool = True, position: Position | None = None
+    ) -> bool:
+        """Move the queue; the track goes on where it was (position, read before)."""
+        reported = last_report(self.hass, target)
         try:
             await self.hass.services.async_call(
                 "music_assistant",
@@ -541,6 +552,16 @@ class FollowManager:
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning("Moving the queue from %s to %s failed: %s", source, target, err)
             return False
+        if auto_play and position is not None and not self._stopped:
+
+            @callback
+            def _seek(seconds: float) -> None:
+                _LOGGER.debug("%s goes on at %.0f s", target, seconds)
+                self._spawn(self._call("media_seek", {ATTR_ENTITY_ID: target, "seek_position": seconds}))
+
+            if self._position_watch is not None:
+                self._position_watch()
+            self._position_watch = keep_position(self.hass, target, position, _seek, reported)
         return True
 
     # -------------------------------------------------------------- evaluation
