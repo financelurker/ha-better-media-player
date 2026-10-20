@@ -255,18 +255,12 @@ class NightMode:
             self.ctrl._save_now()
 
     def _hub_group(self, src: Source) -> bool:
-        """In a group the hub looks after (it brings the member back);
-        other groups: the room does it itself."""
-        if not self.ctrl.volume.in_group(src):
-            return False
+        """In a group the hub looks after (a Music Assistant group: it brings the
+        member back); other groups: the room does it itself."""
         hub = self.ctrl.hub
         if hub is None:
             return False
-        return any(
-            hub.manages(s.entity_id)
-            for s in self.hass.states.async_all("media_player")
-            if src.player in (s.attributes.get("group_members") or [])
-        )
+        return any(hub.ma.is_group(g) for g in src.backend.groups_of(src.player, idle=True))
 
     @callback
     def async_cancel_ramp(self, player: str) -> None:

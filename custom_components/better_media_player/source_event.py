@@ -104,7 +104,7 @@ class SourceWatch:
             state = ctrl.player_state(src)
             if src.key == SOURCE_VIDEO and state in _VIDEO_ON:
                 on.append(src.key)
-            elif src.key == SOURCE_AUDIO and state in _AUDIO_PLAYING and ctrl._group_counts(src.player):
+            elif src.key == SOURCE_AUDIO and state in _AUDIO_PLAYING and ctrl._group_counts(src):
                 on.append(src.key)
         return on
 

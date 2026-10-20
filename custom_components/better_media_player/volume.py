@@ -57,7 +57,6 @@ SETTLE_SECONDS = 2
 
 _PLAYING = {"playing", "buffering"}
 _POWERED = {"on", "idle", "playing", "paused", "buffering"}
-_NOT_GROUPED = {"off", "standby", "unavailable", "unknown"}
 
 
 def _volume(state: State | None) -> float | None:
@@ -213,19 +212,10 @@ class RoomVolume:
         elif self._takes_part(src) and not self._in_group(src):
             self.learn(volume)
 
-    def in_group(self, src: Source) -> bool:
-        return self._in_group(src)
-
     def _in_group(self, src: Source) -> bool:
         """Member of a group, also of one that does not play right now (e.g.
-        joined by follow me before the group starts). Groups that are off are
-        left out: static groups list their members even then."""
-        for state in self.hass.states.async_all("media_player"):
-            if state.entity_id == src.player or state.state in _NOT_GROUPED:
-                continue
-            if src.player in (state.attributes.get("group_members") or []):
-                return True
-        return False
+        joined by follow me before the group starts)."""
+        return bool(src.backend.groups_of(src.player, idle=True))
 
     def _takes_part(self, src: Source) -> bool:
         return self.ctrl.player_supports(src, MediaPlayerEntityFeature.VOLUME_SET)

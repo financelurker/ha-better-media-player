@@ -16,7 +16,6 @@ from homeassistant.data_entry_flow import section
 
 from .const import (
     ACTION_DOMAINS,
-    ATTR_MASS_PLAYER_TYPE,
     CONF_AREA,
     CONF_AUDIO_HOST,
     CONF_AUDIO_OFF_ACTION,
@@ -41,17 +40,16 @@ from .const import (
     DOMAIN,
     ENTRY_TYPE_HUB,
     ENTRY_TYPE_ROOM,
-    MASS_TYPE_GROUP,
     ROLE_ACTIONS,
     ROLE_DOMAINS,
+    SOURCE_VIDEO,
     SWITCH_DOMAINS,
     VOLUME_DEVICE,
     VOLUME_ENTITY_DOMAINS,
     VOLUME_PLAYERS,
 )
-
-VIDEO_PLATFORMS = ("kodi",)
-AUDIO_PLATFORMS = ("music_assistant",)
+from .backend import is_group, suggested_role
+from .music_assistant import MusicAssistant
 
 
 def _entity(domain: str | list[str], device_class: str | None = None, multiple: bool = False):
@@ -190,8 +188,9 @@ def schema_hub() -> vol.Schema:
 
 
 def _validate_hub(hass: HomeAssistant, options: dict) -> dict[str, str]:
-    state = hass.states.get(options.get(CONF_FOLLOW_PLAYER) or "")
-    if state is not None and state.attributes.get(ATTR_MASS_PLAYER_TYPE) != MASS_TYPE_GROUP:
+    player = options.get(CONF_FOLLOW_PLAYER)
+    # follow me moves queues: a group player of Music Assistant
+    if player and hass.states.get(player) is not None and not MusicAssistant(hass).is_group(player):
         return {CONF_FOLLOW_PLAYER: "not_a_group"}
     return {}
 
@@ -216,8 +215,7 @@ def _validate(hass: HomeAssistant, options: dict) -> dict[str, str]:
     if video and video == audio:
         errors[CONF_AUDIO_PLAYER] = "same_player"
     for key in (CONF_VIDEO_PLAYER, CONF_AUDIO_PLAYER):
-        state = hass.states.get(options[key]) if options.get(key) else None
-        if state is not None and state.attributes.get(ATTR_MASS_PLAYER_TYPE) == MASS_TYPE_GROUP:
+        if is_group(hass, options.get(key)):
             errors[key] = "group_player"
     if options.get(CONF_VOLUME_CONTROL) == VOLUME_DEVICE:
         device = options.get(CONF_VOLUME_ENTITY)
@@ -228,7 +226,7 @@ def _validate(hass: HomeAssistant, options: dict) -> dict[str, str]:
             errors[CONF_VOLUME_ENTITY] = "volume_is_player"
         elif (reg := er.async_get(hass).async_get(device)) is not None and reg.platform == DOMAIN:
             errors[CONF_VOLUME_ENTITY] = "volume_is_room"  # a room player (loops)
-        elif state is not None and state.attributes.get(ATTR_MASS_PLAYER_TYPE) == MASS_TYPE_GROUP:
+        elif is_group(hass, device):
             errors[CONF_VOLUME_ENTITY] = "group_player"
         elif (
             state is not None
@@ -282,7 +280,7 @@ def _without_volume(hass: HomeAssistant, options: dict) -> list[str]:
 
 
 def _area_suggestions(hass: HomeAssistant, area_id: str | None) -> dict[str, str]:
-    """Pre-select Kodi / Music Assistant players of the chosen area."""
+    """Pre-select the area's players of known systems (e.g. Kodi, Music Assistant)."""
     if not area_id:
         return {}
     ent_reg = er.async_get(hass)
@@ -297,13 +295,9 @@ def _area_suggestions(hass: HomeAssistant, area_id: str | None) -> dict[str, str
             entry_area = device.area_id if device else None
         if entry_area != area_id:
             continue
-        state = hass.states.get(entry.entity_id)
-        if state is not None and state.attributes.get(ATTR_MASS_PLAYER_TYPE) == MASS_TYPE_GROUP:
-            continue
-        if entry.platform in VIDEO_PLATFORMS:
-            found.setdefault(CONF_VIDEO_PLAYER, entry.entity_id)
-        elif entry.platform in AUDIO_PLATFORMS:
-            found.setdefault(CONF_AUDIO_PLAYER, entry.entity_id)
+        role = suggested_role(hass, entry)
+        if role is not None:
+            found.setdefault(CONF_VIDEO_PLAYER if role == SOURCE_VIDEO else CONF_AUDIO_PLAYER, entry.entity_id)
     return found
 
 

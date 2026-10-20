@@ -412,10 +412,10 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
                 data["enqueue"] = enqueue
             if kwargs.get(ATTR_MEDIA_EXTRA):
                 data["extra"] = kwargs[ATTR_MEDIA_EXTRA]
-            # the player may carry the mode in its own id (Better Kodi's choices):
+            # the player may carry the mode in its own id (e.g. Better Kodi's choices):
             # passed through unchanged, but the room decides by it
             await self.ctrl.async_play_on(
-                key, data, room_mode=mode or self._browser.player_mode(inner_id)
+                key, data, room_mode=mode or self._browser.player_mode(key, inner_id)
             )
             return
         data = {"media_content_type": media_type, "media_content_id": media_id}
@@ -455,7 +455,7 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
         if is_own_id(media_content_id):
             key, inner_type, inner_id, _mode = self._browser.resolve_play(media_content_id)
             data = {"media_content_type": inner_type or media_content_type, "media_content_id": inner_id}
-            room_mode = self._browser.player_mode(inner_id)
+            room_mode = self._browser.player_mode(key, inner_id)
         else:
             key = source or (SOURCE_AUDIO if SOURCE_AUDIO in self.ctrl.sources else SOURCE_VIDEO)
             data = {"media_content_type": media_content_type, "media_content_id": media_content_id}

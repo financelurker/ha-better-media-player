@@ -50,7 +50,6 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    ATTR_MASS_PLAYER_TYPE,
     CONF_DEFAULT_VOLUME,
     CONF_FOLLOW_PLAYER,
     CONF_NIGHT_FADE_IN,
@@ -69,14 +68,14 @@ from .const import (
     FOLLOW_WAITING,
     FOLLOW_WAKING,
     HUB_ENTITY_DEFAULTS,
-    MASS_TYPE_GROUP,
     SOURCE_VIDEO,
     STORAGE_VERSION,
     TICK_SECONDS,
     WAKE_ARRIVAL_WINDOW,
 )
 from .output import MemberOutput
-from .position import Position, keep_position, last_report
+from .music_assistant import MusicAssistant
+from .position import Position
 from .ramp import VolumeRamp
 
 if TYPE_CHECKING:
@@ -152,7 +151,7 @@ class FollowManager:
         self._lock = asyncio.Lock()
         self._unsubs: list[Callable[[], None]] = []
         self._track_unsub: Callable[[], None] | None = None
-        self._position_watch: Callable[[], None] | None = None  # the track goes on where it was
+        self.ma = MusicAssistant(hass)  # how groups and queues work
         self._listeners: list[Callable[[], None]] = []
         self._tasks: set[asyncio.Task] = set()
         self._queued = False
@@ -210,9 +209,7 @@ class FollowManager:
         if self._track_unsub:
             self._track_unsub()
             self._track_unsub = None
-        if self._position_watch is not None:
-            self._position_watch()
-            self._position_watch = None
+        self.ma.async_stop()
         for ramp in self._group_ramps.values():
             ramp.stop()
         for task in list(self._tasks):
@@ -230,7 +227,7 @@ class FollowManager:
             return
         if self._track_unsub:
             self._track_unsub()
-        tracked = [*([self.follow_player] if self.follow_player else []), *self.ma_groups()]
+        tracked = [*([self.follow_player] if self.follow_player else []), *self.ma.groups()]
         for room in get_rooms(self.hass).values():
             tracked += room.follow_tracked_entities
         tracked = list(dict.fromkeys(tracked))
@@ -286,28 +283,8 @@ class FollowManager:
         """Playback in this group follows the people (not just plays)."""
         return self.active and group == self.follow_player
 
-    def ma_groups(self) -> list[str]:
-        return [
-            s.entity_id
-            for s in self.hass.states.async_all(MP_DOMAIN)
-            if s.attributes.get(ATTR_MASS_PLAYER_TYPE) == MASS_TYPE_GROUP
-        ]
-
-    def manages(self, group: str) -> bool:
-        """A Music Assistant group: its members' volumes are the hub's business."""
-        state = self.hass.states.get(group)
-        return state is not None and state.attributes.get(ATTR_MASS_PLAYER_TYPE) == MASS_TYPE_GROUP
-
-    def group_members(self, group: str | None) -> list[str]:
-        state = self.hass.states.get(group) if group else None
-        return list(state.attributes.get("group_members") or []) if state else []
-
-    def group_state(self, group: str | None) -> str | None:
-        state = self.hass.states.get(group) if group else None
-        return state.state if state else None
-
     def _member_rooms(self, group: str) -> list[RoomController]:
-        members = self.group_members(group)
+        members = self.ma.members(group)
         return [r for r in self.follow_rooms() if r.audio_player in members]
 
     def can_start(self, room: RoomController) -> bool:
@@ -336,12 +313,12 @@ class FollowManager:
             return None
         player = room.audio_player
         names["player"] = self._name(player)
-        if player in self.group_members(self.follow_player):
-            if self.group_state(self.follow_player) in PLAYING:
+        if player in self.ma.members(self.follow_player):
+            if self.ma.state(self.follow_player) in PLAYING:
                 return None  # already in the follow-me player, which plays without follow me
             # left in the follow-me player, which does not play (e.g. paused)
             return "start_follow_paused", {**names, "group": self._name(self.follow_player)}
-        groups = room.groups_of(player)
+        groups = self.ma.groups_of(player)
         if groups:
             return "start_in_group", {**names, "group": ", ".join(self._name(g) for g in groups)}
         return "start_not_playing", names
@@ -357,7 +334,7 @@ class FollowManager:
         """
         state = self.hass.states.get(group)
         vol = state.attributes.get("volume_level") if state else None
-        members = self.group_members(group)
+        members = self.ma.members(group)
         faded = self._faded_members(members)
         if faded:
             # members whose volume is no wish (sleep fade, night limit, wake): the
@@ -406,7 +383,7 @@ class FollowManager:
     def _remember_volume(self, group: str) -> None:
         state = self.hass.states.get(group)
         vol = state.attributes.get("volume_level") if state else None
-        members = self.group_members(group)
+        members = self.ma.members(group)
         if vol is None or float(vol) <= 0 or not members:
             return
         if self._faded_members(members) or self._member_ramping(members):
@@ -437,9 +414,9 @@ class FollowManager:
         if player is None:
             return FOLLOW_EXCLUDED_BUSY
         # never take a room away from another group or from direct playback
-        if any(other != group for other in room.groups_of(player)):
+        if any(other != group for other in self.ma.groups_of(player)):
             return FOLLOW_EXCLUDED_BUSY
-        if player not in self.group_members(group) and room.audio_playing_directly:
+        if player not in self.ma.members(group) and room.audio_playing_directly:
             return FOLLOW_EXCLUDED_BUSY
         return None
 
@@ -474,7 +451,7 @@ class FollowManager:
                 # join first: an empty group cannot play; then the queue moves over
                 # (also as a member left in the idle follow-me player from before)
                 self._commands.pop((player, f"join:{group}"), None)
-                position = Position.of(self.hass, player)  # (joining may stop the player)
+                position = self.ma.position(player)  # (joining may stop the player)
                 ok = await self._join(room, group, keep_volume=True)
                 ok = ok and await self._transfer(player, group, position=position)
                 if not ok:
@@ -491,13 +468,13 @@ class FollowManager:
             if not self.active:
                 raise ServiceValidationError(translation_domain=DOMAIN, translation_key="follow_not_running")
             group = self.follow_player
-            members = self.group_members(group)
-            playing = self.group_state(group) in PLAYING  # paused stays paused in the room
+            members = self.ma.members(group)
+            playing = self.ma.state(group) in PLAYING  # paused stays paused in the room
             target = room if room is not None and room.audio_player in members else self.origin
             for wake_room in get_rooms(self.hass).values():
                 if wake_room.wake.follows and wake_room.wake.active:
                     await wake_room.wake.async_finish("stopped")
-            position = Position.of(self.hass, group)  # (the group stops with its last member)
+            position = self.ma.position(group)  # (the group stops with its last member)
             for member in members:
                 await self._unjoin(member, "follow me stopped")
             moved = True
@@ -540,29 +517,7 @@ class FollowManager:
         self, source: str, target: str, auto_play: bool = True, position: Position | None = None
     ) -> bool:
         """Move the queue; the track goes on where it was (position, read before)."""
-        reported = last_report(self.hass, target)
-        try:
-            await self.hass.services.async_call(
-                "music_assistant",
-                "transfer_queue",
-                {ATTR_ENTITY_ID: target, "source_player": source, "auto_play": auto_play},
-                blocking=True,
-                context=Context(),
-            )
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.warning("Moving the queue from %s to %s failed: %s", source, target, err)
-            return False
-        if auto_play and position is not None and not self._stopped:
-
-            @callback
-            def _seek(seconds: float) -> None:
-                _LOGGER.debug("%s goes on at %.0f s", target, seconds)
-                self._spawn(self._call("media_seek", {ATTR_ENTITY_ID: target, "seek_position": seconds}))
-
-            if self._position_watch is not None:
-                self._position_watch()
-            self._position_watch = keep_position(self.hass, target, position, _seek, reported)
-        return True
+        return await self.ma.transfer(source, target, auto_play, position)
 
     # -------------------------------------------------------------- evaluation
 
@@ -580,12 +535,12 @@ class FollowManager:
         """
         now = _now()
         s = self.session
-        if s.group != group or self.group_state(group) != MediaPlayerState.PAUSED:
+        if s.group != group or self.ma.state(group) != MediaPlayerState.PAUSED:
             return False
         recent = {rid for rid, ts in s.video_left.items() if now - ts < VIDEO_RESUME_MAX_SECONDS}
         if not recent:
             return False
-        members = self.group_members(group)
+        members = self.ma.members(group)
         if not members:
             return True
         member_ids = {r.entry.entry_id for r in self._member_rooms(group)}
@@ -600,13 +555,13 @@ class FollowManager:
 
     def _session_goes_on(self, group: str, now: float) -> bool:
         s = self.session
-        state = self.group_state(group)
+        state = self.ma.state(group)
         if state in PLAYING or (s.started_by_us and now - s.started_at < START_GRACE_SECONDS):
             return True
         if self._resumable(group) or self._wake_waits(group):
             return True
         # paused by someone: the session goes on, nothing changes
-        return state == MediaPlayerState.PAUSED and bool(self.group_members(group))
+        return state == MediaPlayerState.PAUSED and bool(self.ma.members(group))
 
     async def _evaluate(self) -> None:
         now = _now()
@@ -622,7 +577,7 @@ class FollowManager:
                 room.set_prewarm(False)
                 room.set_follow_state(FOLLOW_INACTIVE)
             return
-        if self.group_state(group) in UNCERTAIN:
+        if self.ma.state(group) in UNCERTAIN:
             return  # MA reconnecting: no decisions
         if s.group != group:
             # follow me was on before a restart: members are kept, no overrides
@@ -638,11 +593,11 @@ class FollowManager:
         presences = {r.entry.entry_id: r.presence() for r in rooms}
         exclusions = {r.entry.entry_id: self.room_exclusion(r, group) for r in rooms}
 
-        group_playing = self.group_state(group) in PLAYING
+        group_playing = self.ma.state(group) in PLAYING
         resumable = self._resumable(group)
         if not group_playing and not resumable and not (s.started_by_us and now - s.started_at < START_GRACE_SECONDS):
             # paused by someone: membership stays as it is, prewarm runs down
-            members = self.group_members(group)
+            members = self.ma.members(group)
             for room in get_rooms(self.hass).values():
                 room.set_prewarm(False)
                 if room.wake.follow_snoozed:
@@ -658,7 +613,7 @@ class FollowManager:
                     room.set_follow_state(FOLLOW_WAKING)
             return
 
-        members = self.group_members(group)
+        members = self.ma.members(group)
         anyone = any(presences[rid] == PRESENT and exclusions[rid] is None for rid in presences)
 
         for room in rooms:
@@ -764,8 +719,8 @@ class FollowManager:
         """
         by_player = {r.audio_player: r for r in get_rooms(self.hass).values() if r.audio_player}
         free: dict[str, float] = self.data.setdefault("free_volumes", {})
-        for group in self.ma_groups():
-            members = self.group_members(group)
+        for group in self.ma.groups():
+            members = self.ma.members(group)
             limited = {p for p in members if p in by_player and by_player[p].night.player_cap is not None}
             was = self._night_limited.get(group, set())
             self._night_limited[group] = limited
@@ -799,7 +754,7 @@ class FollowManager:
         else:
             return  # nothing known: stays
         player = room.audio_player
-        seconds = float(room.setting(CONF_NIGHT_FADE_IN)) * 60 if self.group_state(group) in PLAYING else 0
+        seconds = float(room.setting(CONF_NIGHT_FADE_IN)) * 60 if self.ma.state(group) in PLAYING else 0
         ramp = self._group_ramps.get(player)
         if ramp is None:
             ramp = self._group_ramps[player] = VolumeRamp(
@@ -879,7 +834,7 @@ class FollowManager:
         s = self.session
         group = self.follow_player
         return self.active and (
-            self.group_state(group) in PLAYING
+            self.ma.state(group) in PLAYING
             or (s.group == group and s.started_by_us and _now() - s.started_at < START_GRACE_SECONDS)
         )
 
@@ -907,14 +862,14 @@ class FollowManager:
                 for other in self.follow_rooms():
                     if other is not room and other.presence() == PRESENT:
                         s.held_out.add(other.entry.entry_id)
-                for member in self.group_members(group):
+                for member in self.ma.members(group):
                     if member != room.audio_player:
                         await self._unjoin(member, "a follow wake starts follow me")
             s.backed.add(room.entry.entry_id)
             s.leaving.discard(room.entry.entry_id)
             s.opted_out.discard(room.entry.entry_id)
             s.held_out.discard(room.entry.entry_id)
-            if room.audio_player not in self.group_members(group):
+            if room.audio_player not in self.ma.members(group):
                 self._commands.pop((room.audio_player, f"join:{group}"), None)
                 await self._join(room, group, volume_override=volume)
             if not running:
@@ -936,10 +891,10 @@ class FollowManager:
             s = self.session
             s.backed.add(room.entry.entry_id)
             s.leaving.discard(room.entry.entry_id)
-            if room.audio_player not in self.group_members(group):
+            if room.audio_player not in self.ma.members(group):
                 self._commands.pop((room.audio_player, f"join:{group}"), None)
                 await self._join(room, group, volume_override=volume)
-            if self.group_state(group) not in PLAYING:
+            if self.ma.state(group) not in PLAYING:
                 s.started_at, s.started_by_us = _now(), True
                 self._commands.pop((group, "play"), None)
                 await self._resume(group)
@@ -948,7 +903,7 @@ class FollowManager:
 
     async def async_wake_snooze(self, room: RoomController) -> None:
         """Snooze of a follow wake: only this room leaves the group meanwhile."""
-        if room.audio_player in self.group_members(self.session.group):
+        if room.audio_player in self.ma.members(self.session.group):
             await self._leave(room, "snoozed")
         self.async_schedule("wake_snooze")
 
@@ -1006,7 +961,7 @@ class FollowManager:
             return True  # MA has not reported the last join yet
         if keep_volume:
             _LOGGER.info("Follow: %s joins %s", room.entry.title, group)
-            return await self._call("join", {ATTR_ENTITY_ID: group, "group_members": [player]})
+            return await self.ma.join(group, player)
         if volume_override is not None:
             volume = volume_override * 100  # a wake room: its start volume
         else:
@@ -1015,17 +970,17 @@ class FollowManager:
         _LOGGER.info("Follow: %s joins %s at %.0f%%", room.entry.title, group, volume)
         room.volume.note_own(player, volume / 100)  # follow's volume, not a wish for the room
         await self._call("volume_set", {ATTR_ENTITY_ID: player, "volume_level": volume / 100})
-        return await self._call("join", {ATTR_ENTITY_ID: group, "group_members": [player]})
+        return await self.ma.join(group, player)
 
     async def _resume(self, group: str) -> None:
         if self._due(group, "play"):
-            await self._call("media_play", {ATTR_ENTITY_ID: group})
+            await self.ma.resume(group)
 
     async def _unjoin(self, player: str, why: str) -> None:
         if not self._due(player, "unjoin"):
             return
         _LOGGER.info("Follow: %s leaves its group (%s)", player, why)
-        await self._call("unjoin", {ATTR_ENTITY_ID: player})
+        await self.ma.unjoin(player)
 
     async def _leave(self, room: RoomController, why: str) -> None:
         # stays 'backed' until MA really removed it, so it can never turn into an override

@@ -491,10 +491,10 @@ class WakeAlarm:
                 return
             hub = self.ctrl.hub
             if w.get("follow") and hub is not None:
-                if src.player not in hub.group_members(hub.follow_player):
+                if src.player not in hub.ma.members(hub.follow_player):
                     hub.async_schedule("wake_dropped")
                     return  # dropped from its group: follow me takes it back in
-                if hub.group_state(hub.follow_player) in _PLAYING:
+                if hub.ma.state(hub.follow_player) in _PLAYING:
                     return
             self.ctrl._spawn(self.async_finish(REASON_STOPPED))
 
@@ -646,9 +646,9 @@ class WakeAlarm:
             self._schedule(w["snooze_until"])
         elif (
             w.get("follow")
-            and not self.ctrl.groups_of(src.player)
+            and not src.backend.groups_of(src.player)
             and self.ctrl.hub is not None
-            and self.ctrl.hub.group_state(self.ctrl.hub.follow_player) not in (None, "unavailable", "unknown")
+            and self.ctrl.hub.ma.state(self.ctrl.hub.follow_player) not in (None, "unavailable", "unknown")
         ):
             # a follow wake whose group stopped while HA was down: join again
             self._spawn_start()
