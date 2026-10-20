@@ -62,9 +62,10 @@ async def test_groups(hass, home):
     assert ma.is_group(GROUP) and not ma.is_group(MUSIC) and not MusicBackend(hass).is_group(GROUP)
     assert set(ma.groups()) == {GROUP, FOLLOW}
     assert groups_of(hass, MUSIC) == [GROUP], "playing groups only"
-    assert set(groups_of(hass, MUSIC, idle=True)) == {GROUP, FOLLOW}, "also one that does not play"
+    assert set(groups_of(hass, MUSIC, idle=True)) == {GROUP}, "it plays (in GROUP): an idle group does not count"
     home.group("off", [MUSIC], GROUP)
-    assert groups_of(hass, MUSIC, idle=True) == [FOLLOW], "groups that are off are left out"
+    home.music("idle")
+    assert groups_of(hass, MUSIC, idle=True) == [FOLLOW], "groups that are off are left out; an idle one counts"
 
 
 async def test_suggested_role(hass, home):
