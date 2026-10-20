@@ -49,6 +49,8 @@ AMP = "number.amp_volume"  # volume device as a number (-80..0 dB)
 LG = "media_player.lg_tv"  # a TV that turns itself on/off (role device)
 HARMONY = "remote.harmony"  # a remote as a role device
 IR_ON, IR_OFF = "script.ir_sub_on", "script.ir_sub_off"  # own on/off actions
+KODI2 = "media_player.kodi_bedroom"  # a second video player (bedroom)
+BED_TV = "switch.bedroom_tv"
 AVR_FEATURES = int(F.VOLUME_SET | F.VOLUME_MUTE | F.VOLUME_STEP | F.TURN_ON | F.TURN_OFF)
 
 KODI_FEATURES = int(
@@ -123,6 +125,7 @@ class FakeHome:
     calls: list[tuple[str, str, str]] = field(default_factory=list)
     played: list[tuple[str, str, dict]] = field(default_factory=list)
     transferred: list[tuple[str, str]] = field(default_factory=list)
+    handovers: list[tuple[str, str, bool]] = field(default_factory=list)
     kodi_boots: bool = False  # turn_on makes Kodi idle immediately
     kodi_suspends: bool = True  # turn_off makes Kodi off immediately
     avr_memory: float = 0.4  # the AVR's own volume when its power comes back
@@ -237,6 +240,13 @@ class FakeHome:
             if self.lg_obeys or entity_id != LG:
                 self.hass.states.async_set(entity_id, "on" if service == "turn_on" else "off", st.attributes, context=context)
             return True
+        if domain == "better_kodi" and service == "handover":
+            # the playback goes on at the destination; the source stops unless kept
+            self.handovers.append((entity_id, data["destination"], data.get("keep_source_playing", False)))
+            self.set(data["destination"], "playing", media_title=st.attributes.get("media_title"))
+            if not data.get("keep_source_playing"):
+                self.set(entity_id, "idle")
+            return True
         if domain == "music_assistant" and service == "transfer_queue":
             # the queue moves: the target plays it (or holds it paused), the source stops
             source = data.get("source_player")
@@ -261,10 +271,10 @@ class FakeHome:
                 self.set(entity_id, state, **track)
             return True
         if domain == "media_player":
-            if entity_id == KODI and service == "turn_on" and self.kodi_boots:
-                self.kodi("idle")
-            elif entity_id == KODI and service == "turn_off" and self.kodi_suspends:
-                self.kodi("off")
+            if entity_id in (KODI, KODI2) and service == "turn_on" and self.kodi_boots:
+                self.set(entity_id, "idle", supported_features=KODI_FEATURES)
+            elif entity_id in (KODI, KODI2) and service == "turn_off" and self.kodi_suspends:
+                self.set(entity_id, "off")
             elif service == "unjoin":
                 self._leave_groups(entity_id)
                 self.set(entity_id, "idle")
@@ -317,7 +327,7 @@ def home(hass: HomeAssistant):
         if isinstance(ids, str) and ids.split(".")[1] in {
             "tv_plug", "speaker_plug", "bass_plug", "kodi", "office_player", "kodi_box_plug", "wol",
             "all_players", "all_players_follow", "kitchen_player", "kitchen_speakers", "avr", "amp_volume",
-            "lg_tv", "harmony", "ir_sub_on", "ir_sub_off",
+            "lg_tv", "harmony", "ir_sub_on", "ir_sub_off", "kodi_bedroom", "bedroom_tv",
         }:
             if service in ("browse_media", "search_media", "get_queue"):
                 return fake.respond(service, ids, service_data or {})
