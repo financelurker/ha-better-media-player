@@ -468,7 +468,7 @@ async def test_room_follow_options(hass, home):
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         {"display": entry.options["display"], "speakers": entry.options["speakers"], "bass": entry.options["bass"],
-         "standby": {}, "follow": {CONF_OCCUPANCY: [LIVING_OCC]}},
+         "actions": {}, "standby": {}, "follow": {CONF_OCCUPANCY: [LIVING_OCC]}},
     )
     result = await hass.config_entries.options.async_configure(result["flow_id"], {"next_step_id": "save"})
     assert result["type"] is FlowResultType.CREATE_ENTRY

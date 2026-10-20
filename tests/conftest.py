@@ -46,6 +46,9 @@ KITCHEN_OCC = "binary_sensor.kitchen_occupancy"
 GROUPS = (GROUP, FOLLOW)
 AVR = "media_player.avr"  # volume device behind the speaker plug
 AMP = "number.amp_volume"  # volume device as a number (-80..0 dB)
+LG = "media_player.lg_tv"  # a TV that turns itself on/off (role device)
+HARMONY = "remote.harmony"  # a remote as a role device
+IR_ON, IR_OFF = "script.ir_sub_on", "script.ir_sub_off"  # own on/off actions
 AVR_FEATURES = int(F.VOLUME_SET | F.VOLUME_MUTE | F.VOLUME_STEP | F.TURN_ON | F.TURN_OFF)
 
 KODI_FEATURES = int(
@@ -128,6 +131,8 @@ class FakeHome:
     transfer_reports: bool = True  # the target reports its position right away
     transfer_track: str | None = None  # the target is at another track by then
     clock_skew: float = 0.0  # s the clock of Music Assistant's server is ahead of HA's
+    lg_on_plug: bool = False  # the LG TV hangs on the TV plug (unavailable without power)
+    lg_obeys: bool = True  # the LG TV follows turn_on / turn_off
 
     def now(self):
         """The time on Music Assistant's server."""
@@ -200,6 +205,9 @@ class FakeHome:
                 self.hass.states.async_set(
                     entity_id, "on" if service == "turn_on" else "off", st.attributes, context=context
                 )
+                if entity_id == TV and self.lg_on_plug:
+                    # the TV comes up (off) with power, and is gone without
+                    self.hass.states.async_set(LG, "off" if service == "turn_on" else "unavailable", {})
                 avr = self.hass.states.get(AVR)
                 if entity_id == SPEAKERS and avr is not None:
                     # the AVR hangs on the speaker plug: its own last volume comes back
@@ -224,6 +232,10 @@ class FakeHome:
                 self.set(AVR, st.state, volume_level=round(min(1, max(0, vol + (0.05 if service == "volume_up" else -0.05))), 3))
             elif service == "volume_mute":
                 self.set(AVR, st.state, is_volume_muted=data["is_volume_muted"])
+            return True
+        if entity_id in (LG, HARMONY) and service in ("turn_on", "turn_off"):
+            if self.lg_obeys or entity_id != LG:
+                self.hass.states.async_set(entity_id, "on" if service == "turn_on" else "off", st.attributes, context=context)
             return True
         if domain == "music_assistant" and service == "transfer_queue":
             # the queue moves: the target plays it (or holds it paused), the source stops
@@ -305,6 +317,7 @@ def home(hass: HomeAssistant):
         if isinstance(ids, str) and ids.split(".")[1] in {
             "tv_plug", "speaker_plug", "bass_plug", "kodi", "office_player", "kodi_box_plug", "wol",
             "all_players", "all_players_follow", "kitchen_player", "kitchen_speakers", "avr", "amp_volume",
+            "lg_tv", "harmony", "ir_sub_on", "ir_sub_off",
         }:
             if service in ("browse_media", "search_media", "get_queue"):
                 return fake.respond(service, ids, service_data or {})

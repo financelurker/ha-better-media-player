@@ -66,7 +66,7 @@ async def main() -> None:
         await flow(fid, {"video_player": "media_player.lounge_room", "audio_player": "media_player.walkman", "special": {}})
         res = await flow(fid, {"display": ["switch.tv_plug"], "speakers": ["switch.speaker_plug"],
                                "bass": ["switch.subwoofer_plug"],
-                               "standby": {"display_power": ["sensor.tv_power"], "audio_power": ["sensor.speaker_power"]},
+                               "actions": {}, "standby": {"display_power": ["sensor.tv_power"], "audio_power": ["sensor.speaker_power"]},
                                "follow": {}})
         if res.get("step_id") == "volume_note":
             res = await flow(fid, {})

@@ -524,11 +524,14 @@ class RoomController:
 
     def role_standby(self, role: Role) -> bool:
         """Wait for standby before its plug goes off (only with power sensors)."""
+        return self.can_standby(role) and bool(self.setting(f"{role.prefix}_standby"))
+
+    def can_standby(self, role: Role) -> bool:
+        """Power sensors and a plug to cut after the standby (display, speakers)."""
         return (
             bool(role.power)
             and role.prefix in ("display", "audio")
             and any(self.kind(e) == "plug" for e in role.entities)
-            and bool(self.setting(f"{role.prefix}_standby"))
         )
 
     @property

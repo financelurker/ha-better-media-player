@@ -25,6 +25,7 @@ from .const import (
     CONF_AUDIO_POWER,
     CONF_BASS,
     CONF_DISPLAY,
+    CONF_DISPLAY_ON_ACTION,
     CONF_DISPLAY_POWER,
     CONF_ENTRY_TYPE,
     CONF_FOLLOW_PLAYER,
@@ -41,6 +42,8 @@ from .const import (
     ENTRY_TYPE_HUB,
     ENTRY_TYPE_ROOM,
     MASS_TYPE_GROUP,
+    ROLE_ACTIONS,
+    ROLE_DOMAINS,
     SWITCH_DOMAINS,
     VOLUME_DEVICE,
     VOLUME_ENTITY_DOMAINS,
@@ -78,7 +81,7 @@ def _fields() -> dict[str, Any]:
     """Every room option: its selector (all of them choose what is connected)."""
     action = _entity(ACTION_DOMAINS)
     plug = _entity(SWITCH_DOMAINS)
-    plugs = _entity(SWITCH_DOMAINS, multiple=True)
+    devices = _entity(ROLE_DOMAINS, multiple=True)  # plugs, media players, remotes
     power = _entity("sensor", "power", multiple=True)
     return {
         CONF_VIDEO_PLAYER: _entity("media_player"),
@@ -89,9 +92,10 @@ def _fields() -> dict[str, Any]:
         CONF_AUDIO_ON_ACTION: action,
         CONF_AUDIO_OFF_ACTION: action,
         CONF_AUDIO_HOST: plug,
-        CONF_DISPLAY: plugs,
-        CONF_SPEAKERS: plugs,
-        CONF_BASS: plugs,
+        CONF_DISPLAY: devices,
+        CONF_SPEAKERS: devices,
+        CONF_BASS: devices,
+        **{key: action for keys in ROLE_ACTIONS.values() for key in keys},
         CONF_VOLUME_CONTROL: sel.SelectSelector(
             sel.SelectSelectorConfig(
                 options=[VOLUME_PLAYERS, VOLUME_DEVICE], translation_key=CONF_VOLUME_CONTROL, mode=sel.SelectSelectorMode.LIST
@@ -118,7 +122,11 @@ LAYOUT: dict[str, tuple[list[str], dict[str, list[str]]]] = {
     ),
     "devices": (
         [CONF_DISPLAY, CONF_SPEAKERS, CONF_BASS, CONF_VOLUME_CONTROL, CONF_VOLUME_ENTITY],
-        {"standby": [CONF_DISPLAY_POWER, CONF_AUDIO_POWER], "follow": [CONF_OCCUPANCY]},
+        {
+            "actions": [key for keys in ROLE_ACTIONS.values() for key in keys],
+            "standby": [CONF_DISPLAY_POWER, CONF_AUDIO_POWER],
+            "follow": [CONF_OCCUPANCY],
+        },
     ),
 }
 
@@ -230,13 +238,17 @@ def _validate(hass: HomeAssistant, options: dict) -> dict[str, str]:
             errors[CONF_VOLUME_ENTITY] = "no_volume"
 
     roles = {k: list(options.get(k) or []) for k in (CONF_DISPLAY, CONF_SPEAKERS, CONF_BASS)}
-    if roles[CONF_DISPLAY] and not video:
+    for key, (on_k, off_k) in ROLE_ACTIONS.items():
+        if bool(options.get(on_k)) != bool(options.get(off_k)):
+            errors[on_k if not options.get(on_k) else off_k] = "needs_both_actions"
+    if (roles[CONF_DISPLAY] or options.get(CONF_DISPLAY_ON_ACTION)) and not video:
         errors[CONF_DISPLAY] = "display_needs_video"
-    seen: set[str] = set()
+    # one device may serve two roles (e.g. a TV's own speakers); a player hardware
+    # plug is the player's alone
+    seen: set[str] = {e for entities in roles.values() for e in entities}
     for key, entities in roles.items():
-        if seen & set(entities):
-            errors[key] = "duplicate_device"
-        seen |= set(entities)
+        if {video, audio} & set(entities) - {None}:
+            errors[key] = "device_is_player"
     for key in (CONF_VIDEO_HOST, CONF_AUDIO_HOST):
         if options.get(key) and options[key] in seen:
             errors[key] = "duplicate_device"

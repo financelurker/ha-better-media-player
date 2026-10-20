@@ -23,7 +23,7 @@ from custom_components.better_media_player.const import (
 from .conftest import GROUP, KODI, LIVING_OCC, MUSIC, SPEAKERS, TV, setup_room
 
 PLAYERS = {"special": {}}
-DEVICES = {"standby": {}, "follow": {}}
+DEVICES = {"actions": {}, "standby": {}, "follow": {}}
 
 
 async def _start(hass: HomeAssistant, area: str | None = None):
@@ -46,7 +46,7 @@ async def test_full_flow(hass, home):
     assert result["step_id"] == "devices"
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
-        {CONF_DISPLAY: [TV], CONF_SPEAKERS: [SPEAKERS], "standby": {}, "follow": {"occupancy": [LIVING_OCC]}},
+        {CONF_DISPLAY: [TV], CONF_SPEAKERS: [SPEAKERS], "actions": {}, "standby": {}, "follow": {"occupancy": [LIVING_OCC]}},
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Wohnzimmer"
@@ -79,10 +79,12 @@ async def test_validation(hass, home):
     assert result["step_id"] == "devices"
     result = await hass.config_entries.flow.async_configure(flow, {CONF_DISPLAY: [TV], **DEVICES})
     assert result["errors"] == {CONF_DISPLAY: "display_needs_video"}
+    result = await hass.config_entries.flow.async_configure(flow, {CONF_SPEAKERS: [MUSIC], **DEVICES})
+    assert result["errors"] == {CONF_SPEAKERS: "device_is_player"}
     result = await hass.config_entries.flow.async_configure(
-        flow, {CONF_SPEAKERS: [SPEAKERS], "bass": [SPEAKERS], **DEVICES}
+        flow, {CONF_SPEAKERS: [SPEAKERS], "actions": {"bass_on_action": "script.sub_on"}, "standby": {}, "follow": {}}
     )
-    assert result["errors"] == {"bass": "duplicate_device"}
+    assert result["errors"] == {"actions": "needs_both_actions"}
     result = await hass.config_entries.flow.async_configure(flow, {CONF_SPEAKERS: [SPEAKERS], **DEVICES})
     assert result["type"] is FlowResultType.CREATE_ENTRY
 
@@ -118,7 +120,7 @@ async def test_options_flow(hass, home):
     assert result["menu_options"] == ["room", "players", "devices", "save"]
     result = await hass.config_entries.options.async_configure(result["flow_id"], {"next_step_id": "devices"})
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_DISPLAY: [TV], CONF_SPEAKERS: [SPEAKERS], "standby": {}, "follow": {"occupancy": [LIVING_OCC]}}
+        result["flow_id"], {CONF_DISPLAY: [TV], CONF_SPEAKERS: [SPEAKERS], "actions": {}, "standby": {}, "follow": {"occupancy": [LIVING_OCC]}}
     )
     assert result["type"] is FlowResultType.MENU
     result = await hass.config_entries.options.async_configure(result["flow_id"], {"next_step_id": "save"})

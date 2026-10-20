@@ -63,7 +63,7 @@
       },
       "devices": {
         "title": "Geräte und Lautstärke",
-        "description": "Steckdosen, die nur noch dieser Raum schaltet. Andere Automationen für diese Steckdosen deaktivieren. Die Geräte müssen bei Stromzufuhr selbst starten.",
+        "description": "Was dieser Raum schaltet: Steckdosen oder Geräte, die sich selbst ein- und ausschalten (TV oder AVR als Media Player, eine Fernbedienung), oder beides (erst die Steckdose, dann das Gerät). Andere Automationen dafür deaktivieren. Geräte nur an einer Steckdose müssen bei Stromzufuhr selbst starten.",
         "data": {
           "display": "Bild (TV, Beamer)",
           "speakers": "Lautsprecher / Verstärker / AVR",
@@ -79,6 +79,18 @@
           "volume_entity": "Ein Media Player mit Lautstärke oder eine number / input_number (ihr Bereich zählt als 0–100 %)."
         },
         "sections": {
+          "actions": {
+            "name": "Eigene Ein-/Aus-Aktionen",
+            "description": "Für ein Gerät, das nur ein eigenes Script oder ein Button schaltet (z. B. per IR). Beide Aktionen sind nötig; als Zustand gilt, was zuletzt gesendet wurde.",
+            "data": {
+              "display_on_action": "Bild: Ein-Aktion",
+              "display_off_action": "Bild: Aus-Aktion",
+              "speakers_on_action": "Lautsprecher: Ein-Aktion",
+              "speakers_off_action": "Lautsprecher: Aus-Aktion",
+              "bass_on_action": "Subwoofer: Ein-Aktion",
+              "bass_off_action": "Subwoofer: Aus-Aktion"
+            }
+          },
           "standby": {
             "name": "Auf Standby warten (Leistungssensoren)",
             "description": "Mit Leistungssensoren wird eine Steckdose erst getrennt, wenn das Gerät von selbst in den Standby gegangen ist (z. B. OLED-Pflege); einschalten mit „Auf Standby warten“ am Gerät. Ohne gilt der Nachlauf.",
@@ -105,13 +117,15 @@
       "same_player": "Video- und Musik-Player müssen verschieden sein.",
       "group_player": "Das ist eine Music-Assistant-Gruppe. Bitte den Player des Raums auswählen.",
       "display_needs_video": "Ein Bild-Gerät braucht einen Video-Player.",
-      "duplicate_device": "Ein Gerät darf nur einmal verwendet werden.",
+      "duplicate_device": "Eine Steckdose der Player-Hardware darf kein Gerät einer Rolle sein.",
       "needs_player": "Braucht den zugehörigen Player.",
       "not_a_group": "Das ist kein Music-Assistant-Gruppen-Player.",
       "needs_volume_entity": "Bitte das Lautstärke-Gerät wählen.",
       "volume_is_player": "Das Lautstärke-Gerät darf keiner der Player des Raums sein.",
       "no_volume": "Dieser Media Player kann keine Lautstärke setzen.",
-      "volume_is_room": "Ein Better-Media-Player-Raum kann nicht das Lautstärke-Gerät sein."
+      "volume_is_room": "Ein Better-Media-Player-Raum kann nicht das Lautstärke-Gerät sein.",
+      "needs_both_actions": "Bitte Ein- und Aus-Aktion wählen.",
+      "device_is_player": "Ein Gerät darf keiner der Player des Raums sein."
     },
     "abort": {
       "hub_exists": "Zentrale Einstellungen gibt es schon. Ändern über Konfigurieren.",
@@ -177,7 +191,7 @@
       },
       "devices": {
         "title": "Geräte und Lautstärke",
-        "description": "Steckdosen, die nur noch dieser Raum schaltet. Andere Automationen für diese Steckdosen deaktivieren. Die Geräte müssen bei Stromzufuhr selbst starten.",
+        "description": "Was dieser Raum schaltet: Steckdosen oder Geräte, die sich selbst ein- und ausschalten (TV oder AVR als Media Player, eine Fernbedienung), oder beides (erst die Steckdose, dann das Gerät). Andere Automationen dafür deaktivieren. Geräte nur an einer Steckdose müssen bei Stromzufuhr selbst starten.",
         "data": {
           "display": "Bild (TV, Beamer)",
           "speakers": "Lautsprecher / Verstärker / AVR",
@@ -193,6 +207,18 @@
           "volume_entity": "Ein Media Player mit Lautstärke oder eine number / input_number (ihr Bereich zählt als 0–100 %)."
         },
         "sections": {
+          "actions": {
+            "name": "Eigene Ein-/Aus-Aktionen",
+            "description": "Für ein Gerät, das nur ein eigenes Script oder ein Button schaltet (z. B. per IR). Beide Aktionen sind nötig; als Zustand gilt, was zuletzt gesendet wurde.",
+            "data": {
+              "display_on_action": "Bild: Ein-Aktion",
+              "display_off_action": "Bild: Aus-Aktion",
+              "speakers_on_action": "Lautsprecher: Ein-Aktion",
+              "speakers_off_action": "Lautsprecher: Aus-Aktion",
+              "bass_on_action": "Subwoofer: Ein-Aktion",
+              "bass_off_action": "Subwoofer: Aus-Aktion"
+            }
+          },
           "standby": {
             "name": "Auf Standby warten (Leistungssensoren)",
             "description": "Mit Leistungssensoren wird eine Steckdose erst getrennt, wenn das Gerät von selbst in den Standby gegangen ist (z. B. OLED-Pflege); einschalten mit „Auf Standby warten“ am Gerät. Ohne gilt der Nachlauf.",
@@ -219,13 +245,15 @@
       "same_player": "Video- und Musik-Player müssen verschieden sein.",
       "group_player": "Das ist eine Music-Assistant-Gruppe. Bitte den Player des Raums auswählen.",
       "display_needs_video": "Ein Bild-Gerät braucht einen Video-Player.",
-      "duplicate_device": "Ein Gerät darf nur einmal verwendet werden.",
+      "duplicate_device": "Eine Steckdose der Player-Hardware darf kein Gerät einer Rolle sein.",
       "needs_player": "Braucht den zugehörigen Player.",
       "not_a_group": "Das ist kein Music-Assistant-Gruppen-Player.",
       "needs_volume_entity": "Bitte das Lautstärke-Gerät wählen.",
       "volume_is_player": "Das Lautstärke-Gerät darf keiner der Player des Raums sein.",
       "no_volume": "Dieser Media Player kann keine Lautstärke setzen.",
-      "volume_is_room": "Ein Better-Media-Player-Raum kann nicht das Lautstärke-Gerät sein."
+      "volume_is_room": "Ein Better-Media-Player-Raum kann nicht das Lautstärke-Gerät sein.",
+      "needs_both_actions": "Bitte Ein- und Aus-Aktion wählen.",
+      "device_is_player": "Ein Gerät darf keiner der Player des Raums sein."
     },
     "abort": {
       "invalid_config": "Die Einstellungen passen nicht zusammen. Bitte Media Player und Stromgeräte prüfen."
