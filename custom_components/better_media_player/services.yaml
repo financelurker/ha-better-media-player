@@ -135,3 +135,27 @@ set_volume_preset:
             - normal
             - loud
             - party
+
+handover:
+  target:
+    entity:
+      integration: better_media_player
+      domain: media_player
+  fields:
+    destination:
+      required: true
+      selector:
+        entity:
+          integration: better_media_player
+          domain: media_player
+    source:
+      selector:
+        select:
+          translation_key: source
+          options:
+            - audio
+            - video
+    keep_source_playing:
+      default: false
+      selector:
+        boolean:

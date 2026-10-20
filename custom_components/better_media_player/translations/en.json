@@ -471,6 +471,9 @@
           "loud": "Loud",
           "party": "Party"
         }
+      },
+      "handover": {
+        "name": "Hand over to"
       }
     }
   },
@@ -566,6 +569,24 @@
           "description": "Quiet, normal, loud or party."
         }
       }
+    },
+    "handover": {
+      "name": "Hand over",
+      "description": "Continue what plays in this room in another room: the other room powers up, the playback goes on there (music: the queue with the position of the current track; video: Better Kodi's handover), this room goes off.",
+      "fields": {
+        "destination": {
+          "name": "Destination",
+          "description": "The room player of the room to continue in."
+        },
+        "source": {
+          "name": "Source",
+          "description": "Music or video (default: what plays)."
+        },
+        "keep_source_playing": {
+          "name": "Keep playing here",
+          "description": "This room plays on (only where the player's system can: Better Kodi)."
+        }
+      }
     }
   },
   "selector": {
@@ -654,6 +675,24 @@
     },
     "start_follow_paused": {
       "message": "{room} cannot start follow me: {player} is still in the follow-me player {group}, which does not play. Resume {group}, or start the music on {player} itself."
+    },
+    "handover_not_a_room": {
+      "message": "{destination} is no Better Media Player room."
+    },
+    "handover_same_room": {
+      "message": "{room} cannot hand over to itself."
+    },
+    "handover_nothing_playing": {
+      "message": "Nothing plays in {room} that could be handed over."
+    },
+    "handover_no_player": {
+      "message": "{destination} has no {source} player to continue in."
+    },
+    "handover_not_supported": {
+      "message": "{player} cannot hand over to {target} (needs the same system with handover: Music Assistant, Better Kodi)."
+    },
+    "handover_keep_not_supported": {
+      "message": "{player} cannot play on while handing over (its queue moves)."
     }
   },
   "device_automation": {

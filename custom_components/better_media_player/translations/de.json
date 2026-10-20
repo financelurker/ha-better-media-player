@@ -471,6 +471,9 @@
           "loud": "Laut",
           "party": "Party"
         }
+      },
+      "handover": {
+        "name": "Übergeben an"
       }
     }
   },
@@ -566,6 +569,24 @@
           "description": "Leise, Normal, Laut oder Party."
         }
       }
+    },
+    "handover": {
+      "name": "Übergeben",
+      "description": "Was in diesem Raum läuft, in einem anderen Raum fortsetzen: Der andere Raum schaltet ein, die Wiedergabe geht dort weiter (Musik: die Queue mit der Stelle im aktuellen Titel; Video: Handover von Better Kodi), dieser Raum geht aus.",
+      "fields": {
+        "destination": {
+          "name": "Ziel",
+          "description": "Der Raum-Player des Raums, in dem es weitergeht."
+        },
+        "source": {
+          "name": "Quelle",
+          "description": "Musik oder Video (Standard: was läuft)."
+        },
+        "keep_source_playing": {
+          "name": "Hier weiterspielen",
+          "description": "Dieser Raum spielt weiter (nur wo das System des Players das kann: Better Kodi)."
+        }
+      }
     }
   },
   "selector": {
@@ -654,6 +675,24 @@
     },
     "start_follow_paused": {
       "message": "{room} kann Follow-Me nicht starten: {player} ist noch im Follow-Me-Player {group}, der gerade nicht spielt. Setze {group} fort oder starte die Musik direkt auf {player}."
+    },
+    "handover_not_a_room": {
+      "message": "{destination} ist kein Better-Media-Player-Raum."
+    },
+    "handover_same_room": {
+      "message": "{room} kann nicht an sich selbst übergeben."
+    },
+    "handover_nothing_playing": {
+      "message": "In {room} läuft nichts, das übergeben werden könnte."
+    },
+    "handover_no_player": {
+      "message": "{destination} hat keinen {source}-Player, um fortzusetzen."
+    },
+    "handover_not_supported": {
+      "message": "{player} kann nicht an {target} übergeben (braucht dasselbe System mit Handover: Music Assistant, Better Kodi)."
+    },
+    "handover_keep_not_supported": {
+      "message": "{player} kann beim Übergeben nicht weiterspielen (seine Queue zieht um)."
     }
   },
   "device_automation": {

@@ -44,6 +44,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_ENTITY_ID, ATTR_FRIENDLY_NAME, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import Context, Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.storage import Store
@@ -106,6 +107,14 @@ def get_hub(hass: HomeAssistant) -> FollowManager | None:
 
 def get_rooms(hass: HomeAssistant) -> dict[str, RoomController]:
     return hass.data.setdefault(DOMAIN, {}).setdefault("rooms", {})
+
+
+def room_of(hass: HomeAssistant, entity_id: str | None) -> RoomController | None:
+    """The room whose room player this is."""
+    entry = er.async_get(hass).async_get(entity_id) if entity_id else None
+    if entry is None or entry.platform != DOMAIN or entry.config_entry_id is None:
+        return None
+    return get_rooms(hass).get(entry.config_entry_id)
 
 
 @dataclass
@@ -462,15 +471,19 @@ class FollowManager:
         _LOGGER.info("Follow me started in %s", room.entry.title)
         self.async_schedule("follow_start")
 
-    async def async_follow_stop(self, room: RoomController | None = None) -> None:
-        """Follow me off: the music goes back to one room, the others stop."""
+    async def async_follow_stop(self, room: RoomController | None = None, to: RoomController | None = None) -> None:
+        """Follow me off: the music goes back to one room (to: this one, e.g. a
+        handover), the others stop."""
         async with self._lock:
             if not self.active:
                 raise ServiceValidationError(translation_domain=DOMAIN, translation_key="follow_not_running")
             group = self.follow_player
             members = self.ma.members(group)
             playing = self.ma.state(group) in PLAYING  # paused stays paused in the room
-            target = room if room is not None and room.audio_player in members else self.origin
+            if to is not None:
+                target = to
+            else:
+                target = room if room is not None and room.audio_player in members else self.origin
             for wake_room in get_rooms(self.hass).values():
                 if wake_room.wake.follows and wake_room.wake.active:
                     await wake_room.wake.async_finish("stopped")

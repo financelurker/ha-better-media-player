@@ -89,6 +89,8 @@ class PlayerBackend:
     room_choices = True  # the room offers play now / next / add / replace for its items
     lifts_queue = False  # its browser root has a queue entry (queue_entry) the room lifts
     has_queue = False  # queue() gives its queue
+    can_handover = False  # handover() continues its playback on another player of the system
+    keeps_source = False  # ... and can let the source play on
 
     def __init__(self, hass: HomeAssistant) -> None:
         self.hass = hass
@@ -125,6 +127,14 @@ class PlayerBackend:
     def enqueue_mode(self, media_id: str | None) -> str | None:
         """Play now / next / add / replace, if the player carries it in its own ids."""
         return None
+
+    def handover_to(self, other: PlayerBackend) -> bool:
+        """Its playback can continue on a player with that backend."""
+        return self.can_handover and type(other) is type(self)
+
+    async def handover(self, source: str, target: str, keep_source_playing: bool = False) -> bool:
+        """Continue the playback of source on target (it is up already)."""
+        return False
 
     async def unjoin(self, player: str, context: Context | None = None) -> bool:
         """Leave the group(s) it is in (Home Assistant's own grouping)."""

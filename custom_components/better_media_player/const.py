@@ -58,6 +58,7 @@ CONF_PRESET = "preset_{}"  # .format(name)
 CONF_POWER_ON_PRESET = "power_on_preset"
 PRESET_DEFAULTS = {"quiet": 15, "normal": 30, "loud": 50, "party": 70}
 SERVICE_SET_VOLUME_PRESET = "set_volume_preset"
+SERVICE_HANDOVER = "handover"
 ATTR_PRESET = "preset"
 CONF_PREWARM = "prewarm"
 CONF_WAKE_DETECT_LEFT = "wake_detect_left"  # follow wake: leaving the wake room ends the wake

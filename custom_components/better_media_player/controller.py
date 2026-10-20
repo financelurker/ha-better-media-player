@@ -1357,33 +1357,7 @@ class RoomController:
             raise HomeAssistantError(f"Unknown source: {key}")
         enqueue = room_mode or data.get("enqueue")
         if enqueue is None or str(enqueue) in ("play", "replace"):
-            self.source_watch.note_request(key)
-            await self._stop_others(key)
-            if not self.source_powered(key):
-                await self.async_turn_on(key)
-                task = self._seq_task
-                if task is not None:
-                    # shielded: if our caller (e.g. a voice command) gives up, the
-                    # room's power sequence still finishes or rolls back properly
-                    try:
-                        await asyncio.shield(task)
-                    except asyncio.CancelledError:
-                        if not task.cancelled():
-                            raise  # the caller was cancelled, not the sequence
-                        raise HomeAssistantError(f"{self.entry.title}: start was interrupted") from None
-                if self.error:
-                    raise HomeAssistantError(f"{self.entry.title}: {self.error}")
-            elif self.data.get("last_source") != key:
-                self.data["last_source"] = key
-                self._save()
-            if (
-                key == SOURCE_AUDIO
-                and src.backend.groups_of(src.player)
-                and self.player_supports(src, MediaPlayerEntityFeature.GROUPING)
-            ):
-                # play here, not on the whole group (independent of Music
-                # Assistant's 'play media overrides group' setting)
-                await self._unjoin(src)
+            await self.async_prepare(key)
             # played here on its own: with the room's volume from the first second
             await self.volume.async_apply(src, left_group=True)
         ctx = Context()
@@ -1391,6 +1365,102 @@ class RoomController:
         await self.hass.services.async_call(
             MP_DOMAIN, "play_media", {ATTR_ENTITY_ID: src.player, **data}, blocking=True, context=ctx
         )
+
+    async def async_prepare(self, key: str) -> None:
+        """Make the room ready to play on this source: the other source stops, the
+        power sequence runs (and is waited for), the player leaves its group."""
+        src = self.sources[key]
+        self.source_watch.note_request(key)
+        await self._stop_others(key)
+        if not self.source_powered(key):
+            await self.async_turn_on(key)
+            task = self._seq_task
+            if task is not None:
+                # shielded: if our caller (e.g. a voice command) gives up, the
+                # room's power sequence still finishes or rolls back properly
+                try:
+                    await asyncio.shield(task)
+                except asyncio.CancelledError:
+                    if not task.cancelled():
+                        raise  # the caller was cancelled, not the sequence
+                    raise HomeAssistantError(f"{self.entry.title}: start was interrupted") from None
+            if self.error:
+                raise HomeAssistantError(f"{self.entry.title}: {self.error}")
+        elif self.data.get("last_source") != key:
+            self.data["last_source"] = key
+            self._save()
+        if (
+            key == SOURCE_AUDIO
+            and src.backend.groups_of(src.player)
+            and self.player_supports(src, MediaPlayerEntityFeature.GROUPING)
+        ):
+            # play here, not on the whole group (independent of Music
+            # Assistant's 'play media overrides group' setting)
+            await self._unjoin(src)
+
+    # --------------------------------------------------------------- handover
+
+    def handover_source(self, source: str | None = None) -> Source | None:
+        """What would be handed over: the given source, or the one that plays
+        (paused counts; music also in a group)."""
+        src = self.sources.get(source) if source else self.active_source
+        if src is None:
+            return None
+        state = self.player_state(src)
+        if src.key == SOURCE_VIDEO:
+            return src if state in GROUP_ACTIVE_STATES else None
+        if state in GROUP_ACTIVE_STATES or any(
+            self.player_state_of(g) in GROUP_ACTIVE_STATES for g in src.backend.groups_of(src.player)
+        ):
+            return src
+        return None
+
+    def handover_blocker(self, dest: RoomController | None, source: str | None = None, keep: bool = False):
+        """Why the playback cannot go to dest (None: it can): (reason, placeholders)."""
+        names = {"room": self.entry.title, "destination": dest.entry.title if dest else "?"}
+        if dest is None:
+            return "handover_not_a_room", names
+        if dest is self:
+            return "handover_same_room", names
+        src = self.handover_source(source)
+        if src is None:
+            return "handover_nothing_playing", names
+        target = dest.sources.get(src.key)
+        if target is None:
+            return "handover_no_player", {**names, "source": src.key}
+        if not src.backend.handover_to(target.backend):
+            return "handover_not_supported", {**names, "player": src.player, "target": target.player}
+        if keep and not src.backend.keeps_source:
+            return "handover_keep_not_supported", {**names, "player": src.player}
+        return None
+
+    async def async_handover(self, dest: RoomController | None, source: str | None = None, keep: bool = False) -> None:
+        """Continue what plays here in dest; this room goes off (unless keep)."""
+        if (blocker := self.handover_blocker(dest, source, keep)) is not None:
+            key, placeholders = blocker
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key=key, translation_placeholders=placeholders
+            )
+        assert dest is not None
+        src = self.handover_source(source)
+        assert src is not None
+        target = dest.sources[src.key]
+        _LOGGER.info("%s: handing %s over to %s", self.entry.title, src.key, dest.entry.title)
+        hub = self.hub
+        if src.key == SOURCE_AUDIO and hub is not None and any(hub.follows(g) for g in src.backend.groups_of(src.player)):
+            # follow me plays it: it ends, the music goes to dest (the others stop)
+            await dest.async_prepare(src.key)
+            await hub.async_follow_stop(self, to=dest)
+            return
+        await dest.async_prepare(src.key)
+        if not await src.backend.handover(src.player, target.player, keep):
+            raise HomeAssistantError(f"{self.entry.title}: could not hand over to {dest.entry.title}")
+        if not keep:
+            await self.async_turn_off()
+
+    def player_state_of(self, entity_id: str) -> str | None:
+        state = self._state(entity_id)
+        return state.state if state else None
 
     async def _stop_others(self, source: str) -> None:
         for other in self.sources.values():

@@ -10,12 +10,15 @@ Better Kodi, on top:
 - it adds a queue entry to its browser; the room lifts it to its own root
   ("Queue: <player>");
 - its own play now / next / add / replace entries carry the mode in their id:
-  the room reads it (and decides by it), the id goes to the player unchanged.
+  the room reads it (and decides by it), the id goes to the player unchanged;
+- its handover continues the playback on another Better Kodi (it takes a
+  snapshot and resumes there; the source may play on).
 """
 
 from __future__ import annotations
 
 from homeassistant.components.media_player import BrowseMedia
+from homeassistant.const import ATTR_ENTITY_ID
 
 from .backend import ENQUEUE_MODES, VideoBackend
 
@@ -32,6 +35,15 @@ class Kodi(VideoBackend):
 class BetterKodi(Kodi):
     platform = "better_kodi"
     lifts_queue = True
+    can_handover = True
+    keeps_source = True
+
+    async def handover(self, source: str, target: str, keep_source_playing: bool = False) -> bool:
+        return await self._call(
+            "better_kodi",
+            "handover",
+            {ATTR_ENTITY_ID: source, "destination": target, "keep_source_playing": keep_source_playing, "resume": True},
+        )
 
     def queue_entry(self, root: BrowseMedia | None) -> BrowseMedia | None:
         for item in (root.children or []) if root else []:

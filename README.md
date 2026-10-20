@@ -16,7 +16,7 @@ It is a custom integration in the spirit of Better Thermostat: you tell it what 
 - [Installation](#installation)
 - [Setup](#setup)
 - [How the room behaves](#how-the-room-behaves)
-- [Features](#features): [room volume](#room-volume), [night mode](#night-mode), [sleep timer](#sleep-timer), [wake up](#wake-up), [follow me](#follow-me), [media browser](#media-browser-and-search)
+- [Features](#features): [room volume](#room-volume), [night mode](#night-mode), [sleep timer](#sleep-timer), [wake up](#wake-up), [follow me](#follow-me), [handover](#handover), [media browser](#media-browser-and-search)
 - [Automations](#automations): actions, events, device triggers
 - [Dashboards](#dashboards)
 - [Reference](#reference): entities and states
@@ -33,6 +33,7 @@ It is a custom integration in the spirit of Better Thermostat: you tell it what 
 - **One volume per room**, with presets (quiet, normal, loud, party) – on the players or on an amplifier, AV receiver or soundbar.
 - **Night mode, sleep timer and wake up** with fades.
 - **Follow me:** start it in a room and the music moves with you from room to room, using the rooms' occupancy sensors and one Music Assistant group player.
+- **Handover:** continue the music or the film in another room, where it was.
 - **Media browser and search** across all of the room's players, with their queues on top; picking a movie powers up TV and Kodi first.
 - **Manual override:** switch a plug (or turn a device on) by hand and the room steps back until everything is off again.
 - **Tidy dashboards:** controls that make no sense right now are hidden.
@@ -409,6 +410,26 @@ While it plays:
 
 **Stop** follow me with any room's **Stop follow me** button or `better_media_player.stop_follow` (target: a room player). The music goes back to one room: the room you stop it in if it plays along, else the room it was started in (paused music stays paused there); playing music goes on there where it was. All other rooms stop. Stopping while follow me is off gives an error. Follow me also ends by itself when the follow-me player is stopped in Music Assistant.
 
+### Handover
+
+Continue what plays in one room in another: the music or the film goes on there, this room goes off. With the room's select **Hand over to** (it offers the rooms that can take it over, while something plays) or the action:
+
+```yaml
+action: better_media_player.handover
+target:
+  entity_id: media_player.living_room
+data:
+  destination: media_player.kitchen
+  source: audio                 # optional: audio or video (default: what plays)
+  keep_source_playing: false    # optional: this room plays on (Better Kodi only)
+```
+
+- **The destination powers up first** (its power sequence for that source: TV, player, speakers), then the playback moves: **music** with its queue, going on where the track was (Music Assistant); **video** with Better Kodi's handover (it continues where the film was). The destination plays at its own room volume (night mode and presets apply there).
+- **What the destination played before** is replaced, as with a source change.
+- **During follow me**, handing the music over ends follow me: the music goes to the destination, the other rooms stop.
+- **This room goes off** afterwards (its sleep timer or wake end with it), unless `keep_source_playing` (only where the player's system can: Better Kodi; a Music Assistant queue moves).
+- Both rooms need a player for the source with handover: the same system (two Music Assistant players, two Better Kodi players). Otherwise the action gives an error that says why (nothing plays, no such player in the destination, the system cannot hand over, …).
+
 ### Media browser and search
 
 The room player's media browser bundles the browsers of its players. Only what a player supports is offered.
@@ -439,6 +460,7 @@ All of them target a room player (`media_player.<room>`).
 | `better_media_player.wake` | [wake up](#wake-up) (`media_content_id`, `media_content_type`; optional `start_volume`, `target_volume`, `fade_minutes`, `max_duration_minutes`, `night_mode`, `source`, `follow`) |
 | `better_media_player.snooze` / `stop_wake` | snooze (optional `minutes`) / stop a wake |
 | `better_media_player.start_follow` / `stop_follow` | [follow me](#follow-me) |
+| `better_media_player.handover` | [handover](#handover) (`destination`; optional `source`, `keep_source_playing`) |
 | `media_player.play_media` with `extra: {night_mode: true}` | play and switch the [night mode](#night-mode) along |
 
 ### Events and device triggers
@@ -494,6 +516,7 @@ action:
 | Wake, Snooze, Stop wake | a wake runs |
 | Follow me / Stop follow me | it can be started here / follow me runs |
 | Volume preset | the room plays or is on |
+| Hand over to | something plays that another room can take over |
 | central: Follow rooms | follow me runs |
 
 - "Plays or is on": one of its players is used (video player on, music playing or paused, or turned on with a source), or the room is being turned on.
@@ -522,6 +545,7 @@ action:
 | `sensor.<room>_wake` | wake state; snooze end, end time and volumes in the attributes |
 | `button.<room>_snooze`, `button.<room>_stop_wake` | wake controls |
 | `select.<room>_volume_preset` | volume preset (the offered presets and manual) |
+| `select.<room>_hand_over_to` | [handover](#handover) to another room |
 | `sensor.<room>_follow` | follow state of the room (with occupancy sensors only) |
 | `button.<room>_follow_me`, `button.<room>_stop_follow_me` | start / stop follow me |
 | `sensor.better_media_player_follow_rooms` | central: rooms in follow me; follow-me player, start room in the attributes |
@@ -582,8 +606,8 @@ What a particular system does on top, or differently, lives in a backend of its 
 | System | Backend | What it adds |
 |---|---|---|
 | Kodi | `kodi.py` | nothing beyond the video player's defaults |
-| Better Kodi | `kodi.py` | its queue is lifted to the room's root; its own play next / add entries are read |
-| Music Assistant | `music_assistant.py` | its group players (not taken as a room's player), the queue in the browser, moving a queue with the position of the current track |
+| Better Kodi | `kodi.py` | its queue is lifted to the room's root; its own play next / add entries are read; handover (also playing on) |
+| Music Assistant | `music_assistant.py` | its group players (not taken as a room's player), the queue in the browser, moving a queue with the position of the current track (follow me, handover) |
 
 Another system is one more module with a subclass of `VideoBackend` or `MusicBackend`, added to the list in `backend.py` (contributions welcome). Follow me works with Music Assistant only: it needs a group player and a system that can move a queue.
 

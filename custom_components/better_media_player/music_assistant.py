@@ -33,6 +33,7 @@ TYPE_GROUP = "group"
 class MusicAssistant(MusicBackend):
     platform = PLATFORM
     has_queue = True
+    can_handover = True  # (the queue moves: the source cannot play on)
 
     def __init__(self, hass: HomeAssistant) -> None:
         super().__init__(hass)
@@ -70,6 +71,10 @@ class MusicAssistant(MusicBackend):
                 self._watch()
             self._watch = keep_position(self.hass, target, position, _seek, reported)
         return True
+
+    async def handover(self, source: str, target: str, keep_source_playing: bool = False) -> bool:
+        """The queue moves; the current track goes on where it was."""
+        return await self.transfer(source, target, True, self.position(source))
 
     async def queue(self, player: str) -> Queue:
         """Current and next item (all that Home Assistant exposes)."""

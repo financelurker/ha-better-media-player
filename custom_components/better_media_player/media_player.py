@@ -36,6 +36,7 @@ from .browser import RoomBrowser, is_own_id
 from .const import (
     ATTR_PRESET,
     PRESETS,
+    SERVICE_HANDOVER,
     SERVICE_SET_VOLUME_PRESET,
     SERVICE_FOLLOW_START,
     SERVICE_FOLLOW_STOP,
@@ -52,7 +53,7 @@ from .const import (
     SOURCE_VIDEO,
 )
 from .entity import BetterMediaPlayerEntity
-from .hub import get_hub
+from .hub import get_hub, room_of
 from .sleep import MAX_MINUTES
 
 BASE_FEATURES = MediaPlayerEntityFeature.TURN_ON | MediaPlayerEntityFeature.TURN_OFF
@@ -138,6 +139,15 @@ async def async_setup_entry(
     platform.async_register_entity_service(SERVICE_STOP_WAKE, None, "async_stop_wake")
     platform.async_register_entity_service(
         SERVICE_SET_VOLUME_PRESET, {vol.Required(ATTR_PRESET): vol.In(PRESETS)}, "async_set_volume_preset"
+    )
+    platform.async_register_entity_service(
+        SERVICE_HANDOVER,
+        {
+            vol.Required("destination"): cv.entity_id,
+            vol.Optional("source"): vol.In([SOURCE_AUDIO, SOURCE_VIDEO]),
+            vol.Optional("keep_source_playing", default=False): cv.boolean,
+        },
+        "async_handover",
     )
 
 
@@ -492,6 +502,11 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
 
     async def async_set_volume_preset(self, preset: str) -> None:
         await self.ctrl.async_set_volume_preset(preset)
+
+    async def async_handover(
+        self, destination: str, source: str | None = None, keep_source_playing: bool = False
+    ) -> None:
+        await self.ctrl.async_handover(room_of(self.hass, destination), source, keep_source_playing)
 
     async def async_snooze(self, minutes: float | None = None) -> None:
         await self.ctrl.wake.async_snooze(minutes)
