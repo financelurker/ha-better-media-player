@@ -125,7 +125,8 @@
       "no_volume": "Dieser Media Player kann keine Lautstärke setzen.",
       "volume_is_room": "Ein Better-Media-Player-Raum kann nicht das Lautstärke-Gerät sein.",
       "needs_both_actions": "Bitte Ein- und Aus-Aktion wählen.",
-      "device_is_player": "Ein Gerät darf keiner der Player des Raums sein."
+      "device_is_player": "Ein Gerät darf keiner der Player des Raums sein.",
+      "device_is_room": "Ein Better-Media-Player-Raum kann kein Gerät einer Rolle sein."
     },
     "abort": {
       "hub_exists": "Zentrale Einstellungen gibt es schon. Ändern über Konfigurieren.",
@@ -253,7 +254,8 @@
       "no_volume": "Dieser Media Player kann keine Lautstärke setzen.",
       "volume_is_room": "Ein Better-Media-Player-Raum kann nicht das Lautstärke-Gerät sein.",
       "needs_both_actions": "Bitte Ein- und Aus-Aktion wählen.",
-      "device_is_player": "Ein Gerät darf keiner der Player des Raums sein."
+      "device_is_player": "Ein Gerät darf keiner der Player des Raums sein.",
+      "device_is_room": "Ein Better-Media-Player-Raum kann kein Gerät einer Rolle sein."
     },
     "abort": {
       "invalid_config": "Die Einstellungen passen nicht zusammen. Bitte Media Player und Stromgeräte prüfen."

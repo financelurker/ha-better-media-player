@@ -246,12 +246,19 @@ def _validate(hass: HomeAssistant, options: dict) -> dict[str, str]:
     # one device may serve two roles (e.g. a TV's own speakers); a player hardware
     # plug is the player's alone
     seen: set[str] = {e for entities in roles.values() for e in entities}
+    ent_reg = er.async_get(hass)
     for key, entities in roles.items():
         if {video, audio} & set(entities) - {None}:
             errors[key] = "device_is_player"
+        elif any((reg := ent_reg.async_get(e)) is not None and reg.platform == DOMAIN for e in entities):
+            errors[key] = "device_is_room"  # a room player (loops)
     for key in (CONF_VIDEO_HOST, CONF_AUDIO_HOST):
         if options.get(key) and options[key] in seen:
             errors[key] = "duplicate_device"
+            # shown in whichever step is open (the host's or the roles')
+            for role_key, entities in roles.items():
+                if options[key] in entities:
+                    errors.setdefault(role_key, "duplicate_device")
     if options.get(CONF_VIDEO_HOST) and not video:
         errors[CONF_VIDEO_HOST] = "needs_player"
     if options.get(CONF_AUDIO_HOST) and not audio:

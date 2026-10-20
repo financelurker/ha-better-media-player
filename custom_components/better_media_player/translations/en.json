@@ -125,7 +125,8 @@
       "no_volume": "This media player cannot set a volume.",
       "volume_is_room": "A Better Media Player room cannot be the volume device.",
       "needs_both_actions": "Choose both the on and the off action.",
-      "device_is_player": "A device must not be one of the room's players."
+      "device_is_player": "A device must not be one of the room's players.",
+      "device_is_room": "A Better Media Player room cannot be a device of a role."
     },
     "abort": {
       "hub_exists": "Central settings already exist. Change them via Configure.",
@@ -253,7 +254,8 @@
       "no_volume": "This media player cannot set a volume.",
       "volume_is_room": "A Better Media Player room cannot be the volume device.",
       "needs_both_actions": "Choose both the on and the off action.",
-      "device_is_player": "A device must not be one of the room's players."
+      "device_is_player": "A device must not be one of the room's players.",
+      "device_is_room": "A Better Media Player room cannot be a device of a role."
     },
     "abort": {
       "invalid_config": "The settings are not consistent. Check media players and power devices."

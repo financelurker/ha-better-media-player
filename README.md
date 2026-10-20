@@ -146,7 +146,7 @@ Display, speakers and subwoofer can also be devices that turn themselves on and 
 
 - **Plug and device in one role:** on: the plug, then the device once it is there (at most the start timeout; a device that does not come is left out until the next start); off: the device first, the plug once the device reports off (at most 60 s), after the standby wait if switched on (only a role with a plug waits for standby).
 - **One device in two roles** (e.g. a TV with its own speakers as display and speakers): it goes off only when no role needs it any more.
-- **Turned off by hand** while it is needed (e.g. the TV with its own remote): it stays off until the next start; everything else goes on automatically. **Turned on by hand** while nothing needs it (e.g. live TV): manual mode, as with a plug switched by hand.
+- **Turned off by hand** while it is needed (e.g. the TV with its own remote): it stays off until the next start; everything else goes on automatically. **Turned on by hand** while nothing needs it (e.g. live TV): manual mode, as with a plug switched by hand; while it is needed (e.g. woken by another device over HDMI-CEC) it simply counts as on.
 - **TV inputs and AV receiver inputs** are not switched by the room: use an automation on the [source change event](#source-changes).
 - **A TV that only an automation can turn on** (e.g. webOS with Wake-on-LAN): keep that automation for its turn-on trigger, as with Kodi.
 

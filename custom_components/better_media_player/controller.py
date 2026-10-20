@@ -449,7 +449,8 @@ class RoomController:
         if self._started and entity_id in self.power_entities and new is not None and old is not None:
             was_on, is_on = self._on(entity_id, old), self._on(entity_id, new)
             if (
-                old.state not in NOT_AVAILABLE
+                # a device may be gone while off (behind its plug, deep standby)
+                (old.state not in NOT_AVAILABLE or self.kind(entity_id) == "device")
                 and new.state not in NOT_AVAILABLE
                 and was_on != is_on
                 and not self._is_own_change(entity_id, new)
@@ -471,11 +472,19 @@ class RoomController:
         A device (TV, AVR) turned off while needed stays off until the next start,
         everything else goes on automatically; anything else (a plug, a device
         turned on) is the user's: manual mode until everything is off."""
-        demanded = any(entity_id in r.entities and self.role_demand(r) for r in self.roles.values())
-        if self.kind(entity_id) == "device" and not on:
-            if demanded:
+        demanded = self.sequence_running or any(
+            entity_id in r.entities and self.role_demand(r) for r in self.roles.values()
+        )
+        if self.kind(entity_id) == "device" and demanded:
+            # needed anyway (e.g. woken by another device over HDMI-CEC): stays automatic
+            if on:
+                self.held.discard(entity_id)
+            else:
                 _LOGGER.info("%s: %s turned off from outside, left off until the next start", self.entry.title, entity_id)
                 self.held.add(entity_id)
+                self._last_command.pop(entity_id, None)  # our turn-on is no longer on its way
+            return
+        if self.kind(entity_id) == "device" and not on:
             return
         _LOGGER.info(
             "%s: %s switched %s from outside, switching to manual mode",
@@ -644,16 +653,27 @@ class RoomController:
         last = self._last_command.get(entity_id)
         return last is not None and last[0] and _now() - last[1] < COMMAND_RETRY_SECONDS
 
+    def plugs_of(self, role: Role) -> list[str]:
+        """The role's plugs, and those of other roles that feed one of its devices
+        (a TV on the display's plug that also serves as the speakers)."""
+        devices = {e for e in role.entities if self.kind(e) == "device"}
+        plugs: list[str] = []
+        for r in self.roles.values():
+            if r is role or devices & set(r.entities):
+                plugs += [e for e in r.entities if self.kind(e) == "plug" and e not in plugs]
+        return plugs
+
     def role_fully_on(self, role: Role) -> bool:
-        """Everything of the role is on (a device behind a plug of its role only once
-        it is there and on; something unavailable otherwise does not hold it up)."""
-        plugged = any(self.kind(e) == "plug" and self.is_on(e) for e in role.entities)
-        return all(
+        """Everything of the role is on (a device behind a plug only once it is there
+        and on; something unavailable otherwise does not hold it up)."""
+        plugs = self.plugs_of(role)
+        return all(self.is_on(e) or self._pending_on(e) or not self.is_available(e) for e in plugs) and all(
             self.is_on(e)
             or self._pending_on(e)
             or e in self.held
-            or (not self.is_available(e) and not (plugged and self.kind(e) == "device"))
+            or (not self.is_available(e) and not (plugs and self.kind(e) == "device"))
             for e in role.entities
+            if self.kind(e) != "plug"
         )
 
     def devices_on(self, role: Role) -> bool:
@@ -872,7 +892,8 @@ class RoomController:
         """Room off, and every device has reported (not still unknown after a start)."""
         if self.room_on:
             return False
-        ids = [s.player for s in self.sources.values()] + self.power_entities
+        # devices are often gone while off (behind their plug, deep standby)
+        ids = [s.player for s in self.sources.values()] + [e for e in self.power_entities if self.kind(e) == "plug"]
         return all(self.is_available(e) for e in ids)
 
     @callback
@@ -1051,9 +1072,8 @@ class RoomController:
         """On: plugs first, then the devices behind them. Off: devices first, the
         plugs only once the devices are off."""
         if on:
-            for entity_id in role.entities:
-                if self.kind(entity_id) == "plug":
-                    await self._switch(entity_id, True, force)
+            for entity_id in self.plugs_of(role):
+                await self._switch(entity_id, True, force)
             for entity_id in role.entities:
                 if self.kind(entity_id) != "plug" and entity_id not in self.held:
                     await self._switch(entity_id, True, force)
@@ -1068,7 +1088,7 @@ class RoomController:
     async def _role_up(self, role: Role) -> None:
         """Plugs on, then the devices behind them once they are there."""
         await self._switch_role(role, True, force=True)
-        if not any(self.kind(e) == "plug" for e in role.entities):
+        if not self.plugs_of(role):
             return
         waiting = [e for e in role.entities if self.kind(e) == "device" and e not in self.held and not self.is_available(e)]
         if not waiting:
@@ -1091,6 +1111,8 @@ class RoomController:
 
     async def _switch_plugs_off(self, role: Role, force: bool = False) -> None:
         needed = self._needed_elsewhere(role)
+        if any(e in needed for e in role.entities if self.kind(e) == "device"):
+            return  # its plugs feed a device another role still needs
         for entity_id in role.entities:
             if self.kind(entity_id) == "plug" and entity_id not in needed:
                 await self._switch(entity_id, False, force)
