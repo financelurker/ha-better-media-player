@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from homeassistant.components.select import SelectEntity
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import BetterMediaPlayerConfigEntry
-from .const import PRESET_MANUAL
-from .entity import ControlEntity
+from .const import CONF_POWER_ON_PRESET, PRESET_MANUAL, PRESET_NONE, PRESETS
+from .entity import BetterMediaPlayerEntity, ControlEntity
 
 
 async def async_setup_entry(
@@ -18,7 +19,25 @@ async def async_setup_entry(
 ) -> None:
     ctrl = entry.runtime_data
     # always there: the presets can be offered later (number entities)
-    async_add_entities([VolumePresetSelect(entry, ctrl, "volume_preset")])
+    async_add_entities(
+        [VolumePresetSelect(entry, ctrl, "volume_preset"), PowerOnPresetSelect(entry, ctrl, CONF_POWER_ON_PRESET)]
+    )
+
+
+class PowerOnPresetSelect(BetterMediaPlayerEntity, SelectEntity):
+    """The room's volume whenever it comes on (none: as it was)."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_icon = "mdi:volume-source"
+    _attr_options = [PRESET_NONE, *PRESETS]
+
+    @property
+    def current_option(self) -> str:
+        value = self.ctrl.setting(CONF_POWER_ON_PRESET)
+        return value if value in self._attr_options else PRESET_NONE
+
+    async def async_select_option(self, option: str) -> None:
+        await self.ctrl.async_set_setting(CONF_POWER_ON_PRESET, option)
 
 
 class VolumePresetSelect(ControlEntity, SelectEntity):

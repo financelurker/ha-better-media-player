@@ -9,7 +9,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import BetterMediaPlayerConfigEntry
 from .const import DOMAIN
-from .entity import BetterMediaPlayerEntity, ControlEntity
+from .entity import ControlEntity
 from .hub import get_hub
 
 

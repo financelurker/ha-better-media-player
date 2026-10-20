@@ -146,7 +146,7 @@ class RoomVolume:
     def async_power_on(self) -> None:
         """The room came on: the power-on preset is its volume (players get it
         when they start)."""
-        name = self.ctrl.opts.get(CONF_POWER_ON_PRESET)
+        name = self.ctrl.setting(CONF_POWER_ON_PRESET)
         if not name or name == PRESET_NONE:
             return
         if name not in self.presets:

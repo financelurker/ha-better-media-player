@@ -115,7 +115,7 @@ class SleepTimer:
 
     @property
     def default_fade_minutes(self) -> float:
-        return float(self.ctrl.opts.get(CONF_SLEEP_FADE, 0))
+        return float(self.ctrl.setting(CONF_SLEEP_FADE))
 
     @property
     def _restores(self) -> dict[str, dict[str, float | None]]:

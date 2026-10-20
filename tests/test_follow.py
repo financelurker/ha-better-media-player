@@ -19,7 +19,6 @@ from custom_components.better_media_player.const import (
     CONF_ENTRY_TYPE,
     CONF_FOLLOW_PLAYER,
     CONF_OCCUPANCY,
-    CONF_VOLUME_OFFSET,
     DOMAIN,
     ENTRY_TYPE_HUB,
 )
@@ -431,11 +430,9 @@ async def test_hub_flow_and_single_instance(hass, home):
     assert result["step_id"] == "hub"
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_FOLLOW_PLAYER: "media_player.radio"})
     assert result["errors"] == {CONF_FOLLOW_PLAYER: "not_a_group"}
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_FOLLOW_PLAYER: FOLLOW, CONF_DEFAULT_VOLUME: 30}
-    )
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_FOLLOW_PLAYER: FOLLOW})
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["options"] == {CONF_FOLLOW_PLAYER: FOLLOW, CONF_DEFAULT_VOLUME: 30, "dynamic_controls": True, "hide_delay": 3}
+    assert result["options"] == {CONF_FOLLOW_PLAYER: FOLLOW}
     await hass.async_block_till_done()
 
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
@@ -458,17 +455,20 @@ async def test_old_central_entry_is_migrated(hass, home):
     reg.async_get_or_create("button", DOMAIN, f"{entry.entry_id}_start_follow", config_entry=entry)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
-    assert entry.version == 2
-    assert dict(entry.options) == {CONF_FOLLOW_PLAYER: FOLLOW, CONF_DEFAULT_VOLUME: 30}
+    assert entry.version == 3
+    assert dict(entry.options) == {CONF_FOLLOW_PLAYER: FOLLOW}
+    assert float(hass.states.get("number.better_media_player_follow_me_default_volume").state) == 30
     assert reg.async_get_entity_id("button", DOMAIN, f"{entry.entry_id}_start_follow") is None
 
 
 async def test_room_follow_options(hass, home):
     entry = await setup_room(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(result["flow_id"], {"next_step_id": "follow"})
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {"next_step_id": "devices"})
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_OCCUPANCY: [LIVING_OCC], CONF_VOLUME_OFFSET: -10}
+        result["flow_id"],
+        {"display": entry.options["display"], "speakers": entry.options["speakers"], "bass": entry.options["bass"],
+         "standby": {}, "follow": {CONF_OCCUPANCY: [LIVING_OCC]}},
     )
     result = await hass.config_entries.options.async_configure(result["flow_id"], {"next_step_id": "save"})
     assert result["type"] is FlowResultType.CREATE_ENTRY

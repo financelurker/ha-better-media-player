@@ -183,7 +183,7 @@ class NightMode:
             return
         ctrl.data["night_fade_back"] = True  # a restart in between goes on afterwards
         ctrl._save_now()
-        seconds = float(ctrl.opts.get(CONF_NIGHT_FADE_IN, 0)) * 60
+        seconds = float(ctrl.setting(CONF_NIGHT_FADE_IN)) * 60
         for out, src in self._outputs():
             if (
                 (src is not None and ctrl.player_state(src) not in _POWERED)

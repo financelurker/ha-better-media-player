@@ -68,7 +68,7 @@ from .const import (
     FOLLOW_UNKNOWN,
     FOLLOW_WAITING,
     FOLLOW_WAKING,
-    HUB_DEFAULTS,
+    HUB_ENTITY_DEFAULTS,
     MASS_TYPE_GROUP,
     SOURCE_VIDEO,
     STORAGE_VERSION,
@@ -143,7 +143,7 @@ class FollowManager:
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.hass = hass
         self.entry = entry
-        self.opts: dict[str, Any] = {**HUB_DEFAULTS, **entry.options}
+        self.opts: dict[str, Any] = dict(entry.options)
         self.follow_player: str | None = self.opts.get(CONF_FOLLOW_PLAYER)
         self._store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
         self.data: dict[str, Any] = {}
@@ -165,6 +165,16 @@ class FollowManager:
         self._arrivals: dict[str, float] = {}
 
     # ------------------------------------------------------------------ setup
+
+    def setting(self, key: str) -> Any:
+        """A value set on the central device (config entity), else its default."""
+        return self.data.get(key, HUB_ENTITY_DEFAULTS[key])
+
+    async def async_set_setting(self, key: str, value: Any) -> None:
+        self.data[key] = value
+        self._store.async_delay_save(lambda: self.data, 0)
+        self._notify()
+        self._notify_rooms()  # e.g. the dynamic controls of every room
 
     async def async_start(self) -> None:
         self.data = {"volumes": {}, **(await self._store.async_load() or {})}
@@ -364,7 +374,7 @@ class FollowManager:
         stored = self.data.get("volumes", {}).get(group)
         if stored:
             return float(stored)
-        return float(self.opts[CONF_DEFAULT_VOLUME])
+        return float(self.setting(CONF_DEFAULT_VOLUME))
 
     def _faded_members(self, members: list[str]) -> set[str]:
         """Members whose volume is not a wish right now: a sleep timer lowers
@@ -768,7 +778,7 @@ class FollowManager:
         else:
             return  # nothing known: stays
         player = room.audio_player
-        seconds = float(room.opts.get(CONF_NIGHT_FADE_IN, 0)) * 60 if self.group_state(group) in PLAYING else 0
+        seconds = float(room.setting(CONF_NIGHT_FADE_IN)) * 60 if self.group_state(group) in PLAYING else 0
         ramp = self._group_ramps.get(player)
         if ramp is None:
             ramp = self._group_ramps[player] = VolumeRamp(
@@ -811,7 +821,7 @@ class FollowManager:
             return
         s.member_since.setdefault(rid, now)
         s.leaving.discard(rid)
-        if room.wake.seen and presence == EMPTY and room.opts.get(CONF_WAKE_DETECT_LEFT, True):
+        if room.wake.seen and presence == EMPTY and room.setting(CONF_WAKE_DETECT_LEFT):
             since = max(s.empty_since.setdefault(rid, now), s.member_since[rid])
             if now - since >= room.presence_run_down and self._arrived_elsewhere(room):
                 _LOGGER.info("Follow wake: %s was left, the wake is done", room.entry.title)

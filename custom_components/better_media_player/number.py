@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from homeassistant.components.number import NumberEntity, NumberMode
-from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTime
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfPower, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from . import BetterMediaPlayerConfigEntry
+from . import BetterMediaPlayerConfigEntry, is_hub
 from .const import (
+    CONF_DEFAULT_VOLUME,
+    CONF_HIDE_DELAY,
     CONF_PRESET,
     PRESETS,
     ROLE_AUDIO,
@@ -18,7 +20,7 @@ from .const import (
     ROLE_VIDEO_HOST,
     SOURCE_VIDEO,
 )
-from .entity import BetterMediaPlayerEntity, ControlEntity
+from .entity import BetterMediaPlayerEntity, ControlEntity, HubEntity
 from .sleep import MAX_MINUTES
 
 
@@ -27,6 +29,15 @@ async def async_setup_entry(
     entry: BetterMediaPlayerConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
+    if is_hub(entry):
+        hub = entry.runtime_data
+        async_add_entities(
+            [
+                HubNumber(entry, hub, CONF_DEFAULT_VOLUME, 1, 100, 1, PERCENTAGE, "mdi:volume-medium"),
+                HubNumber(entry, hub, CONF_HIDE_DELAY, 0, 300, 1, UnitOfTime.SECONDS, "mdi:timer-sand"),
+            ]
+        )
+        return
     ctrl = entry.runtime_data
     entities = []
     if ROLE_DISPLAY in ctrl.roles:
@@ -42,6 +53,25 @@ async def async_setup_entry(
         entities.append(MinutesNumber(entry, ctrl, "night_display_run_down", 0, 120))
     entities.append(PercentNumber(entry, ctrl, "night_max_volume"))
     entities += [PresetNumber(entry, ctrl, name) for name in PRESETS]
+    # how the room behaves (set on the device, not in the options)
+    s, mins = UnitOfTime.SECONDS, UnitOfTime.MINUTES
+    entities.append(SettingNumber(entry, ctrl, "start_timeout", 10, 600, 5, s))
+    for role_key, prefix in ((ROLE_DISPLAY, "display"), (ROLE_AUDIO, "audio")):
+        role = ctrl.roles.get(role_key)
+        if role is None:
+            continue
+        entities.append(SettingNumber(entry, ctrl, f"{prefix}_on_wait", 0, 120, 1, s))
+        if role.power:
+            entities.append(SettingNumber(entry, ctrl, f"{prefix}_standby_w", 0, 200, 0.5, UnitOfPower.WATT))
+            entities.append(SettingNumber(entry, ctrl, f"{prefix}_standby_max", 1, 120, 1, mins))
+    if ROLE_VIDEO_HOST in ctrl.roles or ROLE_AUDIO_HOST in ctrl.roles:
+        entities.append(SettingNumber(entry, ctrl, "host_on_wait", 0, 120, 1, s))
+    entities.append(SettingNumber(entry, ctrl, "sleep_fade", 0, 60, 1, mins))
+    entities.append(SettingNumber(entry, ctrl, "snooze_minutes", 1, 120, 1, mins))
+    entities.append(SettingNumber(entry, ctrl, "night_fade_in", 0, 30, 1, mins))
+    if ctrl.follow_capable:
+        entities.append(SettingNumber(entry, ctrl, "presence_run_down", 0, 60, 0.5, mins))
+        entities.append(SettingNumber(entry, ctrl, "volume_offset", -50, 50, 1, PERCENTAGE))
     entities.append(SleepTimerNumber(entry, ctrl, "sleep_timer"))
     async_add_entities(entities)
 
@@ -93,6 +123,42 @@ class PresetNumber(MinutesNumber):
     async def async_set_native_value(self, value: float) -> None:
         await self.ctrl.async_set_number(self._key, value)
         await self.ctrl.volume.async_preset_changed(self._name)
+
+
+class SettingNumber(MinutesNumber):
+    """A setting of the room's behaviour (seconds, minutes, %, W)."""
+
+    def __init__(self, entry, ctrl, key: str, minimum: float, maximum: float, step: float, unit: str) -> None:
+        super().__init__(entry, ctrl, key, minimum, maximum)
+        self._attr_native_step = step
+        self._attr_native_unit_of_measurement = unit
+
+    @property
+    def native_value(self) -> float:
+        return float(self.ctrl.setting(self._key))
+
+
+class HubNumber(HubEntity, NumberEntity):
+    """A setting of the central device."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_mode = NumberMode.BOX
+
+    def __init__(self, entry, hub, key: str, minimum: float, maximum: float, step: float, unit: str, icon: str) -> None:
+        super().__init__(entry, hub, key)
+        self._key = key
+        self._attr_native_min_value = minimum
+        self._attr_native_max_value = maximum
+        self._attr_native_step = step
+        self._attr_native_unit_of_measurement = unit
+        self._attr_icon = icon
+
+    @property
+    def native_value(self) -> float:
+        return float(self.hub.setting(self._key))
+
+    async def async_set_native_value(self, value: float) -> None:
+        await self.hub.async_set_setting(self._key, float(value))
 
 
 class SleepTimerNumber(ControlEntity, NumberEntity):

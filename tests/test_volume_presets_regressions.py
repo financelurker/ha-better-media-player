@@ -9,7 +9,7 @@ from custom_components.better_media_player.const import (
     VOLUME_DEVICE,
 )
 
-from .conftest import AVR, MUSIC, SPEAKERS, setup_room
+from .conftest import AVR, SPEAKERS, setup_room
 from .test_volume_presets import SELECT, _room_volume, _select, _tick, _vol, _wake
 
 MUSIC_ONLY = {"video_player": None, "display": None, "speakers": None, "bass": None}
@@ -79,13 +79,25 @@ async def test_switching_the_output_keeps_the_preset(hass, home, freezer):
     assert _room_volume(hass) == 0.5
 
 
-async def test_changed_preset_value_is_taken(hass, home, freezer):
-    entry = await setup_room(hass)
-    home.music("playing", volume_level=0.4)
-    await hass.async_block_till_done()
-    await _tick(hass, freezer, 3)
-    await _select(hass, "normal")
-    hass.config_entries.async_update_entry(entry, options={**entry.options, "preset_normal": 40})
+async def test_preset_value_changed_before_the_update_is_taken(hass, home, freezer, hass_storage):
+    """An option change the entity had not taken yet comes with the update (migration)."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.better_media_player.const import CONF_ENTRY_TYPE, ENTRY_TYPE_ROOM
+
+    from .conftest import room_options
+
+    hass_storage[f"{DOMAIN}.room1"] = {
+        "version": 1, "key": f"{DOMAIN}.room1",
+        "data": {"volume_preset": "normal", "room_volume": 0.3, "preset_normal": 30.0, "cfg_preset_normal": 30.0},
+    }
+    home.music("playing", volume_level=0.3)
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="Wohnzimmer", entry_id="room1", data={CONF_ENTRY_TYPE: ENTRY_TYPE_ROOM},
+        options=room_options(preset_normal=40), version=2,
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
     await _tick(hass, freezer, 3)
     assert hass.states.get(SELECT).state == "normal"

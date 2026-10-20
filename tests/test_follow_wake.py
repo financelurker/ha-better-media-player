@@ -292,8 +292,9 @@ async def test_other_sensor_first_then_bedroom_empty_is_left(hass, house, freeze
 
 
 async def test_left_detection_can_be_switched_off(hass, house, freezer):
-    entry = next(e for e in hass.config_entries.async_entries(DOMAIN) if e.title == "Wohnzimmer")
-    hass.config_entries.async_update_entry(entry, options={**entry.options, "wake_detect_left": False})
+    await hass.services.async_call(
+        "switch", "turn_off", {"entity_id": "switch.wohnzimmer_wake_detect_leaving_the_room"}, blocking=True
+    )
     await hass.async_block_till_done()
     finished = async_capture_events(hass, EVENT_WAKE_FINISHED)
     hass.states.async_set(LIVING_OCC, "on")

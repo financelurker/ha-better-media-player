@@ -60,19 +60,10 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    CONF_AUDIO_ON_WAIT,
     CONF_AUDIO_POWER,
-    CONF_AUDIO_STANDBY,
-    CONF_AUDIO_STANDBY_MAX,
-    CONF_AUDIO_STANDBY_W,
     CONF_BASS,
     CONF_DISPLAY,
-    CONF_DISPLAY_ON_WAIT,
     CONF_DISPLAY_POWER,
-    CONF_DISPLAY_STANDBY,
-    CONF_DISPLAY_STANDBY_MAX,
-    CONF_DISPLAY_STANDBY_W,
-    CONF_HOST_ON_WAIT,
     CONF_OCCUPANCY,
     CONF_PRESENCE_RUN_DOWN,
     CONF_PREWARM,
@@ -167,11 +158,8 @@ class Role:
     entities: list[str]
     sources: tuple[str, ...]  # sources whose activity demands this role
     run_down_key: str  # key in controller.data (minutes)
-    on_wait: float = 0.0
-    power: list[str] | None = None
-    standby: bool = False
-    standby_w: float = 0.0
-    standby_max: float = 0.0  # minutes
+    prefix: str | None = None  # of its settings on the device ("display": display_on_wait, ...)
+    power: list[str] | None = None  # power sensors (wait for standby)
     # runtime
     last_demand: float | None = None
     force_off: bool = False
@@ -222,11 +210,8 @@ class RoomController:
                 entities=list(o[CONF_DISPLAY]),
                 sources=(SOURCE_VIDEO,),
                 run_down_key="display_run_down",
-                on_wait=float(o[CONF_DISPLAY_ON_WAIT]),
+                prefix="display",
                 power=list(o.get(CONF_DISPLAY_POWER) or []),
-                standby=bool(o[CONF_DISPLAY_STANDBY]) and bool(o.get(CONF_DISPLAY_POWER)),
-                standby_w=float(o[CONF_DISPLAY_STANDBY_W]),
-                standby_max=float(o[CONF_DISPLAY_STANDBY_MAX]),
             )
         if o.get(CONF_SPEAKERS):
             self.roles[ROLE_AUDIO] = Role(
@@ -234,11 +219,8 @@ class RoomController:
                 entities=list(o[CONF_SPEAKERS]),
                 sources=both,
                 run_down_key="audio_run_down",
-                on_wait=float(o[CONF_AUDIO_ON_WAIT]),
+                prefix="audio",
                 power=list(o.get(CONF_AUDIO_POWER) or []),
-                standby=bool(o[CONF_AUDIO_STANDBY]) and bool(o.get(CONF_AUDIO_POWER)),
-                standby_w=float(o[CONF_AUDIO_STANDBY_W]),
-                standby_max=float(o[CONF_AUDIO_STANDBY_MAX]),
             )
         if o.get(CONF_BASS):
             self.roles[ROLE_BASS] = Role(
@@ -255,7 +237,7 @@ class RoomController:
                     entities=[src.host],
                     sources=(src_key,),
                     run_down_key="host_run_down",
-                    on_wait=float(o[CONF_HOST_ON_WAIT]),
+                    prefix="host",
                 )
 
         self._store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
@@ -320,9 +302,9 @@ class RoomController:
             self.data["controls"] = self.data.pop("wake_controls")
         if self.data.get("last_source") not in self.sources:
             self.data["last_source"] = default_source
-        # values set on the device (number entities): first values from the defaults
+        # values set on the device (config entities): first values from the defaults
         for key, value in ENTITY_DEFAULTS.items():
-            self.data.setdefault(key, float(value))
+            self.data.setdefault(key, value)
             self.data.pop(f"cfg_{key}", None)  # (marker of when the options set them too)
         if self.data.get("volume_preset") is not None and self.data["volume_preset"] not in self.volume.presets:
             self.data.pop("volume_preset")  # no longer offered (options): it does not come back by itself
@@ -509,6 +491,19 @@ class RoomController:
             return False
         return bool(int(state.attributes.get(ATTR_SUPPORTED_FEATURES, 0) or 0) & feature)
 
+    def setting(self, key: str) -> Any:
+        """A value set on the device (config entity), else its default."""
+        return self.data.get(key, ENTITY_DEFAULTS.get(key))
+
+    def role_on_wait(self, role: Role) -> float:
+        if role.prefix is None:
+            return 0.0
+        return float(self.setting(f"{role.prefix}_on_wait") or 0)
+
+    def role_standby(self, role: Role) -> bool:
+        """Wait for standby before its plug goes off (only with power sensors)."""
+        return bool(role.power) and role.prefix in ("display", "audio") and bool(self.setting(f"{role.prefix}_standby"))
+
     @property
     def room_active(self) -> bool:
         """A player of the room is used (or the room is being turned on): its
@@ -654,15 +649,15 @@ class RoomController:
 
     @property
     def prewarm_enabled(self) -> bool:
-        return bool(self.opts[CONF_PREWARM])
+        return bool(self.setting(CONF_PREWARM))
 
     @property
     def presence_run_down(self) -> float:
-        return float(self.opts[CONF_PRESENCE_RUN_DOWN]) * 60.0
+        return float(self.setting(CONF_PRESENCE_RUN_DOWN)) * 60.0
 
     @property
     def volume_offset(self) -> float:
-        return float(self.opts[CONF_VOLUME_OFFSET])
+        return float(self.setting(CONF_VOLUME_OFFSET))
 
     def presence(self) -> str:
         """'present', 'empty' or 'unknown' (all sensors unavailable)."""
@@ -893,7 +888,7 @@ class RoomController:
             if not due or blocked:
                 holding.append(role)
                 continue
-            if role.standby and not self._standby_reached(role, now):
+            if self.role_standby(role) and not self._standby_reached(role, now):
                 holding.append(role)
                 continue
             await self._switch_role(role, False)
@@ -915,14 +910,14 @@ class RoomController:
             role.low_since = None
         values = [_float(self._state(e)) for e in role.power or []]
         known = [v for v in values if v is not None]
-        if known and all(v <= role.standby_w for v in known):
+        if known and all(v <= self.setting(f"{role.prefix}_standby_w") for v in known):
             if role.low_since is None:
                 role.low_since = now
         else:
             role.low_since = None
         if role.low_since is not None and now - role.low_since >= STANDBY_HOLD_SECONDS:
             return True
-        return now - role.stop_since >= role.standby_max * 60
+        return now - role.stop_since >= self.setting(f"{role.prefix}_standby_max") * 60
 
     def _update_status(self) -> None:
         if self.sequence_running:
@@ -1119,13 +1114,13 @@ class RoomController:
                 if not self.role_fully_on(role):
                     await self._switch_role(role, True, force=True)
                     switched.append(role)
-                    await self._sleep(role.on_wait)
+                    await self._sleep(self.role_on_wait(role))
                 else:
                     role.last_demand = _now()
 
             if src is not None and src.key in needed_sources:
                 # one deadline for the whole player start
-                deadline = _now() + float(self.opts[CONF_START_TIMEOUT])
+                deadline = _now() + float(self.setting(CONF_START_TIMEOUT))
                 if src.host and not await self._wait_until(
                     lambda: self.player_available(src), deadline - _now()
                 ):
@@ -1141,7 +1136,7 @@ class RoomController:
                 if not self.role_fully_on(role):
                     await self._switch_role(role, True, force=True)
                     switched.append(role)
-                    await self._sleep(role.on_wait)
+                    await self._sleep(self.role_on_wait(role))
                 else:
                     role.last_demand = _now()
             self.error = None
@@ -1331,7 +1326,11 @@ class RoomController:
         await self.async_update("auto_power")
 
     async def async_set_number(self, key: str, value: float) -> None:
-        self.data[key] = float(value)
+        await self.async_set_setting(key, float(value))
+
+    async def async_set_setting(self, key: str, value: Any) -> None:
+        """A value set on the device (config entity)."""
+        self.data[key] = value
         self._save()
         await self.async_update(key)
 

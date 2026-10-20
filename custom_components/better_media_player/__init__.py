@@ -7,8 +7,8 @@ A central entry adds "follow me" with a Music Assistant group player.
 
 from __future__ import annotations
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.storage import Store
@@ -21,6 +21,7 @@ from .const import (
     DOMAIN,
     ENTITY_DEFAULTS,
     ENTRY_TYPE_HUB,
+    HUB_ENTITY_DEFAULTS,
     HUB_PLATFORMS,
     PLATFORMS,
     STORAGE_VERSION,
@@ -60,19 +61,22 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 reg.async_remove(old)
         hass.config_entries.async_update_entry(entry, options=options, version=2)
     if entry.version == 2:
+        # how a room (or follow me) behaves is set on its device now: the
+        # values move from the options to the device's stored values
         options = dict(entry.options)
-        if not is_hub(entry):
-            store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
-            data = await store.async_load() or {}
-            for key in ENTITY_DEFAULTS:
-                if key not in options:
-                    continue
-                value = float(options.pop(key) or 0)
-                # an option change not yet taken by the entity wins (as before)
-                if key not in data or data.get(f"cfg_{key}") != value:
-                    data[key] = value
-                data.pop(f"cfg_{key}", None)
-            await store.async_save(data)
+        defaults = HUB_ENTITY_DEFAULTS if is_hub(entry) else ENTITY_DEFAULTS
+        store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
+        data = await store.async_load() or {}
+        for key, default in defaults.items():
+            if key not in options:
+                continue
+            raw = options.pop(key)
+            value = type(default)(raw) if not isinstance(default, (int, float)) else float(raw or 0)
+            # an option change not yet taken by the entity wins (as before)
+            if key not in data or data.get(f"cfg_{key}") != value:
+                data[key] = value
+            data.pop(f"cfg_{key}", None)
+        await store.async_save(data)
         hass.config_entries.async_update_entry(entry, options=options, version=3)
     return True
 
@@ -87,6 +91,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: BetterMediaPlayerConfigE
         await hub.async_start()
         entry.runtime_data = hub
         await hass.config_entries.async_forward_entry_setups(entry, HUB_PLATFORMS)
+
+        @callback
+        def _state_changed() -> None:
+            if entry.state is ConfigEntryState.LOADED:
+                for room in get_rooms(hass).values():
+                    room.notify()  # the dynamic controls' settings are known now
+
+        entry.async_on_unload(entry.async_on_state_change(_state_changed))
     else:
         controller = RoomController(hass, entry)
         await controller.async_start()

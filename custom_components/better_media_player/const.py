@@ -25,7 +25,7 @@ CONF_ENTRY_TYPE = "entry_type"
 ENTRY_TYPE_ROOM = "room"
 ENTRY_TYPE_HUB = "hub"
 
-HUB_PLATFORMS: list[Platform] = [Platform.SENSOR]
+HUB_PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.NUMBER, Platform.SWITCH]
 
 # --- Hub (central settings) ----------------------------------------------------
 CONF_FOLLOW_PLAYER = "follow_player"  # the follow-me player: an MA group with dynamic members
@@ -34,7 +34,8 @@ CONF_DEFAULT_VOLUME = "default_volume"  # %
 # controls that make no sense right now are hidden (all rooms), after a delay (s)
 CONF_DYNAMIC_CONTROLS = "dynamic_controls"
 CONF_HIDE_DELAY = "hide_delay"
-HUB_DEFAULTS: dict = {CONF_DEFAULT_VOLUME: 25, CONF_DYNAMIC_CONTROLS: True, CONF_HIDE_DELAY: 3}
+# central settings: set on the central device (entities); options only the follow-me player
+HUB_ENTITY_DEFAULTS: dict = {CONF_DEFAULT_VOLUME: 25, CONF_DYNAMIC_CONTROLS: True, CONF_HIDE_DELAY: 3}
 
 SERVICE_FOLLOW_START = "start_follow"
 SERVICE_FOLLOW_STOP = "stop_follow"
@@ -170,10 +171,6 @@ ENTITY_DEFAULTS: dict = {
     CONF_NIGHT_DISPLAY_RUN_DOWN: 1,
     CONF_NIGHT_MAX_VOLUME: 30,
     **{CONF_PRESET.format(name): value for name, value in PRESET_DEFAULTS.items()},
-}
-
-# room options
-DEFAULTS: dict = {
     CONF_START_TIMEOUT: 90,
     CONF_DISPLAY_ON_WAIT: 0,
     CONF_HOST_ON_WAIT: 0,
@@ -186,13 +183,17 @@ DEFAULTS: dict = {
     CONF_AUDIO_STANDBY_MAX: 5,
     CONF_PRESENCE_RUN_DOWN: 2,
     CONF_VOLUME_OFFSET: 0,
-    CONF_VOLUME_CONTROL: VOLUME_PLAYERS,
     CONF_POWER_ON_PRESET: PRESET_NONE,
     CONF_PREWARM: True,
     CONF_WAKE_DETECT_LEFT: True,
     CONF_SLEEP_FADE: 5,
     CONF_NIGHT_FADE_IN: 2,
     CONF_SNOOZE_MINUTES: 9,
+}
+
+# room options (what is connected; how it behaves is set on the device)
+DEFAULTS: dict = {
+    CONF_VOLUME_CONTROL: VOLUME_PLAYERS,
 }
 
 # --- Sleep timer ---------------------------------------------------------------
