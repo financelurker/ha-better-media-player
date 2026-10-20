@@ -216,7 +216,7 @@ A room has one volume, not one per player. It is the volume last chosen in the r
 
 - Assumption: the room's players are about equally loud at the same volume level.
 - Playback started through the room player gets the volume before it plays. Playback started on the player itself is adjusted a moment after it starts (Home Assistant learns about it only then).
-- Group playback (Music Assistant groups, follow me) is left alone: there the group decides. A player still joined to a group that does not play right now counts as in the group. The room's volume comes back with the next playback of the room on its own.
+- Group playback (Music Assistant groups, follow me) is left alone: there the group decides. A player still joined to a group that does not play right now counts as in the group, unless it plays on its own (an idle group may still list players that play elsewhere, e.g. Music Assistant's *All players*). The room's volume comes back with the next playback of the room on its own.
 - What Better Media Player sets itself (sleep timer, follow me's join volume) does not change the room volume.
 - Players that cannot set a volume take no part; the setup shows a note for them.
 - The room player shows the room volume in the attribute `room_volume`; `volume_level` is the volume of the active player.

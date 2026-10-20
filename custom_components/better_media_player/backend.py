@@ -49,8 +49,9 @@ _POWERED = {
     MediaPlayerState.BUFFERING,
 }
 # a group "has" a player while it plays (or is paused); idle=True: also while it
-# does not play right now (e.g. joined by follow me before the group starts).
-# Groups that are off are left out: static groups list their members even then.
+# does not play right now (e.g. joined by follow me before the group starts), as
+# long as the player does not play on its own. Groups that are off are left out:
+# static groups list their members even then; idle ones may too.
 _GROUP_ACTIVE = {MediaPlayerState.PLAYING, MediaPlayerState.PAUSED, MediaPlayerState.BUFFERING}
 _OFF = {"off", "standby", "unavailable", "unknown"}
 
@@ -190,11 +191,13 @@ class MusicBackend(PlayerBackend):
 
 def groups_of(hass: HomeAssistant, player: str, idle: bool = False) -> list[str]:
     """Media players (groups of any system) that have player as a member right now."""
+    own = hass.states.get(player)
+    on_its_own = own is not None and own.state in _GROUP_ACTIVE  # (a group it plays in plays too)
     out = []
     for state in hass.states.async_all(MP_DOMAIN):
         if state.entity_id == player:
             continue
-        if (state.state in _OFF) if idle else (state.state not in _GROUP_ACTIVE):
+        if state.state not in _GROUP_ACTIVE and (not idle or state.state in _OFF or on_its_own):
             continue
         if player in (state.attributes.get("group_members") or []):
             out.append(state.entity_id)
