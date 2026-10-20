@@ -141,6 +141,9 @@ async def test_follow_me_ends_into_the_destination(hass, rooms, freezer):
     hass.config_entries.async_update_entry(living, options={**living.options, "occupancy": [LIVING_OCC]})
     await hass.async_block_till_done()
     hass.states.async_set(LIVING_OCC, "on")
+    await hass.services.async_call(
+        "switch", "turn_off", {"entity_id": "switch.kitchen_follow_me_prewarm_speakers"}, blocking=True
+    )
     await _music(hass, home, freezer)
     await hass.services.async_call(DOMAIN, "start_follow", {"entity_id": LIVING}, blocking=True)
     await hass.async_block_till_done()
