@@ -105,7 +105,7 @@ from .const import (
 )
 from .hub import get_hub, get_rooms
 from .sleep import REASON_ROOM_OFF, SleepTimer
-from .music_assistant import MusicAssistant
+from .backend import PlayerBackend, backend_for, groups_of
 from .night import NightMode
 from .source_event import SourceWatch
 from .output import DeviceOutput, PlayerOutput
@@ -185,6 +185,7 @@ class Source:
     on_action: str | None
     off_action: str | None
     host: str | None
+    backend: PlayerBackend  # what its system can do (backend.py)
     # runtime
     suppressed: bool = False
     idle_since: float | None = None
@@ -209,6 +210,7 @@ class RoomController:
                     on_action=o.get(on_k),
                     off_action=o.get(off_k),
                     host=o.get(host_k),
+                    backend=backend_for(hass, o[player_k], key),
                 )
 
         self.roles: dict[str, Role] = {}
@@ -248,7 +250,6 @@ class RoomController:
 
         self._store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
         self.data: dict[str, Any] = {}
-        self.ma = MusicAssistant(hass)  # its groups
         self._lock = asyncio.Lock()
         self._changed = asyncio.Event()
         self._unsubs: list[Callable[[], None]] = []
@@ -614,7 +615,7 @@ class RoomController:
     def _group_counts(self, player: str) -> bool:
         """Group playback counts, except follow me in a quiet room (unless it wakes there)."""
         hub = _hub(self.hass)
-        groups = self.ma.groups_of(player)
+        groups = groups_of(self.hass, player)
         if hub is None or not groups or not self.quiet or self.wake.follow_holding:
             return True
         return any(not hub.follows(g) for g in groups)
@@ -738,7 +739,7 @@ class RoomController:
         return (
             src is not None
             and self.source_playing(src)
-            and not self.ma.groups_of(src.player)
+            and not groups_of(self.hass, src.player)
         )
 
     @property
@@ -1152,7 +1153,7 @@ class RoomController:
         """Leave the group(s) the player is in."""
         ctx = Context()
         self._own_contexts.append(ctx.id)
-        await self.ma.unjoin(src.player, ctx)
+        await src.backend.unjoin(src.player, ctx)
 
     async def _source_on(self, src: Source) -> None:
         if self.player_supports(src, MediaPlayerEntityFeature.TURN_ON):
@@ -1163,7 +1164,7 @@ class RoomController:
     async def _source_off(self, src: Source) -> None:
         """Stop a source: leave groups, stop playback, power it down if possible."""
         if src.key == SOURCE_AUDIO:
-            groups = self.ma.groups_of(src.player)
+            groups = groups_of(self.hass, src.player)
             if (
                 groups
                 and self.player_state(src) in GROUP_ACTIVE_STATES
@@ -1378,7 +1379,7 @@ class RoomController:
                 self._save()
             if (
                 key == SOURCE_AUDIO
-                and self.ma.groups_of(src.player)
+                and groups_of(self.hass, src.player)
                 and self.player_supports(src, MediaPlayerEntityFeature.GROUPING)
             ):
                 # play here, not on the whole group (independent of Music
@@ -1402,7 +1403,7 @@ class RoomController:
             else:
                 # music: leave a group, otherwise just pause
                 if (
-                    self.ma.groups_of(other.player)
+                    groups_of(self.hass, other.player)
                     and self.player_state(other) in GROUP_ACTIVE_STATES
                     and self.player_supports(other, MediaPlayerEntityFeature.GROUPING)
                 ):
@@ -1428,7 +1429,7 @@ class RoomController:
         # flag everything first: state events during the awaits below must not
         # start the room again
         for src in self.sources.values():
-            if self.source_active_raw(src) or self.ma.groups_of(src.player):
+            if self.source_active_raw(src) or groups_of(self.hass, src.player):
                 src.suppressed = True
         for role in self.roles.values():
             if self.role_on(role):

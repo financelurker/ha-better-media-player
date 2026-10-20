@@ -20,6 +20,7 @@ It is a custom integration in the spirit of Better Thermostat: you tell it what 
 - [Automations](#automations): actions, events, device triggers
 - [Dashboards](#dashboards)
 - [Reference](#reference): entities and states
+- [Players of other systems](#players-of-other-systems)
 - [Releases](#releases), [roadmap](#roadmap), [license](#license)
 
 ## What it does
@@ -104,7 +105,7 @@ The setup only asks what is connected:
 
 | Step | What you enter |
 |---|---|
-| **New room** | Name and area. Kodi and Music Assistant players of the area are pre-selected in the next step. |
+| **New room** | Name and area. Kodi (also Better Kodi) and Music Assistant players of the area are pre-selected in the next step. |
 | **Media players** | Video player (e.g. Kodi) and/or music player (the room's own player, not a group). *Special cases* (collapsed): on/off actions for a player that cannot turn itself on/off, plugs its hardware hangs on. |
 | **Devices and volume** | Display (TV, projector), speakers (one or more: active speakers, amplifier, AVR), subwoofer: plugs and/or [devices](#devices-instead-of-plugs). Where the room's volume is set: on the players, or on an own device. *Own on/off actions* (collapsed): scripts or buttons for a device only they switch. *Wait for standby* (collapsed): power sensors. *Follow me* (collapsed): occupancy sensors; rooms without them do not take part. |
 
@@ -571,6 +572,18 @@ Settings ([what they do](#settings-on-the-device)); only those the room can use:
 | `presence_unknown` | occupancy sensors unavailable; nothing changes |
 | `waking` / `snoozed` | wake room of a follow wake / snoozed (out of the group meanwhile) |
 | `held_out` | occupied when a follow wake started: joins once its presence went and came again |
+
+## Players of other systems
+
+Any media player can be the room's video or music player: the room then uses what Home Assistant offers for every media player (on, off, play, volume, browse while it is on, groups via `media_player.join`). What a particular system does on top, or does differently, lives in a backend of its own (`backend.py`):
+
+| System | Backend | Quirks it handles |
+|---|---|---|
+| Kodi | `kodi.py` | cannot be browsed while off (the room shows Home Assistant's media sources instead) |
+| Better Kodi | `kodi.py` | as Kodi; its queue is lifted to the room's root; its own play next / add entries are read |
+| Music Assistant | `music_assistant.py` | its group players (follow me), moving a queue with the position of the current track, the queue in the browser |
+
+Another system is one more module with a subclass of `VideoBackend` or `MusicBackend` (contributions welcome). Follow me needs a system that can move a queue: so far Music Assistant.
 
 ## Releases
 

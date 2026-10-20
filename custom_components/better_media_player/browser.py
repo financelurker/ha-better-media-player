@@ -3,10 +3,13 @@
 The room browser bundles the browsers of the room's players:
 
     <room>
-    ├── Queue: <video player>   lifted from the video player's root (Better Kodi)
-    ├── Queue: <music player>   current + next item (Music Assistant get_queue)
-    ├── <video player>          its browser; HA media sources while it is off
+    ├── Queue: <video player>   lifted from its browser root (e.g. Better Kodi)
+    ├── Queue: <music player>   current + next item (e.g. Music Assistant)
+    ├── <video player>          its browser; HA media sources while it cannot browse
     └── <music player>          its browser, playable items offer play now/next/add/replace
+
+What a player's system can do (queue, browsing while off, its own play next /
+add entries) comes from its backend (backend.py).
 
 Every item that comes from a player is wrapped into an id of our own that names
 the source, so browsing further and playing go to the right player:
@@ -42,7 +45,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.translation import async_get_translations
 
-from .const import DOMAIN, SOURCE_AUDIO, SOURCE_VIDEO
+from .backend import PlayerBackend
+from .const import DOMAIN
 
 if TYPE_CHECKING:
     from .controller import RoomController
@@ -60,10 +64,6 @@ KIND_MUSIC_QUEUE = "mqueue"  # Music Assistant queue folder
 KIND_INFO = "info"  # not playable information entry
 
 CHOICES = ("play", "next", "add", "replace")
-BETTER_KODI_QUEUE_TYPE = "better_kodi_queue"
-# Better Kodi's own play now / next / add / replace entries; read only, so that
-# 'next' and 'add' do not switch the room
-BETTER_KODI_ENQUEUE_PREFIX = "better_kodi://enqueue/"
 MAX_CHOICE_ITEMS = 1000
 
 
@@ -122,12 +122,6 @@ def browse_media_from(payload: BrowseMedia | dict[str, Any]) -> BrowseMedia:
     )
 
 
-def _video_filter(item: BrowseMedia) -> bool:
-    """Media sources that make sense on a video player."""
-    content_type = str(item.media_content_type or "")
-    return not content_type.startswith(("audio/", "image/"))
-
-
 class RoomBrowser:
     """Media browser and search of one room."""
 
@@ -149,12 +143,6 @@ class RoomBrowser:
 
     def any_supports(self, feature: MediaPlayerEntityFeature) -> bool:
         return any(self.supports(k, feature) for k in self.ctrl.sources)
-
-    def _is_music_assistant(self, key: str) -> bool:
-        src = self.ctrl.sources.get(key)
-        if src is None:
-            return False
-        return self.ctrl.ma.is_player(src.player)
 
     async def _texts(self) -> dict[str, str]:
         translations = await async_get_translations(self.hass, self.hass.config.language, "selector", [DOMAIN])
@@ -191,29 +179,30 @@ class RoomBrowser:
         texts = await self._texts()
         children: list[BrowseMedia] = []
         # 1. queues, one click closer
-        video = self.ctrl.sources.get(SOURCE_VIDEO)
-        if video is not None and self.supports(SOURCE_VIDEO, MediaPlayerEntityFeature.BROWSE_MEDIA):
-            try:
-                root = await self._child_browse(SOURCE_VIDEO, None, None)
-            except BrowseError:
-                root = None
-            for item in (root.children or []) if root else []:
-                if item.media_content_type == BETTER_KODI_QUEUE_TYPE:
-                    queue = self._wrap(SOURCE_VIDEO, item)
-                    queue.title = texts.get("queue_of", "Queue: {name}").format(name=self._source_name(SOURCE_VIDEO))
-                    children.append(queue)
-                    break
-        if SOURCE_AUDIO in self.ctrl.sources and self._is_music_assistant(SOURCE_AUDIO):
-            children.append(
-                BrowseMedia(
-                    media_class=MediaClass.PLAYLIST,
-                    media_content_id=make_id(KIND_MUSIC_QUEUE, SOURCE_AUDIO),
-                    media_content_type="playlist",
-                    title=texts.get("queue_of", "Queue: {name}").format(name=self._source_name(SOURCE_AUDIO)),
-                    can_play=False,
-                    can_expand=True,
+        for key, src in self.ctrl.sources.items():
+            title = texts.get("queue_of", "Queue: {name}").format(name=self._source_name(key))
+            if src.backend.has_queue:
+                children.append(
+                    BrowseMedia(
+                        media_class=MediaClass.PLAYLIST,
+                        media_content_id=make_id(KIND_MUSIC_QUEUE, key),
+                        media_content_type="playlist",
+                        title=title,
+                        can_play=False,
+                        can_expand=True,
+                    )
                 )
-            )
+            elif type(src.backend).queue_entry is not PlayerBackend.queue_entry and self.supports(
+                key, MediaPlayerEntityFeature.BROWSE_MEDIA
+            ):
+                try:
+                    root = await self._child_browse(key, None, None)
+                except BrowseError:
+                    root = None
+                if (item := src.backend.queue_entry(root)) is not None:
+                    queue = self._wrap(key, item)
+                    queue.title = title
+                    children.append(queue)
         # 2. the players
         for key in self.ctrl.sources:
             if not self.supports(key, MediaPlayerEntityFeature.BROWSE_MEDIA):
@@ -245,9 +234,9 @@ class RoomBrowser:
         try:
             result = await self._wrap_child_browse(key, None, None)
         except BrowseError:
-            if key != SOURCE_VIDEO:
+            if self.ctrl.sources[key].backend.media_sources is None:
                 raise
-            # video player off: at least the media sources (e.g. Jellyfin)
+            # it cannot browse right now (e.g. Kodi off): at least the media sources (e.g. Jellyfin)
             try:
                 result = await self._media_source(key, None, title=self._source_name(key))
             except BrowseError:
@@ -281,9 +270,9 @@ class RoomBrowser:
         state = self.hass.states.get(src.player)
         if state is None:
             raise BrowseError(f"{src.player} is missing")
-        if key == SOURCE_VIDEO and state.state in ("off", "unavailable", "unknown"):
-            # Kodi needs a connection to browse; other players (Music Assistant) can
-            # browse their library while the player itself is off
+        if not src.backend.can_browse(state.state):
+            # e.g. Kodi needs a connection to browse; Music Assistant can browse its
+            # library while the player itself is off
             raise BrowseError(f"{src.player} is {state.state}")
         data: dict[str, Any] = {ATTR_ENTITY_ID: src.player}
         if media_type is not None:
@@ -302,7 +291,7 @@ class RoomBrowser:
         return browse_media_from(payload)
 
     async def _wrap_child_browse(self, key: str, media_type: str | None, media_id: str | None) -> BrowseMedia:
-        if media_source.is_media_source_id(media_id or "") and key == SOURCE_VIDEO:
+        if media_source.is_media_source_id(media_id or "") and self.ctrl.sources[key].backend.media_sources:
             try:
                 return self._wrap(key, await self._child_browse(key, media_type, media_id), deep=True)
             except BrowseError:
@@ -313,7 +302,7 @@ class RoomBrowser:
         """HA media sources (Jellyfin, local media, ...), for playing on a player."""
         try:
             result = await media_source.async_browse_media(
-                self.hass, media_id, content_filter=_video_filter if key == SOURCE_VIDEO else None
+                self.hass, media_id, content_filter=self.ctrl.sources[key].backend.media_sources
             )
         except Exception as err:  # noqa: BLE001 - media_source not set up, unknown id, ...
             raise BrowseError(str(err)) from err
@@ -356,14 +345,14 @@ class RoomBrowser:
         return wrapped
 
     def _offer_choices(self, key: str, item: BrowseMedia) -> BrowseMedia:
-        """Music: a playable item opens play now / next / add / replace (like Better Kodi).
+        """A playable item opens play now / next / add / replace (like Better Kodi).
 
-        Video players bring their own (Better Kodi); only offered where the player
-        supports enqueueing. The item stays playable, so its play button still
-        plays it right away.
+        Where the room offers them (music players; video players bring their own,
+        e.g. Better Kodi) and the player supports enqueueing. The item stays
+        playable, so its play button still plays it right away.
         """
         if (
-            key != SOURCE_AUDIO
+            not self.ctrl.sources[key].backend.room_choices
             or not item.can_play
             or item.can_expand
             or not self.supports(key, MediaPlayerEntityFeature.MEDIA_ENQUEUE)
@@ -414,11 +403,11 @@ class RoomBrowser:
         )
 
     async def _music_queue(self, key: str) -> BrowseMedia:
-        """Current and next item from Music Assistant (all that HA exposes)."""
+        """Current and next item (e.g. Music Assistant: all that HA exposes)."""
         texts = await self._texts()
         src = self.ctrl.sources[key]
         children: list[BrowseMedia] = []
-        queue = await self.ctrl.ma.queue(src.player)
+        queue = await src.backend.queue(src.player)
         for label, field in (("now_playing", "current_item"), ("up_next", "next_item")):
             entry = queue.get(field)
             if not entry:
@@ -510,11 +499,8 @@ class RoomBrowser:
                 return key, inner_type, inner_id, mode
         raise HomeAssistantError(f"{media_id} cannot be played")
 
-    @staticmethod
-    def player_mode(inner_id: str | None) -> str | None:
-        """Enqueue mode a player encodes in its own ids (Better Kodi's choices)."""
-        if inner_id and inner_id.startswith(BETTER_KODI_ENQUEUE_PREFIX):
-            mode = inner_id.removeprefix(BETTER_KODI_ENQUEUE_PREFIX).split("/", 1)[0]
-            if mode in CHOICES:
-                return mode
-        return None
+    def player_mode(self, key: str, inner_id: str | None) -> str | None:
+        """Enqueue mode a player encodes in its own ids (e.g. Better Kodi's choices)."""
+        src = self.ctrl.sources.get(key)
+        mode = src.backend.enqueue_mode(inner_id) if src is not None else None
+        return mode if mode in CHOICES else None

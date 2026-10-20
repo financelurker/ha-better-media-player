@@ -317,7 +317,7 @@ class FollowManager:
                 return None  # already in the follow-me player, which plays without follow me
             # left in the follow-me player, which does not play (e.g. paused)
             return "start_follow_paused", {**names, "group": self._name(self.follow_player)}
-        groups = room.ma.groups_of(player)
+        groups = self.ma.groups_of(player)
         if groups:
             return "start_in_group", {**names, "group": ", ".join(self._name(g) for g in groups)}
         return "start_not_playing", names
@@ -413,7 +413,7 @@ class FollowManager:
         if player is None:
             return FOLLOW_EXCLUDED_BUSY
         # never take a room away from another group or from direct playback
-        if any(other != group for other in room.ma.groups_of(player)):
+        if any(other != group for other in self.ma.groups_of(player)):
             return FOLLOW_EXCLUDED_BUSY
         if player not in self.ma.members(group) and room.audio_playing_directly:
             return FOLLOW_EXCLUDED_BUSY

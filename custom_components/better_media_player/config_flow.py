@@ -46,11 +46,11 @@ from .const import (
     VOLUME_DEVICE,
     VOLUME_ENTITY_DOMAINS,
     VOLUME_PLAYERS,
-)
-from .music_assistant import PLATFORM as MA_PLATFORM
+
+    SOURCE_VIDEO,)
+from .backend import suggested_role
 from .music_assistant import MusicAssistant
 
-VIDEO_PLATFORMS = ("kodi",)
 
 
 def _entity(domain: str | list[str], device_class: str | None = None, multiple: bool = False):
@@ -281,12 +281,11 @@ def _without_volume(hass: HomeAssistant, options: dict) -> list[str]:
 
 
 def _area_suggestions(hass: HomeAssistant, area_id: str | None) -> dict[str, str]:
-    """Pre-select Kodi / Music Assistant players of the chosen area."""
+    """Pre-select the area's players of known systems (e.g. Kodi, Music Assistant)."""
     if not area_id:
         return {}
     ent_reg = er.async_get(hass)
     dev_reg = dr.async_get(hass)
-    ma = MusicAssistant(hass)
     found: dict[str, str] = {}
     for entry in ent_reg.entities.values():
         if entry.domain != "media_player" or entry.disabled:
@@ -297,12 +296,9 @@ def _area_suggestions(hass: HomeAssistant, area_id: str | None) -> dict[str, str
             entry_area = device.area_id if device else None
         if entry_area != area_id:
             continue
-        if ma.is_group(entry.entity_id):
-            continue
-        if entry.platform in VIDEO_PLATFORMS:
-            found.setdefault(CONF_VIDEO_PLAYER, entry.entity_id)
-        elif entry.platform == MA_PLATFORM:
-            found.setdefault(CONF_AUDIO_PLAYER, entry.entity_id)
+        role = suggested_role(hass, entry)
+        if role is not None:
+            found.setdefault(CONF_VIDEO_PLAYER if role == SOURCE_VIDEO else CONF_AUDIO_PLAYER, entry.entity_id)
     return found
 
 

@@ -30,6 +30,13 @@ def ma_registered(hass: HomeAssistant):
     reg.async_get_or_create("media_player", "music_assistant", "office", suggested_object_id="office_player")
 
 
+@pytest.fixture
+def better_kodi_registered(hass: HomeAssistant):
+    """The video player comes from Better Kodi (its queue, its own play next / add)."""
+    reg = er.async_get(hass)
+    reg.async_get_or_create("media_player", "better_kodi", "kodi1", suggested_object_id="kodi")
+
+
 async def _browse(hass, ws, media_type=None, media_id=None) -> dict:
     msg = {"id": _browse.n, "type": "media_player/browse_media", "entity_id": ROOM}
     _browse.n += 1
@@ -91,7 +98,7 @@ async def test_features_offered_while_room_is_off(hass, home):
         assert features & feature, feature
 
 
-async def test_root_has_queues_first_then_players(hass, ma_registered, home, hass_ws_client):
+async def test_root_has_queues_first_then_players(hass, ma_registered, better_kodi_registered, home, hass_ws_client):
     await setup_room(hass)
     home.kodi("idle")
     await hass.async_block_till_done()
@@ -281,7 +288,7 @@ async def test_play_now_on_grouped_music_player_leaves_group_first(hass, home):
     assert order == ["unjoin", "play_media"]
 
 
-async def test_better_kodi_next_choice_does_not_switch_the_room(hass, home):
+async def test_better_kodi_next_choice_does_not_switch_the_room(hass, better_kodi_registered, home):
     """Better Kodi's own 'play next' entry: passed through, room stays as it is."""
     from custom_components.better_media_player.browser import make_id
 

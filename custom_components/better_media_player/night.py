@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING
 
 from homeassistant.core import State, callback
 
+from .backend import groups_of
 from .const import (
     CONF_NIGHT_FADE_IN,
     EVENT_NIGHT_MODE,
@@ -257,9 +258,10 @@ class NightMode:
     def _hub_group(self, src: Source) -> bool:
         """In a group the hub looks after (a Music Assistant group: it brings the
         member back); other groups: the room does it itself."""
-        if self.ctrl.hub is None:
+        hub = self.ctrl.hub
+        if hub is None:
             return False
-        return any(self.ctrl.ma.is_group(g) for g in self.ctrl.ma.groups_of(src.player, idle=True))
+        return any(hub.ma.is_group(g) for g in groups_of(self.hass, src.player, idle=True))
 
     @callback
     def async_cancel_ramp(self, player: str) -> None:
