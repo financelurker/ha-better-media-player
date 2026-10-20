@@ -1,18 +1,43 @@
 # Better Media Player
 
-One smart media player per room: your room's media players and the TV, speakers and subwoofer (on plugs, turning themselves on and off, or both), combined into a single Home Assistant entity.
+**One smart media player per room.** Better Media Player combines a room's media players (e.g. Kodi and a Music Assistant player) and its TV, speakers and subwoofer into a single Home Assistant entity. Press play and the right devices come on in a safe order; when nothing needs them any more, they go off again by themselves.
 
-Better Media Player is a custom integration in the spirit of Better Thermostat. Each room gets one `media_player` entity that knows which of its players is active, powers the right devices in a safe order and switches them off again when nothing needs them.
+It is a custom integration in the spirit of Better Thermostat: you tell it what is in the room, it takes care of the rest.
 
-- **Power sequencing:** devices are switched in a fixed order, so speakers never pop and the player is only used once it is ready.
+![Dashboard while Kodi plays](docs/images/dashboard.png)
+
+> **Status:** early development.
+
+## Contents
+
+- [What it does](#what-it-does)
+- [Is it for you?](#is-it-for-you)
+- [Screenshots](#screenshots)
+- [Installation](#installation)
+- [Setup](#setup)
+- [How the room behaves](#how-the-room-behaves)
+- [Features](#features): [room volume](#room-volume), [night mode](#night-mode), [sleep timer](#sleep-timer), [wake up](#wake-up), [follow me](#follow-me), [media browser](#media-browser-and-search)
+- [Automations](#automations): actions, events, device triggers
+- [Dashboards](#dashboards)
+- [Reference](#reference): entities and states
+- [Releases](#releases), [roadmap](#roadmap), [license](#license)
+
+## What it does
+
+- **Power in the right order:** press play on Kodi → the TV comes on, Kodi wakes up, then the speakers; speakers never pop and a player is only used once it is ready.
 - **Shared speakers:** one set of speakers (plus subwoofer) serves both a video player such as Kodi and a music player such as Music Assistant.
-- **Auto-on:** music that starts on the room player, also as part of a Music Assistant group, powers the speakers by itself.
+- **On and off by itself:** music that starts on the room's player – also as part of a Music Assistant group – powers the speakers. When nothing plays any more, everything goes off after a while (e.g. the TV 10 min after Kodi is off).
+- **Plugs or devices:** TV, speakers and subwoofer can hang on switchable plugs, turn themselves on and off (a TV or AV receiver as media player, a remote), be switched by your own scripts (e.g. IR) – or a mix.
 - **Room off:** leaves a Music Assistant group, stops playback, turns the video player off and powers everything down.
-- **Manual override:** switch a plug (or turn a device on) by hand and the room steps back until everything is off again.
+- **One volume per room**, with presets (quiet, normal, loud, party) – on the players or on an amplifier, AV receiver or soundbar.
+- **Night mode, sleep timer and wake up** with fades.
 - **Follow me:** start it in a room and the music moves with you from room to room, using the rooms' occupancy sensors and one Music Assistant group player.
-- **Media browser and search:** browse and search all of the room's players in one place, with their queues on top; picking a movie powers up TV and Kodi first.
+- **Media browser and search** across all of the room's players, with their queues on top; picking a movie powers up TV and Kodi first.
+- **Manual override:** switch a plug (or turn a device on) by hand and the room steps back until everything is off again.
+- **Tidy dashboards:** controls that make no sense right now are hidden.
+- **For your own automations:** events for source changes, night mode, sleep timer and wake up; device triggers for source changes and night mode.
 
-## Who it fits
+## Is it for you?
 
 **It fits if**
 
@@ -30,9 +55,7 @@ Better Media Player is a custom integration in the spirit of Better Thermostat. 
 
 Taken from the Home Assistant demo integration: two demo players stand in for Kodi and a Music Assistant player, the plugs are template switches ([how](scripts/screenshots/README.md)).
 
-**Movie night:** Kodi plays, so the TV, the speakers and the subwoofer have power. The room player shows what is playing and controls it.
-
-![Dashboard while Kodi plays](docs/images/dashboard.png)
+**Movie night** (the screenshot at the top): Kodi plays, so the TV, the speakers and the subwoofer have power. The room player shows what is playing and controls it.
 
 **Music only:** after switching the source to music, Kodi is turned off and the TV plug is cut. Speakers and subwoofer stay on for the music.
 
@@ -42,21 +65,11 @@ Taken from the Home Assistant demo integration: two demo players stand in for Ko
 
 <img src="docs/images/more-info.png" alt="More-info dialog of the room player" width="420">
 
-**Device page:** status, demand sensors, automatic power, the *All off* button and, under *Configuration*, everything about how the room behaves ([settings on the device](#settings-on-the-device)).
-
-![Device page](docs/images/device.png)
-
-**Settings:** what is connected can be changed later via **Configure**.
-
-| Menu | Media players | Devices and volume |
-|---|---|---|
-| ![Options menu](docs/images/options-menu.png) | ![Media players](docs/images/options-players.png) | ![Devices and volume](docs/images/options-devices.png) |
-
 **Mobile:**
 
 <img src="docs/images/dashboard-mobile.png" alt="Dashboard on a phone" width="320">
 
-> **Status:** early development.
+The device page and the settings are shown under [Setup](#setup).
 
 ## Installation
 
@@ -76,11 +89,16 @@ Without the button: HACS → ⋮ → **Custom repositories** → add `https://gi
 1. Copy `custom_components/better_media_player` into `config/custom_components/`.
 2. Restart Home Assistant.
 
-## Usage
+## Setup
+
+> **Before you start**
+>
+> - Every plug and device belongs to exactly one controller. Disable automations, scripts or helpers that switch the same plugs or devices (Settings → Entities → plug → **Related** shows them). Devices on a plug alone must start by themselves when they get power.
+> - **Kodi:** Home Assistant cannot switch Kodi on or off by itself: `turn_on` / `turn_off` only fire Kodi's device triggers. Keep your Wake-on-LAN and suspend automations on these triggers; they do the actual work.
 
 [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=better_media_player)
 
-Settings → Devices & services → Add integration → **Better Media Player** → **A room**, once per room. For follow me, or to change the [dynamic controls](#dynamic-controls), add **Central settings** once as well.
+Settings → Devices & services → Add integration → **Better Media Player** → **A room**, once per room. For follow me, or to change the [dynamic controls](#dashboards), add **Central settings** once as well.
 
 The setup only asks what is connected:
 
@@ -90,11 +108,28 @@ The setup only asks what is connected:
 | **Media players** | Video player (e.g. Kodi) and/or music player (the room's own player, not a group). *Special cases* (collapsed): on/off actions for a player that cannot turn itself on/off, plugs its hardware hangs on. |
 | **Devices and volume** | Display (TV, projector), speakers (one or more: active speakers, amplifier, AVR), subwoofer: plugs and/or [devices](#devices-instead-of-plugs). Where the room's volume is set: on the players, or on an own device. *Own on/off actions* (collapsed): scripts or buttons for a device only they switch. *Wait for standby* (collapsed): power sensors. *Follow me* (collapsed): occupancy sensors; rooms without them do not take part. |
 
-Everything can be changed later via **Configure**. How the room behaves is set on its device.
+Everything can be changed later via **Configure**. How the room behaves is set on its device (below).
+
+| Menu | Media players | Devices and volume |
+|---|---|---|
+| ![Options menu](docs/images/options-menu.png) | ![Media players](docs/images/options-players.png) | ![Devices and volume](docs/images/options-devices.png) |
+
+### Examples
+
+| Room | Media players | Power devices |
+|---|---|---|
+| TV room | Kodi | TV, speakers |
+| Office | Music Assistant player | speakers |
+| Living room | Kodi + Music Assistant player | TV, speakers (shared), subwoofer |
+| Home cinema | Kodi + Music Assistant player | TV (webOS, as media player; keep its [Wake-on-LAN automation](#devices-instead-of-plugs)), AV receiver on a plug (plug, then the receiver) with the room volume on the receiver, subwoofer by IR scripts (an on and an off action) |
 
 ### Settings on the device
 
-Times, waits, standby, night mode, volume presets and follow me are configuration entities of the room's device (Settings → Devices & services → device → *Configuration*). They take effect at once, can be set by automations and do not show up on auto-generated dashboards. A room only has the ones it can use:
+Each room is a device (Settings → Devices & services → Better Media Player → the room). Its page shows the status, what is needed right now, automatic power, the *All off* button and the room's controls:
+
+![Device page](docs/images/device.png)
+
+How the room behaves – times, waits, standby, night mode, volume presets and follow me – is set under *Configuration* on that page. These are configuration entities: they take effect at once, can be set by automations (`number.set_value`, `switch.turn_on`, `select.select_option`; entity ids under [Reference](#entities)) and do not show up on auto-generated dashboards. A room only has the ones it can use; to start, you can leave them all at their defaults:
 
 | Entity | Default | Present |
 |---|---|---|
@@ -108,21 +143,23 @@ Times, waits, standby, night mode, volume presets and follow me are configuratio
 | Sleep timer fade-out, Snooze time | 5 / 9 min | always |
 | Follow me: leave after, Follow me: volume offset, Follow me: prewarm speakers, Wake: detect leaving the room | | in follow rooms, see [follow me](#follow-me) |
 
+<details>
+<summary>Screenshot: the settings of a room</summary>
+
+<img src="docs/images/device-settings.png" alt="Configuration entities of a room" width="500">
+
+</details>
+
 The **Central settings** device has *Follow me: default volume*, *Dynamic controls* and *Hide delay*; its **Configure** only asks for the follow-me player.
 
-> **Before you start:** every plug and device belongs to exactly one controller. Disable automations, scripts or helpers that switch the same plugs or devices (Settings → Entities → plug → **Related** shows them). Devices on a plug alone must start by themselves when they get power.
+## How the room behaves
 
-> **Kodi:** `turn_on` / `turn_off` only fire Kodi's device triggers. Keep your Wake-on-LAN and suspend automations for these triggers; they do the actual work.
+### Power button and sources
 
-### Scenarios
-
-| Room | Media players | Power devices |
-|---|---|---|
-| TV room | Kodi | TV, speakers |
-| Office | Music Assistant player | speakers |
-| Living room | Kodi + Music Assistant player | TV, speakers (shared), subwoofer |
-
-## How it decides
+- **On** starts the last used source; the first time after setup that is the video player. The last source survives restarts.
+- **Source** selects video or music explicitly. The other source is stopped (Kodi off, music leaves its group or is paused).
+- **Off** (or **All off**): leave a Music Assistant group with `media_player.unjoin` (if it was the last member, Music Assistant pauses the group), otherwise stop direct playback; turn the video player off; switch all plugs and devices off in order. A player that takes a while to stop does not switch the room back on; only new playback does.
+- **Volume and transport** go to the player that is currently active.
 
 ### Order
 
@@ -132,6 +169,16 @@ The **Central settings** device has *Follow me: default volume*, *Dynamic contro
 | **Off** | subwoofer → speakers → display → player hardware plug |
 
 If the player is not ready within the start timeout (90 s), everything switched on is switched off again and the room reports an error.
+
+### When devices go off
+
+| Device | Needed while … | Run-down (default) |
+|---|---|---|
+| Display | the video player is on (menu, paused, playing) | 10 min |
+| Speakers, subwoofer | the video player is on **or** music is playing | 2 min |
+| Player hardware | its player is active | 2 min |
+
+Paused music is not demand: the speakers switch off after the run-down and on again when playback resumes. A video player that sits idle in its menu is turned off after 30 min.
 
 ### Devices instead of plugs
 
@@ -144,117 +191,23 @@ Display, speakers and subwoofer can also be devices that turn themselves on and 
 | Remote (e.g. a Harmony activity) | `remote.turn_on` / `turn_off` | `on` |
 | Own on/off actions (script, button, scene, automation) | the on / the off action | what was sent last (no feedback) |
 
-- **Plug and device in one role:** on: the plug, then the device once it is there (at most the start timeout; a device that does not come is left out until the next start); off: the device first, the plug once the device reports off (at most 60 s), after the standby wait if switched on (only a role with a plug waits for standby).
+- **Plug and device in one role:** on: the plug, then the device once it is there (at most the start timeout; a device that does not come is left out until the next start). Off: the device first, the plug once the device reports off (at most 60 s), after the standby wait if switched on (only a role with a plug waits for standby).
 - **One device in two roles** (e.g. a TV with its own speakers as display and speakers): it goes off only when no role needs it any more.
-- **Turned off by hand** while it is needed (e.g. the TV with its own remote): it stays off until the next start; everything else goes on automatically. **Turned on by hand** while nothing needs it (e.g. live TV): manual mode, as with a plug switched by hand; while it is needed (e.g. woken by another device over HDMI-CEC) it simply counts as on.
 - **TV inputs and AV receiver inputs** are not switched by the room: use an automation on the [source change event](#source-changes).
 - **A TV that only an automation can turn on** (e.g. webOS with Wake-on-LAN): keep that automation for its turn-on trigger, as with Kodi.
 
-### Demand and run-down
+### Wait for standby
 
-| Device | Needed while … | Run-down |
-|---|---|---|
-| Display | the video player is on (menu, paused, playing) | 10 min |
-| Speakers, subwoofer | the video player is on **or** music is playing | 2 min |
-| Player hardware | its player is active | 2 min |
+With power sensors and a plug in the role (and the device's switch *Display: wait for standby* / *Speakers: wait for standby* on), a plug is cut only after its device has drawn less than the threshold for 30 s, at most after the maximum wait. Useful for OLED TVs that run panel care in standby. A TV that never goes to standby on its own (no CEC) gains nothing from this; then only the run-down applies.
 
-Paused music is not demand: the speakers switch off after the run-down and on again when playback resumes. A video player that sits idle in its menu is turned off after 30 min.
+### Switched by hand
 
-### Power button and sources
+- **A plug switched by hand**, or a device turned on by hand while nothing needs it (e.g. live TV): **manual mode**. The room switches nothing by itself until everything is off again, or until you turn the room player on or off (that also ends it).
+- **A device turned off by hand** while it is needed (e.g. the TV with its own remote): it stays off until the next start; everything else goes on automatically.
+- **A device turned on by hand while it is needed** (e.g. woken by another device over HDMI-CEC) simply counts as on.
+- **Automatic power** (switch on the device) off: no automatic switching at all; commands to the room player still work. Switching it back on ends manual mode too.
 
-- **On** starts the last used source; the first time after setup that is the video player. The last source survives restarts.
-- **Source** selects video or music explicitly. The other source is stopped (Kodi off, music leaves its group or is paused).
-- **Off** (or **All off**): leave a Music Assistant group with `media_player.unjoin` (if it was the last member, Music Assistant pauses the group), otherwise stop direct playback; turn the video player off; switch all plugs and devices off in order. A player that takes a while to stop does not switch the room back on; only new playback does.
-- **Volume and transport** go to the player that is currently active.
-
-#### Source changes
-
-When the room's source changes, the event `better_media_player_source_changed` is fired, e.g. to switch the TV input by IR. The source is `video` while the video player is on, `audio` while the music player plays (also in a group) or is paused while the room still has power for it, or `null` when no player is active any more. A source chosen through the room player (on, source, play, wake) is the room's source from then on, even before something plays (e.g. turned on with music) and during a snooze, until another source plays or the room goes off.
-
-| Data | |
-|---|---|
-| `entity_id`, `entry_id`, `room` | the room player and the room |
-| `source`, `previous` | `video`, `audio` or `null` |
-| `player` | the player of the new source |
-| `reason` | `selected` (through the room player: source, on, play, wake), `player` (a player took over by itself, e.g. a film cast to Kodi), `off` |
-
-- Fired once the room is ready for it: after the power-on sequence, so the TV already has power (plus its wait after switching on).
-- Only for a stable change: two players at the same time for a moment fire nothing. A pause, new media on the same player, a dropout of the current source's player or a restart of Home Assistant fire nothing either. Another player that is unavailable (e.g. behind its host plug) counts as off.
-- The same as **device triggers** in the automation editor: *Source changed*, *Switched to video*, *Switched to music*, *Source off*.
-
-```yaml
-trigger:
-  - trigger: event
-    event_type: better_media_player_source_changed
-    event_data:
-      room: Living room
-      source: video
-action:
-  - action: remote.send_command
-    target:
-      entity_id: remote.living_room_ir
-    data:
-      command: tv_input_hdmi1
-```
-
-### Follow me
-
-Needs the **Central settings** entry with the **follow-me player**: a Music Assistant group player with dynamic members (e.g. *All players*). There is one follow me per Home Assistant installation. Every other Music Assistant group simply plays: it powers the speakers of its members like direct playback.
-
-**Start** follow me in a room where music plays directly on its music player (not video, not in quiet mode), with the room's **Follow me** button or the action:
-
-```yaml
-action: better_media_player.start_follow
-target:
-  entity_id: media_player.living_room
-```
-
-The room joins the follow-me player and its queue moves there (`music_assistant.transfer_queue`); the track goes on where it was (if the follow-me player starts it from the beginning, it is set to the position; not for streams without a duration, e.g. radio). The room's volume becomes follow me's volume (its offset taken out). While follow me runs, the **Follow me** buttons are hidden in every room and the **Stop follow me** buttons are shown ([dynamic controls](#dynamic-controls)); pressing *Follow me* while it runs, or *Stop follow me* while it does not, gives an error.
-
-If follow me cannot be started in a room, the error says why. The button's attribute `blocked_by` shows the same reason (`null` while it can be started):
-
-| `blocked_by` | Reason |
-|---|---|
-| `no_follow_player` | no follow-me player in the central settings |
-| `follow_running` | follow me runs already |
-| `start_not_follow_room` | the room takes no part (it needs a music player and occupancy sensors) |
-| `start_quiet` | the room is in quiet mode |
-| `start_video` | the video player is on |
-| `start_follow_paused` | the music player is still in the follow-me player, which does not play: resume it, or start the music on the player itself |
-| `start_in_group` | the music plays in a group (named in the error): start it on the player itself |
-| `start_not_playing` | no music plays on the room's music player |
-
-While it plays:
-
-- **Prewarm:** the speakers of all follow rooms are switched on, so the sound is there as soon as you walk in.
-- **Join:** a room with presence joins. Its volume is set first: follow me's volume plus the room's offset (e.g. bedroom −10 percentage points).
-- **Leave:** a room without presence leaves after its presence run-down (2 min). When the last room leaves, Music Assistant pauses the group and follow me ends.
-- **Never steals:** a room that plays something else (directly or in another group) is left alone.
-- **Left out:** rooms with video playing (Kodi; when the video ends the room comes back, and if it was the last room the group resumes, within 3 h), rooms in **quiet** mode (switch per room; leaves at once and cuts the speakers) and rooms turned **off** during the session (until follow me ends).
-- **Unknown presence** (all sensors unavailable) changes nothing, so music does not stop because a sensor integration is down.
-- **Nobody detected** at the start: the start room stays as long as nobody is detected in any follow room; then the normal rules apply, including the run-down. The same goes for a room you add to the group by hand.
-- **Paused by you:** follow me goes on, rooms stay as they are, the prewarmed speakers run down. On resume the rules apply again.
-
-**Stop** follow me with any room's **Stop follow me** button or `better_media_player.stop_follow` (target: a room player). The music goes back to one room: the room you stop it in if it plays along, else the room it was started in (paused music stays paused there); playing music goes on there where it was. All other rooms stop. Stopping while follow me is off gives an error. Follow me also ends by itself when the follow-me player is stopped in Music Assistant.
-
-> Group players with **static** members are not supported: Music Assistant stops the whole group when a static member is removed. Use groups with dynamic members only.
-
-### Media browser and search
-
-The room player's media browser bundles the browsers of its players. Only what a player supports is offered.
-
-| Entry | Content |
-|---|---|
-| **Queue: \<video player\>** | the video player's queue, if it has one (e.g. [Better Kodi](https://github.com/financelurker/ha-better-kodi)) |
-| **Queue: \<music player\>** | Music Assistant: the current and the next item (that is all Home Assistant exposes) |
-| **\<video player\>** | its browser. While it is off: Home Assistant's media sources (e.g. Jellyfin) and a hint |
-| **\<music player\>** | its browser (artists, albums, playlists, radio, …) |
-
-- **Playing now** from the browser switches the room to that player: the other player is stopped and the power sequence runs first. A movie picked while Kodi sleeps turns on the TV, wakes Kodi and then plays. A music player in a group leaves it first, so only this room changes.
-- **Music items** open a small folder with **▶ Play now**, **⏭ Play next**, **➕ Add to queue** and **⟲ Replace queue** (if the player supports enqueueing). *Next* and *add* change nothing else in the room.
-- **Search** goes to the players that can search (Music Assistant). Voice commands like "play Kid Rock in the living room" go to the room player and power the room.
-- Media picked through the room player in an automation's media selector stores an id that only the room player understands.
-- Browser labels follow the server language set in Home Assistant.
+## Features
 
 ### Room volume
 
@@ -269,7 +222,7 @@ A room has one volume, not one per player. It is the volume last chosen in the r
 
 #### On an own device
 
-With an amplifier, AV receiver or soundbar that has its own volume, choose **Room volume: Own device** and the **Volume device** in *Media players*: a media player that can set a volume, or a `number` / `input_number` (its range counts as 0–100 %, e.g. −80…0 dB).
+With an amplifier, AV receiver or soundbar that has its own volume, choose **Room volume: Own device** and the **Volume device** in *Devices and volume*: a media player that can set a volume, or a `number` / `input_number` (its range counts as 0–100 %, e.g. −80…0 dB).
 
 - The room's volume is the device's. Volume, steps and mute of the room player go there (mute only with a media player); changes on the device itself (its remote, its app) are learned, also during group playback.
 - The players keep their own level: set it once yourself (e.g. Kodi at 100 %). Better Media Player does not change it; after group playback (below) a player gets its own level back when it plays on its own again.
@@ -281,7 +234,7 @@ With an amplifier, AV receiver or soundbar that has its own volume, choose **Roo
 
 #### Presets
 
-Room volumes by name: **quiet**, **normal**, **loud** and **party** (default 15 / 30 / 50 / 70 %; 0 = not offered in the room). Their volumes are number entities of the room (`Preset: Quiet` etc., like `Night: maximum volume`). Changing the chosen preset's volume sets it right away; a preset set to 0 is no longer offered (the volume stays). Choose one with the select `Volume preset` or the action below; this works with players and with a volume device alike.
+Room volumes by name: **quiet**, **normal**, **loud** and **party** (default 15 / 30 / 50 / 70 %; 0 = not offered in the room). Their volumes are number entities on the device (`Preset: Quiet` etc., `number.<room>_preset_quiet`). Changing the chosen preset's volume sets it right away; a preset set to 0 is no longer offered (the volume stays). Choose one with the select `Volume preset` or the action below; this works with players and with a volume device alike.
 
 ```yaml
 action: better_media_player.set_volume_preset
@@ -335,6 +288,28 @@ action:
       sound_mode: "{{ 'Night' if trigger.event.data.night_mode else 'Movie' }}"
 ```
 
+### Sleep timer
+
+The room turns itself off after a set time, whatever plays (video or music). Over the last minutes the volume of the active player fades out; then the normal *room off* runs and the volume from before the fade is set again, so the next playback does not start at zero. A player that is suspended at the end (e.g. Kodi) gets its volume when it is up again.
+
+- Set it with the number `Sleep timer` (minutes, 0 = off; shows the minutes left), the button `Sleep timer +15 min` or the actions below. Only while the room is on.
+- Turning the room off, or the room going off by itself, ends the timer. Cancelling during the fade sets the volume back.
+- Changing the volume during the fade stops the fade only: your volume stays, and the timer still ends the room.
+- *+15 min* during the fade sets the volume back; the fade starts again before the new end.
+- The timer survives a restart of Home Assistant. If it ran out while Home Assistant was down, the room is turned off at the start only if something still plays.
+- The event `better_media_player_sleep_timer_finished` (`entity_id`, `entry_id`, `room`, `reason`: `expired`, `cancelled` or `room_off`) is fired when the timer ends.
+
+```yaml
+action: better_media_player.set_sleep_timer
+target:
+  entity_id: media_player.bedroom
+data:
+  minutes: 45
+  fade_minutes: 10   # optional, default: the room's Sleep timer fade-out (5 min)
+```
+
+`better_media_player.cancel_sleep_timer` stops it.
+
 ### Wake up
 
 `better_media_player.wake` wakes one room: the room powers up as usual, the playback starts at the start volume and fades in once it really plays.
@@ -355,14 +330,14 @@ data:
 
 - **Which player:** media picked through the room player (media selector of an automation) names the player itself, so a film wakes on Kodi and turns the display on. Other media go to the music player, or to `source: video`.
 - **No playback** within 60 s, or a failed start: the event `better_media_player_wake_failed` (`reason`: `start_failed` / `not_playing`) is fired so a different source can be tried, and the room goes off again if it was off before. A successful start fires `better_media_player_wake_started`.
-- **Snooze** (button, `better_media_player.snooze` with optional `minutes`, default 9, or a pause on the player): pauses (or stops, if the player cannot pause), keeps the room powered, then continues at the start volume and fades in; a player that is no longer paused by then starts the media again. Snoozing during the start starts it again from the beginning afterwards. `max_duration` counts from the last start.
+- **Snooze** (button, `better_media_player.snooze` with optional `minutes`, default: the room's *Snooze time*, 9 min, or a pause on the player): pauses (or stops, if the player cannot pause), keeps the room powered, then continues at the start volume and fades in; a player that is no longer paused by then starts the media again. Snoozing during the start starts it again from the beginning afterwards. `max_duration` counts from the last start.
 - A **volume change** by hand ends only the fade. Switching the night mode off during the wake lets the fade (or the volume) go up to the full target.
 - **Already playing:** a wake replaces the playback; it counts as started once the new playback runs (or something plays at the play check).
 - A player that goes idle for a moment (between two items) is no stop; only a stop that lasts 10 s ends the wake.
-- **Ends** (`better_media_player_wake_finished`, `reason`): `stopped` (button / `better_media_player.stop_wake` / a stop on the player; the playback goes on unless stopped), `max_duration`, `room_off`, `sleep_timer` (a sleep timer set during the wake; the playback goes on), `replaced` (a new wake). A wake ends a running sleep timer.
+- **Ends** (`better_media_player_wake_finished`, `reason`): `stopped` (button / `better_media_player.stop_wake` / a stop on the player; the playback goes on unless stopped), `max_duration`, `room_off`, `sleep_timer` (a sleep timer set during the wake; the playback goes on), `replaced` (a new wake), `left` (with follow me, below). A wake ends a running sleep timer.
 - What the wake sets is not taken as the room volume; the night mode's limit holds.
 - It survives a restart: the fade and the snooze go on, a start cut by the restart is tried again (within 5 min).
-- The sensor `Wake` shows `idle`, `starting`, `fading`, `playing` or `snoozed`. It and the buttons *Snooze* and *Stop wake* are hidden while no wake runs ([dynamic controls](#dynamic-controls); pressing the buttons then does nothing). Cards that list them explicitly still show them; to show them only during a wake:
+- The sensor `Wake` shows `idle`, `starting`, `fading`, `playing` or `snoozed`. It and the buttons *Snooze* and *Stop wake* are hidden while no wake runs ([dynamic controls](#dashboards); pressing the buttons then does nothing). Cards that list them explicitly still show them; to show them only during a wake:
 
 ```yaml
 type: conditional
@@ -391,35 +366,122 @@ With `follow: true` the music follows you out of the wake room: the wake starts 
 - **Ends:** `stop_wake` makes it a normal follow room; `max_duration` fades out only the wake room, which then leaves the group; room off takes only this room out.
 - Night mode is per room as always: a room in night mode joins without subwoofer and limited.
 
-### Sleep timer
+### Follow me
 
-The room turns itself off after a set time, whatever plays (video or music). Over the last minutes the volume of the active player fades out; then the normal *room off* runs and the volume from before the fade is set again, so the next playback does not start at zero. A player that is suspended at the end (e.g. Kodi) gets its volume when it is up again.
+Needs the **Central settings** entry with the **follow-me player**: a Music Assistant group player with dynamic members (e.g. *All players*). There is one follow me per Home Assistant installation. Every other Music Assistant group simply plays: it powers the speakers of its members like direct playback.
 
-- Set it with the number `Sleep timer` (minutes, 0 = off; shows the minutes left), the button `Sleep timer +15 min` or the actions below. Only while the room is on.
-- Turning the room off, or the room going off by itself, ends the timer. Cancelling during the fade sets the volume back.
-- Changing the volume during the fade stops the fade only: your volume stays, and the timer still ends the room.
-- *+15 min* during the fade sets the volume back; the fade starts again before the new end.
-- The timer survives a restart of Home Assistant. If it ran out while Home Assistant was down, the room is turned off at the start only if something still plays.
-- The event `better_media_player_sleep_timer_finished` (`entity_id`, `room`, `reason`: `expired`, `cancelled` or `room_off`) is fired when the timer ends.
+> Group players with **static** members are not supported: Music Assistant stops the whole group when a static member is removed. Use groups with dynamic members only.
+
+**Start** follow me in a room where music plays directly on its music player (not video, not in quiet mode), with the room's **Follow me** button or the action:
 
 ```yaml
-action: better_media_player.set_sleep_timer
+action: better_media_player.start_follow
 target:
-  entity_id: media_player.bedroom
-data:
-  minutes: 45
-  fade_minutes: 10   # optional, default from the room's times (5 min)
+  entity_id: media_player.living_room
 ```
 
-`better_media_player.cancel_sleep_timer` stops it.
+The room joins the follow-me player and its queue moves there (`music_assistant.transfer_queue`); the track goes on where it was (if the follow-me player starts it from the beginning, it is set to the position; not for streams without a duration, e.g. radio). The room's volume becomes follow me's volume (its offset taken out). While follow me runs, the **Follow me** buttons are hidden in every room and the **Stop follow me** buttons are shown ([dynamic controls](#dashboards)); pressing *Follow me* while it runs, or *Stop follow me* while it does not, gives an error.
 
-### Wait for standby
+If follow me cannot be started in a room, the error says why. The button's attribute `blocked_by` shows the same reason (`null` while it can be started):
 
-With power sensors and a plug in the role (and the device's switch *Display: wait for standby* / *Speakers: wait for standby* on), a plug is cut only after its device has drawn less than the threshold for 30 s, at most after the maximum wait. Useful for OLED TVs that run panel care in standby. A TV that never goes to standby on its own (no CEC) gains nothing from this; then only the run-down applies.
+| `blocked_by` | Reason |
+|---|---|
+| `no_follow_player` | no follow-me player in the central settings |
+| `follow_running` | follow me runs already |
+| `start_not_follow_room` | the room takes no part (it needs a music player and occupancy sensors) |
+| `start_quiet` | the room is in quiet mode |
+| `start_video` | the video player is on |
+| `start_follow_paused` | the music player is still in the follow-me player, which does not play: resume it, or start the music on the player itself |
+| `start_in_group` | the music plays in a group (named in the error): start it on the player itself |
+| `start_not_playing` | no music plays on the room's music player |
 
-## Dynamic controls
+While it plays:
 
-A room's controls that make no sense right now are hidden (`hidden_by: integration`), so the automatic dashboards only show what can be used. A control is shown at once when it makes sense again and hidden only after the hide delay (default 3 s), so a short stop between two items changes nothing. The room player and the night mode are always shown; settings and diagnostic entities are left alone.
+- **Prewarm:** the speakers of all follow rooms are switched on, so the sound is there as soon as you walk in.
+- **Join:** a room with presence joins. Its volume is set first: follow me's volume plus the room's offset (e.g. bedroom −10 percentage points).
+- **Leave:** a room without presence leaves after its presence run-down (2 min). When the last room leaves, Music Assistant pauses the group and follow me ends.
+- **Never steals:** a room that plays something else (directly or in another group) is left alone.
+- **Left out:** rooms with video playing (Kodi; when the video ends the room comes back, and if it was the last room the group resumes, within 3 h), rooms in **quiet** mode (switch per room; leaves at once and cuts the speakers) and rooms turned **off** during the session (until follow me ends).
+- **Unknown presence** (all sensors unavailable) changes nothing, so music does not stop because a sensor integration is down.
+- **Nobody detected** at the start: the start room stays as long as nobody is detected in any follow room; then the normal rules apply, including the run-down. The same goes for a room you add to the group by hand.
+- **Paused by you:** follow me goes on, rooms stay as they are, the prewarmed speakers run down. On resume the rules apply again.
+
+**Stop** follow me with any room's **Stop follow me** button or `better_media_player.stop_follow` (target: a room player). The music goes back to one room: the room you stop it in if it plays along, else the room it was started in (paused music stays paused there); playing music goes on there where it was. All other rooms stop. Stopping while follow me is off gives an error. Follow me also ends by itself when the follow-me player is stopped in Music Assistant.
+
+### Media browser and search
+
+The room player's media browser bundles the browsers of its players. Only what a player supports is offered.
+
+| Entry | Content |
+|---|---|
+| **Queue: \<video player\>** | the video player's queue, if it has one (e.g. [Better Kodi](https://github.com/financelurker/ha-better-kodi)) |
+| **Queue: \<music player\>** | Music Assistant: the current and the next item (that is all Home Assistant exposes) |
+| **\<video player\>** | its browser. While it is off: Home Assistant's media sources (e.g. Jellyfin) and a hint |
+| **\<music player\>** | its browser (artists, albums, playlists, radio, …) |
+
+- **Playing now** from the browser switches the room to that player: the other player is stopped and the power sequence runs first. A movie picked while Kodi sleeps turns on the TV, wakes Kodi and then plays. A music player in a group leaves it first, so only this room changes.
+- **Music items** open a small folder with **▶ Play now**, **⏭ Play next**, **➕ Add to queue** and **⟲ Replace queue** (if the player supports enqueueing). *Next* and *add* change nothing else in the room.
+- **Search** goes to the players that can search (Music Assistant). Voice commands like "play Kid Rock in the living room" go to the room player and power the room.
+- Media picked through the room player in an automation's media selector stores an id that only the room player understands.
+- Browser labels follow the server language set in Home Assistant.
+
+## Automations
+
+### Actions
+
+All of them target a room player (`media_player.<room>`).
+
+| Action | What it does |
+|---|---|
+| `better_media_player.set_volume_preset` | choose a [volume preset](#presets) (`preset`) |
+| `better_media_player.set_sleep_timer` / `cancel_sleep_timer` | [sleep timer](#sleep-timer) (`minutes`, optional `fade_minutes`) |
+| `better_media_player.wake` | [wake up](#wake-up) (`media_content_id`, `media_content_type`; optional `start_volume`, `target_volume`, `fade_minutes`, `max_duration_minutes`, `night_mode`, `source`, `follow`) |
+| `better_media_player.snooze` / `stop_wake` | snooze (optional `minutes`) / stop a wake |
+| `better_media_player.start_follow` / `stop_follow` | [follow me](#follow-me) |
+| `media_player.play_media` with `extra: {night_mode: true}` | play and switch the [night mode](#night-mode) along |
+
+### Events and device triggers
+
+| Event | When | Device triggers |
+|---|---|---|
+| `better_media_player_source_changed` | the room's source changed ([below](#source-changes)) | *Source changed*, *Switched to video*, *Switched to music*, *Source off* |
+| `better_media_player_night_mode` | night mode, once the devices are up ([details](#anything-else-at-night)) | *Night mode on (devices up)*, *Night mode off (devices up)* |
+| `better_media_player_sleep_timer_finished` | the [sleep timer](#sleep-timer) ended | |
+| `better_media_player_wake_started`, `_wake_failed`, `_wake_finished` | a [wake](#wake-up) started, failed or ended | |
+
+### Source changes
+
+When the room's source changes, the event `better_media_player_source_changed` is fired, e.g. to switch the TV input by IR. The source is `video` while the video player is on, `audio` while the music player plays (also in a group) or is paused while the room still has power for it, or `null` when no player is active any more. A source chosen through the room player (on, source, play, wake) is the room's source from then on, even before something plays (e.g. turned on with music) and during a snooze, until another source plays or the room goes off.
+
+| Data | |
+|---|---|
+| `entity_id`, `entry_id`, `room` | the room player and the room |
+| `source`, `previous` | `video`, `audio` or `null` |
+| `player` | the player of the new source |
+| `reason` | `selected` (through the room player: source, on, play, wake), `player` (a player took over by itself, e.g. a film cast to Kodi), `off` |
+
+- Fired once the room is ready for it: after the power-on sequence, so the TV already has power (plus its wait after switching on).
+- Only for a stable change: two players at the same time for a moment fire nothing. A pause, new media on the same player, a dropout of the current source's player or a restart of Home Assistant fire nothing either. Another player that is unavailable (e.g. behind its host plug) counts as off.
+- The same as **device triggers** in the automation editor: *Source changed*, *Switched to video*, *Switched to music*, *Source off*.
+
+```yaml
+trigger:
+  - trigger: event
+    event_type: better_media_player_source_changed
+    event_data:
+      room: Living room
+      source: video
+action:
+  - action: remote.send_command
+    target:
+      entity_id: remote.living_room_ir
+    data:
+      command: tv_input_hdmi1
+```
+
+## Dashboards
+
+**Dynamic controls:** a room's controls that make no sense right now are hidden (`hidden_by: integration`), so the automatic dashboards only show what can be used. A control is shown at once when it makes sense again and hidden only after the hide delay (default 3 s), so a short stop between two items changes nothing. The room player and the night mode are always shown; settings and diagnostic entities are left alone.
 
 | Control | Shown while |
 |---|---|
@@ -438,7 +500,9 @@ A room's controls that make no sense right now are hidden (`hidden_by: integrati
 - A control you hid stays hidden; one you show again stays shown.
 - **Central settings:** the switch *Dynamic controls* (default on; off: nothing is hidden, in every room) and the number *Hide delay* (default 3 s) on its device. The follow-me player is optional there. Without central settings (none, disabled), the defaults apply.
 
-## Entities
+## Reference
+
+### Entities
 
 | Entity | Description |
 |---|---|
@@ -448,21 +512,39 @@ A room's controls that make no sense right now are hidden (`hidden_by: integrati
 | `binary_sensor.<room>_display_needed` | display demand right now |
 | `binary_sensor.<room>_speakers_needed` | speaker demand right now |
 | `switch.<room>_automatic_power` | off: no automatic switching; commands to the room player still work |
-| `number.<room>_display_run_down`, `_speaker_run_down`, `_player_hardware_run_down`, `_video_idle_timeout` | times in minutes |
 | `button.<room>_all_off` | same as turning the room player off |
 | `number.<room>_sleep_timer` | sleep timer: minutes left, 0 = off |
 | `button.<room>_sleep_timer_15_min` | sleep timer +15 min (starts one if none runs) |
 | `sensor.<room>_sleep_timer_end` | when the sleep timer turns the room off |
 | `switch.<room>_quiet` | quiet mode: the room takes no part in follow me |
-| `switch.<room>_night_mode` | night mode (see above) |
+| `switch.<room>_night_mode` | [night mode](#night-mode) |
 | `sensor.<room>_wake` | wake state; snooze end, end time and volumes in the attributes |
 | `button.<room>_snooze`, `button.<room>_stop_wake` | wake controls |
-| `number.<room>_night_maximum_volume`, `_night_video_idle_timeout`, `_night_display_run_down` | night mode limit (%) and times (min) |
 | `select.<room>_volume_preset` | volume preset (the offered presets and manual) |
-| `number.<room>_preset_quiet`, `_preset_normal`, `_preset_loud`, `_preset_party` | volume of each preset (%), 0 = not offered |
 | `sensor.<room>_follow` | follow state of the room (with occupancy sensors only) |
 | `button.<room>_follow_me`, `button.<room>_stop_follow_me` | start / stop follow me |
 | `sensor.better_media_player_follow_rooms` | central: rooms in follow me; follow-me player, start room in the attributes |
+
+Settings ([what they do](#settings-on-the-device)); only those the room can use:
+
+| Entity | Unit |
+|---|---|
+| `number.<room>_display_run_down`, `_speaker_run_down`, `_player_hardware_run_down`, `_video_idle_timeout` | min |
+| `number.<room>_start_timeout`, `_wait_after_display_on`, `_wait_after_speakers_on`, `_wait_after_player_plug_on` | s |
+| `switch.<room>_display_wait_for_standby`, `switch.<room>_speakers_wait_for_standby` | on / off |
+| `number.<room>_display_standby_below`, `_speakers_standby_below` | W |
+| `number.<room>_display_wait_for_standby_at_most`, `_speakers_wait_for_standby_at_most` | min |
+| `number.<room>_night_maximum_volume` | %, 0 = no limit |
+| `number.<room>_night_video_idle_timeout`, `_night_display_run_down`, `_night_fade_back_up` | min |
+| `number.<room>_preset_quiet`, `_preset_normal`, `_preset_loud`, `_preset_party` | %, 0 = not offered |
+| `select.<room>_power_on_preset` | none or a preset |
+| `number.<room>_sleep_timer_fade_out`, `_snooze_time` | min |
+| `number.<room>_follow_me_leave_after` | min |
+| `number.<room>_follow_me_volume_offset` | percentage points |
+| `switch.<room>_follow_me_prewarm_speakers`, `switch.<room>_wake_detect_leaving_the_room` | on / off |
+| `number.better_media_player_follow_me_default_volume`, `_hide_delay`, `switch.better_media_player_dynamic_controls` | central: %, s, on / off |
+
+### Status
 
 | Status | Meaning |
 |---|---|
@@ -475,6 +557,8 @@ A room's controls that make no sense right now are hidden (`hidden_by: integrati
 | `manual` | a plug was switched (or a device turned on) by hand; automatic switching paused |
 | `error` | start failed |
 | `disabled` | automatic power is off |
+
+### Follow state
 
 | Follow state | Meaning |
 |---|---|
