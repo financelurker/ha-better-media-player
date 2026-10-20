@@ -76,7 +76,7 @@ from .const import (
     WAKE_ARRIVAL_WINDOW,
 )
 from .output import MemberOutput
-from .position import Position, keep_position
+from .position import Position, keep_position, last_report
 from .ramp import VolumeRamp
 
 if TYPE_CHECKING:
@@ -540,7 +540,7 @@ class FollowManager:
         self, source: str, target: str, auto_play: bool = True, position: Position | None = None
     ) -> bool:
         """Move the queue; the track goes on where it was (position, read before)."""
-        since = dt_util.utcnow()
+        reported = last_report(self.hass, target)
         try:
             await self.hass.services.async_call(
                 "music_assistant",
@@ -554,13 +554,14 @@ class FollowManager:
             return False
         if auto_play and position is not None and not self._stopped:
 
-            async def _seek(seconds: float) -> None:
+            @callback
+            def _seek(seconds: float) -> None:
                 _LOGGER.debug("%s goes on at %.0f s", target, seconds)
-                await self._call("media_seek", {ATTR_ENTITY_ID: target, "seek_position": seconds})
+                self._spawn(self._call("media_seek", {ATTR_ENTITY_ID: target, "seek_position": seconds}))
 
             if self._position_watch is not None:
                 self._position_watch()
-            self._position_watch = keep_position(self.hass, target, position, since, _seek)
+            self._position_watch = keep_position(self.hass, target, position, _seek, reported)
         return True
 
     # -------------------------------------------------------------- evaluation

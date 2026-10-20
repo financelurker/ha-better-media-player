@@ -26,11 +26,11 @@ async def _tick(hass, freezer, seconds):
     await hass.async_block_till_done()
 
 
-async def _start(hass, house, freezer, position=90.0):
+async def _start(hass, house, freezer, position=90.0, duration=240):
     hass.states.async_set(LIVING_OCC, "on")
     house.music(
-        "playing", volume_level=0.25, media_content_id=TRACK, media_duration=240,
-        media_position=position - 5, media_position_updated_at=dt_util.utcnow(),
+        "playing", volume_level=0.25, media_content_id=TRACK, media_duration=duration,
+        media_position=position - 5, media_position_updated_at=house.now(),
     )
     await hass.async_block_till_done()
     await _tick(hass, freezer, 5)  # it played on for 5 s since its last report
@@ -143,4 +143,25 @@ async def test_unloading_stops_the_watch(hass, house, freezer):
     await hass.async_block_till_done()
     house.set(FOLLOW, "playing", media_position=2.0, media_position_updated_at=dt_util.utcnow())
     await hass.async_block_till_done()
+    assert _seeks(house, FOLLOW) == []
+
+
+async def test_a_stream_without_duration_is_not_set(hass, house, freezer):
+    house.transfer_restarts = True
+    await _start(hass, house, freezer, duration=None)  # radio
+    assert _seeks(house, FOLLOW) == []
+
+
+async def test_music_assistant_on_a_clock_behind(hass, house, freezer):
+    house.transfer_restarts = True
+    house.clock_skew = -10  # its reports look 10 s old to HA
+    await _start(hass, house, freezer)
+    assert len(_seeks(house, FOLLOW)) == 1
+
+
+async def test_music_assistant_on_a_clock_ahead(hass, house, freezer):
+    house.transfer_reports = False
+    house.clock_skew = 10
+    house.set(FOLLOW, "idle", media_content_id=TRACK, media_position=0.0, media_position_updated_at=house.now())
+    await _start(hass, house, freezer)  # its old report looks fresh to HA: not taken
     assert _seeks(house, FOLLOW) == []

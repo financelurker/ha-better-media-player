@@ -8,10 +8,9 @@ target plays the same track, it is set there if it is clearly behind.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
 
 from homeassistant.core import CALLBACK_TYPE, Event, EventStateChangedData, HomeAssistant, State, callback
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event
@@ -26,18 +25,22 @@ def _track(state: State) -> str | None:
     return state.attributes.get("media_content_id") or state.attributes.get("media_title")
 
 
+def _updated(state: State | None) -> datetime | None:
+    """When the player last reported its position (by the clock of its server)."""
+    updated = state.attributes.get("media_position_updated_at") if state is not None else None
+    if isinstance(updated, str):
+        updated = dt_util.parse_datetime(updated)
+    return updated if isinstance(updated, datetime) else None
+
+
 def _seconds(state: State) -> float | None:
     """The live position of a player (its last report plus the time since, while playing)."""
     position = state.attributes.get("media_position")
     if position is None:
         return None
     seconds = float(position)
-    if state.state == "playing":
-        updated = state.attributes.get("media_position_updated_at")
-        if isinstance(updated, str):
-            updated = dt_util.parse_datetime(updated)
-        if isinstance(updated, datetime):
-            seconds += max(0.0, (dt_util.utcnow() - updated).total_seconds())
+    if state.state == "playing" and (updated := _updated(state)) is not None:
+        seconds += max(0.0, (dt_util.utcnow() - updated).total_seconds())
     return seconds
 
 
@@ -58,17 +61,23 @@ class Position:
         return cls(track, seconds)
 
 
+def last_report(hass: HomeAssistant, entity_id: str) -> datetime | None:
+    return _updated(hass.states.get(entity_id))
+
+
 @callback
 def keep_position(
     hass: HomeAssistant,
     target: str,
     position: Position,
-    since: datetime,
-    seek: Callable[[float], Coroutine[Any, Any, Any]],
+    seek: Callable[[float], None],
+    reported: datetime | None,
 ) -> CALLBACK_TYPE:
-    """Watch target until it plays the track (reported after since); if it is
-    clearly behind there, seek(seconds) is started. Gives up after WAIT s or
-    with another track. Returns the cancel."""
+    """Watch target until it plays the track (a position report newer than
+    reported, its last one before the move: the same clock, the server's); if
+    it is clearly behind there, seek(seconds) is called. Gives up after WAIT s,
+    with another track, near the end of the track or for a stream without a
+    duration (radio). Returns the cancel."""
     unsubs: list[CALLBACK_TYPE] = []
 
     @callback
@@ -80,10 +89,8 @@ def keep_position(
     def _check(state: State | None) -> None:
         if state is None or state.state != "playing":
             return
-        updated = state.attributes.get("media_position_updated_at")
-        if isinstance(updated, str):
-            updated = dt_util.parse_datetime(updated)
-        if not isinstance(updated, datetime) or updated < since:
+        updated = _updated(state)
+        if updated is None or (reported is not None and updated <= reported):
             return  # not yet reported since the move
         _done()
         if _track(state) != position.track:
@@ -92,9 +99,9 @@ def keep_position(
         duration = state.attributes.get("media_duration")
         if now is None or position.seconds - now <= BEHIND:
             return
-        if duration is not None and position.seconds >= float(duration) - END:
+        if not duration or position.seconds >= float(duration) - END:
             return
-        hass.async_create_task(seek(round(position.seconds, 1)), eager_start=False)
+        seek(round(position.seconds, 1))
 
     @callback
     def _changed(event: Event[EventStateChangedData]) -> None:

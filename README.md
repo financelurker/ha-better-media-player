@@ -193,7 +193,7 @@ target:
   entity_id: media_player.living_room
 ```
 
-The room joins the follow-me player and its queue moves there (`music_assistant.transfer_queue`); the track goes on where it was (if the follow-me player starts it from the beginning, it is set to the position). The room's volume becomes follow me's volume (its offset taken out). While follow me runs, the **Follow me** buttons are hidden in every room and the **Stop follow me** buttons are shown ([dynamic controls](#dynamic-controls)); pressing *Follow me* while it runs, or *Stop follow me* while it does not, gives an error.
+The room joins the follow-me player and its queue moves there (`music_assistant.transfer_queue`); the track goes on where it was (if the follow-me player starts it from the beginning, it is set to the position; not for streams without a duration, e.g. radio). The room's volume becomes follow me's volume (its offset taken out). While follow me runs, the **Follow me** buttons are hidden in every room and the **Stop follow me** buttons are shown ([dynamic controls](#dynamic-controls)); pressing *Follow me* while it runs, or *Stop follow me* while it does not, gives an error.
 
 If follow me cannot be started in a room, the error says why. The button's attribute `blocked_by` shows the same reason (`null` while it can be started):
 

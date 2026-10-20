@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import timedelta
 from typing import Any
 from unittest.mock import patch
 
@@ -126,6 +127,11 @@ class FakeHome:
     transfer_restarts: bool = False  # a moved queue starts its track from the beginning
     transfer_reports: bool = True  # the target reports its position right away
     transfer_track: str | None = None  # the target is at another track by then
+    clock_skew: float = 0.0  # s the clock of Music Assistant's server is ahead of HA's
+
+    def now(self):
+        """The time on Music Assistant's server."""
+        return dt_util.utcnow() + timedelta(seconds=self.clock_skew)
 
     def avr(self, state: str, **attrs: Any) -> None:
         self.set(AVR, state, supported_features=AVR_FEATURES, friendly_name="AV Receiver", **attrs)
@@ -231,7 +237,7 @@ class FakeHome:
                     "media_duration": src.attributes.get("media_duration"),
                 }
                 if self.transfer_reports:
-                    track.update(media_position=position, media_position_updated_at=dt_util.utcnow())
+                    track.update(media_position=position, media_position_updated_at=self.now())
             if source:
                 self.set(source, "idle")
             state = "playing" if data.get("auto_play", True) else "paused"
@@ -266,7 +272,7 @@ class FakeHome:
                     self.group("playing", self.members(entity_id), entity_id)
             elif service == "media_seek":
                 self.set(entity_id, st.state, media_position=float(data["seek_position"]),
-                         media_position_updated_at=dt_util.utcnow())
+                         media_position_updated_at=self.now())
             elif service == "media_stop":
                 self.set(entity_id, "idle")
             elif service == "media_pause":
