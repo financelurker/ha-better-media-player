@@ -661,7 +661,9 @@
       "source_changed": "Source changed",
       "source_video": "Switched to video",
       "source_audio": "Switched to music",
-      "source_off": "Source off (no player active)"
+      "source_off": "Source off (no player active)",
+      "night_mode_on": "Night mode on (devices up)",
+      "night_mode_off": "Night mode off (devices up)"
     }
   }
 }

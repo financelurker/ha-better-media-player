@@ -51,6 +51,7 @@ from homeassistant.core import (
     callback,
 )
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import (
     async_track_state_change_event,
     async_track_time_interval,
@@ -411,6 +412,13 @@ class RoomController:
     @callback
     def _save(self) -> None:
         self._store.async_delay_save(lambda: self.data, 10)
+
+    @callback
+    def async_fire(self, event: str, data: dict[str, Any]) -> None:
+        """An event of the room (with the room player, the entry and the room's name)."""
+        entry = self.entry
+        entity_id = er.async_get(self.hass).async_get_entity_id("media_player", DOMAIN, f"{entry.entry_id}_player")
+        self.hass.bus.async_fire(event, {"entity_id": entity_id, "entry_id": entry.entry_id, "room": entry.title, **data})
 
     @callback
     def _save_now(self) -> None:
@@ -876,6 +884,7 @@ class RoomController:
                 self.held.clear()  # the next start switches them again
             await self.sleep.async_apply_restores()
             self.source_watch.async_check()
+            self.night.async_check()
             if self.sleep.active and self._started and self._fully_off():
                 # everything went off by itself: the timer has nothing left to do
                 self._spawn_sleep_cancel()

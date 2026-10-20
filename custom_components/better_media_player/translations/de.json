@@ -661,7 +661,9 @@
       "source_changed": "Quelle gewechselt",
       "source_video": "Auf Video gewechselt",
       "source_audio": "Auf Musik gewechselt",
-      "source_off": "Quelle aus (kein Player aktiv)"
+      "source_off": "Quelle aus (kein Player aktiv)",
+      "night_mode_on": "Nachtmodus an (Geräte bereit)",
+      "night_mode_off": "Nachtmodus aus (Geräte bereit)"
     }
   }
 }

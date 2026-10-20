@@ -15,7 +15,16 @@ When it ends, the volume fades back up to the room volume (or is set at once
 if nothing plays).
 
 Turning it on and off is up to the user or to other integrations and
-automations.
+automations. So is anything else at night (e.g. the AV receiver's night sound
+mode): the event below says when, once the room's devices are up.
+
+    better_media_player_night_mode:
+        entity_id, entry_id, room, night_mode (true / false),
+        reason: switched (switched while the room is on), room_on (the room
+        came on: a source started after none) or source (another source
+        started, e.g. the TV for video after music) — at night, or the first
+        time after the night mode ended while nothing could be told; after the
+        power-on sequence, right after the source event
 """
 
 from __future__ import annotations
@@ -27,6 +36,7 @@ from homeassistant.core import State, callback
 
 from .const import (
     CONF_NIGHT_FADE_IN,
+    EVENT_NIGHT_MODE,
     ROLE_BASS,
 )
 from .ramp import VolumeRamp
@@ -121,6 +131,43 @@ class NightMode:
         if (hub := ctrl.hub) is not None:
             hub.async_schedule("night_mode")
         await ctrl.async_update("night_mode")
+
+    # ------------------------------------------------------------------ event
+
+    @callback
+    def async_check(self) -> None:
+        """After each update: switched while the room is on (and no power-on
+        sequence runs: then once it is done)."""
+        ctrl = self.ctrl
+        if not ctrl._started or ctrl._stopped or not ctrl.source_watch.ready:
+            return
+        if "night_announced" not in ctrl.data:
+            ctrl.data["night_announced"] = self.active  # (first look after an update: as it is)
+            ctrl._save()
+            return
+        watch = ctrl.source_watch
+        if watch.source is None or watch.changing or ctrl.sequence_running:
+            return  # told when the room (or its new source) is up
+        if bool(ctrl.data["night_announced"]) != self.active:
+            self._fire(self.active, "switched")
+
+    @callback
+    def async_source_changed(self, source: str | None, previous: str | None) -> None:
+        """A source started (after the source event; its devices are up): at night,
+        or the first time after the night mode ended while nothing told it."""
+        if source is None:
+            return
+        active = self.active
+        if active or bool(self.ctrl.data.get("night_announced", False)) != active:
+            self._fire(active, "room_on" if previous is None else "source")
+
+    @callback
+    def _fire(self, active: bool, reason: str) -> None:
+        ctrl = self.ctrl
+        ctrl.data["night_announced"] = active
+        ctrl._save()
+        _LOGGER.info("%s: night mode %s announced (%s)", ctrl.entry.title, "on" if active else "off", reason)
+        ctrl.async_fire(EVENT_NIGHT_MODE, {"night_mode": active, "reason": reason})
 
     # ------------------------------------------------------------ volume cap
 

@@ -1,4 +1,5 @@
-"""Device triggers of a room: its source changes (see source_event.py)."""
+"""Device triggers of a room: its source changes (see source_event.py) and its
+night mode (see night.py)."""
 
 from __future__ import annotations
 
@@ -20,17 +21,20 @@ from .const import (
     CONF_VIDEO_PLAYER,
     DOMAIN,
     ENTRY_TYPE_HUB,
+    EVENT_NIGHT_MODE,
     EVENT_SOURCE_CHANGED,
     SOURCE_AUDIO,
     SOURCE_VIDEO,
 )
 
-# trigger type -> the source it waits for (None: any change)
-TRIGGERS: dict[str, str | None] = {
-    "source_changed": None,
-    "source_video": SOURCE_VIDEO,
-    "source_audio": SOURCE_AUDIO,
-    "source_off": "off",
+# trigger type -> its event and the event data it waits for
+TRIGGERS: dict[str, tuple[str, dict[str, Any]]] = {
+    "source_changed": (EVENT_SOURCE_CHANGED, {}),
+    "source_video": (EVENT_SOURCE_CHANGED, {"source": SOURCE_VIDEO}),
+    "source_audio": (EVENT_SOURCE_CHANGED, {"source": SOURCE_AUDIO}),
+    "source_off": (EVENT_SOURCE_CHANGED, {"reason": "off"}),
+    "night_mode_on": (EVENT_NIGHT_MODE, {"night_mode": True}),
+    "night_mode_off": (EVENT_NIGHT_MODE, {"night_mode": False}),
 }
 
 TRIGGER_SCHEMA = DEVICE_TRIGGER_BASE_SCHEMA.extend({vol.Required(CONF_TYPE): vol.In(TRIGGERS)})
@@ -56,7 +60,7 @@ async def async_get_triggers(hass: HomeAssistant, device_id: str) -> list[dict[s
     options = entry.options if entry is not None else {}
     # from the options: also for a room that is not loaded right now
     sources = {k for k, conf in ((SOURCE_VIDEO, CONF_VIDEO_PLAYER), (SOURCE_AUDIO, CONF_AUDIO_PLAYER)) if options.get(conf)}
-    types = [t for t, src in TRIGGERS.items() if src in (None, "off") or src in sources]
+    types = [t for t, (_event, data) in TRIGGERS.items() if data.get("source") in (None, *sources)]
     return [
         {CONF_PLATFORM: "device", CONF_DOMAIN: DOMAIN, CONF_DEVICE_ID: device_id, CONF_TYPE: t} for t in types
     ]
@@ -69,17 +73,12 @@ async def async_attach_trigger(
     trigger_info: TriggerInfo,
 ) -> CALLBACK_TYPE:
     entry_id = _entry_id(hass, config[CONF_DEVICE_ID])
-    event_data: dict[str, Any] = {"entry_id": entry_id}
-    wanted = TRIGGERS[config[CONF_TYPE]]
-    if wanted == "off":
-        event_data["reason"] = "off"
-    elif wanted is not None:
-        event_data["source"] = wanted
+    event, data = TRIGGERS[config[CONF_TYPE]]
     event_config = event_trigger.TRIGGER_SCHEMA(
         {
             event_trigger.CONF_PLATFORM: "event",
-            event_trigger.CONF_EVENT_TYPE: EVENT_SOURCE_CHANGED,
-            event_trigger.CONF_EVENT_DATA: event_data,
+            event_trigger.CONF_EVENT_TYPE: event,
+            event_trigger.CONF_EVENT_DATA: {"entry_id": entry_id, **data},
         }
     )
     return await event_trigger.async_attach_trigger(hass, event_config, action, trigger_info, platform_type="device")
