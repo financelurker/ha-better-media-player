@@ -261,3 +261,93 @@ async def test_not_between_two_systems(hass, ma_living_only, home, freezer):
     with pytest.raises(ServiceValidationError) as err:
         await _handover(hass, LIVING, KROOM)
     assert err.value.translation_key == "handover_not_supported"
+
+
+# ----------------------------------------------------------- from review
+
+
+async def test_the_destination_plays_at_its_room_volume(hass, rooms, freezer):
+    home = rooms
+    home.kitchen("idle", volume_level=0.9)
+    await hass.services.async_call(
+        "select", "select_option", {"entity_id": "select.kitchen_volume_preset", "option": "quiet"}, blocking=True
+    )
+    await _music(hass, home, freezer)
+    await _handover(hass, LIVING, KROOM)
+    await _tick(hass, freezer)
+    assert hass.states.get(KITCHEN).attributes["volume_level"] == 0.15
+    assert hass.states.get("select.kitchen_volume_preset").state == "quiet"
+
+
+async def test_not_from_a_group(hass, rooms, freezer):
+    from .conftest import GROUP
+
+    home = rooms
+    home.music("playing")
+    home.group("playing", [MUSIC], GROUP)
+    await hass.async_block_till_done()
+    await _tick(hass, freezer)
+    with pytest.raises(ServiceValidationError) as err:
+        await _handover(hass, LIVING, KROOM)
+    assert err.value.translation_key == "handover_in_group"
+    assert not home.on(KITCHEN_SPK), "nothing happened in the kitchen"
+
+
+async def test_paused_music_arrives_paused(hass, rooms, freezer):
+    home = rooms
+    await _music(hass, home, freezer)
+    home.music("paused")
+    await hass.async_block_till_done()
+    await _handover(hass, LIVING, KROOM)
+    assert hass.states.get(KITCHEN).state == "paused"
+
+
+async def test_after_follow_me_the_source_room_goes_off(hass, rooms, freezer):
+    home = rooms
+    home.group("idle", [], FOLLOW)
+    await setup_hub(hass)
+    living = next(e for e in hass.config_entries.async_entries(DOMAIN) if e.title == "Wohnzimmer")
+    hass.config_entries.async_update_entry(living, options={**living.options, "occupancy": [LIVING_OCC]})
+    await hass.async_block_till_done()
+    hass.states.async_set(LIVING_OCC, "on")
+    await _music(hass, home, freezer)
+    await hass.services.async_call(DOMAIN, "start_follow", {"entity_id": LIVING}, blocking=True)
+    await hass.async_block_till_done()
+    await _handover(hass, LIVING, KROOM)
+    await _tick(hass, freezer, 10)
+    assert not home.on(SPEAKERS), "the living room went off (no run-down)"
+
+
+async def test_music_from_behind_a_film_keeps_the_film(hass, rooms, freezer):
+    home = rooms
+    await _video(hass, home, freezer)
+    home.music("paused", media_content_id="t", media_position=10.0, media_position_updated_at=dt_util.utcnow())
+    await hass.async_block_till_done()
+    await _handover(hass, LIVING, KROOM, source="audio")
+    assert home.transferred[-1] == (MUSIC, KITCHEN)
+    assert hass.states.get(KODI).state == "playing" and home.on(TV), "the film plays on"
+
+
+async def test_not_a_room_names_the_entity(hass, rooms, freezer):
+    await _music(hass, rooms, freezer)
+    with pytest.raises(ServiceValidationError) as err:
+        await _handover(hass, LIVING, "media_player.office_player")
+    assert err.value.translation_placeholders["destination"] == "media_player.office_player"
+
+
+async def test_better_kodis_own_error_reaches_the_user(hass, rooms, freezer):
+    from homeassistant.exceptions import HomeAssistantError
+
+    home = rooms
+    await _video(hass, home, freezer)
+    original = home.handle
+
+    def handle(domain, service, entity_id, data, context):
+        if domain == "better_kodi":
+            raise HomeAssistantError("Kodi bedroom is not ready")
+        return original(domain, service, entity_id, data, context)
+
+    home.handle = handle
+    with pytest.raises(HomeAssistantError, match="not ready"):
+        await _handover(hass, LIVING, BEDROOM)
+    assert home.on(TV), "the living room stays on"

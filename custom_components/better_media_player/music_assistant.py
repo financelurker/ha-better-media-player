@@ -73,8 +73,10 @@ class MusicAssistant(MusicBackend):
         return True
 
     async def handover(self, source: str, target: str, keep_source_playing: bool = False) -> bool:
-        """The queue moves; the current track goes on where it was."""
-        return await self.transfer(source, target, True, self.position(source))
+        """The queue moves; the current track goes on where it was (paused stays paused)."""
+        state = self.hass.states.get(source)
+        playing = state is not None and state.state in ("playing", "buffering")
+        return await self.transfer(source, target, playing, self.position(source))
 
     async def queue(self, player: str) -> Queue:
         """Current and next item (all that Home Assistant exposes)."""

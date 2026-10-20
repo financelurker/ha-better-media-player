@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from homeassistant.components.media_player import BrowseMedia
 from homeassistant.const import ATTR_ENTITY_ID
+from homeassistant.core import Context
 
 from .backend import ENQUEUE_MODES, VideoBackend
 
@@ -39,11 +40,15 @@ class BetterKodi(Kodi):
     keeps_source = True
 
     async def handover(self, source: str, target: str, keep_source_playing: bool = False) -> bool:
-        return await self._call(
+        # (its own errors, e.g. nothing playing, reach the user as they are)
+        await self.hass.services.async_call(
             "better_kodi",
             "handover",
             {ATTR_ENTITY_ID: source, "destination": target, "keep_source_playing": keep_source_playing, "resume": True},
+            blocking=True,
+            context=Context(),
         )
+        return True
 
     def queue_entry(self, root: BrowseMedia | None) -> BrowseMedia | None:
         for item in (root.children or []) if root else []:

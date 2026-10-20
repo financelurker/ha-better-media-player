@@ -1415,9 +1415,11 @@ class RoomController:
             return src
         return None
 
-    def handover_blocker(self, dest: RoomController | None, source: str | None = None, keep: bool = False):
+    def handover_blocker(
+        self, dest: RoomController | None, source: str | None = None, keep: bool = False, dest_id: str | None = None
+    ):
         """Why the playback cannot go to dest (None: it can): (reason, placeholders)."""
-        names = {"room": self.entry.title, "destination": dest.entry.title if dest else "?"}
+        names = {"room": self.entry.title, "destination": dest.entry.title if dest else str(dest_id)}
         if dest is None:
             return "handover_not_a_room", names
         if dest is self:
@@ -1425,18 +1427,33 @@ class RoomController:
         src = self.handover_source(source)
         if src is None:
             return "handover_nothing_playing", names
+        player = self._name(src.player)
         target = dest.sources.get(src.key)
         if target is None:
-            return "handover_no_player", {**names, "source": src.key}
+            return "handover_no_player", {**names, "player": player}
         if not src.backend.handover_to(target.backend):
-            return "handover_not_supported", {**names, "player": src.player, "target": target.player}
+            return "handover_not_supported", {**names, "player": player, "target": self._name(target.player)}
         if keep and not src.backend.keeps_source:
-            return "handover_keep_not_supported", {**names, "player": src.player}
+            return "handover_keep_not_supported", {**names, "player": player}
+        hub = self.hub
+        groups = [
+            g for g in src.backend.groups_of(src.player) if hub is None or not hub.follows(g)
+        ] if src.key == SOURCE_AUDIO else []
+        if groups:
+            # the group plays it, not the player (follow me: it ends, see below)
+            return "handover_in_group", {**names, "player": player, "group": ", ".join(self._name(g) for g in groups)}
         return None
 
-    async def async_handover(self, dest: RoomController | None, source: str | None = None, keep: bool = False) -> None:
-        """Continue what plays here in dest; this room goes off (unless keep)."""
-        if (blocker := self.handover_blocker(dest, source, keep)) is not None:
+    def _name(self, entity_id: str) -> str:
+        state = self._state(entity_id)
+        return str(state.attributes.get("friendly_name") or entity_id) if state else entity_id
+
+    async def async_handover(
+        self, dest: RoomController | None, source: str | None = None, keep: bool = False, dest_id: str | None = None
+    ) -> None:
+        """Continue what plays here in dest; this room goes off (unless keep, or
+        its other source is in use)."""
+        if (blocker := self.handover_blocker(dest, source, keep, dest_id)) is not None:
             key, placeholders = blocker
             raise ServiceValidationError(
                 translation_domain=DOMAIN, translation_key=key, translation_placeholders=placeholders
@@ -1451,11 +1468,14 @@ class RoomController:
             # follow me plays it: it ends, the music goes to dest (the others stop)
             await dest.async_prepare(src.key)
             await hub.async_follow_stop(self, to=dest)
-            return
-        await dest.async_prepare(src.key)
-        if not await src.backend.handover(src.player, target.player, keep):
-            raise HomeAssistantError(f"{self.entry.title}: could not hand over to {dest.entry.title}")
-        if not keep:
+        else:
+            await dest.async_prepare(src.key)
+            if not await src.backend.handover(src.player, target.player, keep):
+                raise HomeAssistantError(f"{self.entry.title}: could not hand over to {dest.entry.title}")
+        # the destination plays at its room volume (night mode, presets)
+        await dest.volume.async_apply(target, left_group=True)
+        others_in_use = any(self.source_active(s) for s in self.sources.values() if s is not src)
+        if not keep and not others_in_use:
             await self.async_turn_off()
 
     def player_state_of(self, entity_id: str) -> str | None:

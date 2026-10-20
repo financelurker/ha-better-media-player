@@ -686,13 +686,16 @@
       "message": "Nothing plays in {room} that could be handed over."
     },
     "handover_no_player": {
-      "message": "{destination} has no {source} player to continue in."
+      "message": "{destination} has no player to continue what {player} plays."
     },
     "handover_not_supported": {
       "message": "{player} cannot hand over to {target} (needs the same system with handover: Music Assistant, Better Kodi)."
     },
     "handover_keep_not_supported": {
       "message": "{player} cannot play on while handing over (its queue moves)."
+    },
+    "handover_in_group": {
+      "message": "{player} plays in a group ({group}): hand over the group in Music Assistant, or start the music on {player} itself."
     }
   },
   "device_automation": {

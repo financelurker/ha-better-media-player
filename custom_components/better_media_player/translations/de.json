@@ -686,13 +686,16 @@
       "message": "In {room} läuft nichts, das übergeben werden könnte."
     },
     "handover_no_player": {
-      "message": "{destination} hat keinen {source}-Player, um fortzusetzen."
+      "message": "{destination} hat keinen Player, um fortzusetzen, was {player} spielt."
     },
     "handover_not_supported": {
       "message": "{player} kann nicht an {target} übergeben (braucht dasselbe System mit Handover: Music Assistant, Better Kodi)."
     },
     "handover_keep_not_supported": {
       "message": "{player} kann beim Übergeben nicht weiterspielen (seine Queue zieht um)."
+    },
+    "handover_in_group": {
+      "message": "{player} spielt in einer Gruppe ({group}): die Gruppe in Music Assistant übergeben oder die Musik direkt auf {player} starten."
     }
   },
   "device_automation": {
