@@ -363,7 +363,7 @@ With power sensors, a plug is cut only after its device has drawn less than the 
 
 ## Dynamic controls
 
-A room's controls that make no sense right now are hidden (`hidden_by: integration`), so the automatic dashboards only show what can be used. A control is shown at once when it makes sense again and hidden only after the hide delay (default 3 s), so a short stop between two items changes nothing. The room player itself is always shown; settings and diagnostic entities are left alone.
+A room's controls that make no sense right now are hidden (`hidden_by: integration`), so the automatic dashboards only show what can be used. A control is shown at once when it makes sense again and hidden only after the hide delay (default 3 s), so a short stop between two items changes nothing. The room player and the night mode are always shown; settings and diagnostic entities are left alone.
 
 | Control | Shown while |
 |---|---|

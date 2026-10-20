@@ -240,3 +240,22 @@ async def test_quiet_hidden_with_central_settings_but_no_follow_player(hass, hom
     await setup_room(hass, occupancy=[LIVING_OCC])
     await _tick(hass, freezer, 5)
     assert _hidden(hass, QUIET), "without a follow-me player there is no follow me"
+
+
+async def test_quiet_follows_the_central_settings(hass, home, freezer):
+    hub = await setup_hub(hass)
+    await setup_room(hass, occupancy=[LIVING_OCC])
+    await _tick(hass, freezer, 5)
+    assert not _hidden(hass, QUIET)
+    assert await hass.config_entries.async_reload(hub.entry_id)  # (an options change)
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 5)
+    assert not _hidden(hass, QUIET), "a reload keeps it"
+    hass.config_entries.async_update_entry(hub, options={**hub.options, "follow_player": None})
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 5)
+    assert _hidden(hass, QUIET), "no follow-me player: no follow me"
+    await hass.config_entries.async_remove(hub.entry_id)
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 5)
+    assert _hidden(hass, QUIET)
