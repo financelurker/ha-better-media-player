@@ -309,6 +309,31 @@ The switch `Night mode` puts the room into night mode until it is turned off aga
 - After a restart, or when the limit is lowered (number), the limit holds at once.
 - `media_player.play_media` on the room player accepts `extra: {night_mode: true}` (or `false`) to switch the night mode along with the playback; it is not passed on to the player.
 
+#### Anything else at night
+
+Anything else at night (e.g. the AV receiver's night sound mode or dynamic range compression, the TV's picture mode) is up to you, with the event `better_media_player_night_mode`. It comes when the room's devices are up, so they take the command:
+
+| `reason` | When |
+|---|---|
+| `switched` | the night mode was switched while the room is on |
+| `room_on` | the room came on in night mode (every time, e.g. for a receiver that forgets its night mode with its power), or for the first time after the night mode was switched off while the room was off |
+
+Data: `entity_id`, `entry_id`, `room`, `night_mode` (`true` / `false`), `reason`. It comes after the power-on sequence, after the [source change event](#source-changes). Also as **device triggers**: *Night mode on (devices up)*, *Night mode off (devices up)*.
+
+```yaml
+trigger:
+  - trigger: event
+    event_type: better_media_player_night_mode
+    event_data:
+      room: Living room
+action:
+  - action: media_player.select_sound_mode
+    target:
+      entity_id: media_player.living_room_avr
+    data:
+      sound_mode: "{{ 'Night' if trigger.event.data.night_mode else 'Movie' }}"
+```
+
 ### Wake up
 
 `better_media_player.wake` wakes one room: the room powers up as usual, the playback starts at the start volume and fades in once it really plays.

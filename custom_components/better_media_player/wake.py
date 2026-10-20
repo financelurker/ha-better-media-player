@@ -27,7 +27,6 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.components.media_player import MediaPlayerEntityFeature
 from homeassistant.core import CALLBACK_TYPE, State, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
-from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.util import dt as dt_util
 
@@ -683,6 +682,4 @@ class WakeAlarm:
 
     @callback
     def _fire(self, event: str, data: dict[str, Any]) -> None:
-        entry = self.ctrl.entry
-        entity_id = er.async_get(self.hass).async_get_entity_id("media_player", DOMAIN, f"{entry.entry_id}_player")
-        self.hass.bus.async_fire(event, {"entity_id": entity_id, "entry_id": entry.entry_id, "room": entry.title, **data})
+        self.ctrl.async_fire(event, data)

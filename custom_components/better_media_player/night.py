@@ -15,7 +15,14 @@ When it ends, the volume fades back up to the room volume (or is set at once
 if nothing plays).
 
 Turning it on and off is up to the user or to other integrations and
-automations.
+automations. So is anything else at night (e.g. the AV receiver's night sound
+mode): the event below says when, once the room's devices are up.
+
+    better_media_player_night_mode:
+        entity_id, entry_id, room, night_mode (true / false),
+        reason: switched (switched while the room is on) or room_on (the room
+        came on in night mode, or after it was switched off while the room was
+        off; after the power-on sequence, with the source event)
 """
 
 from __future__ import annotations
@@ -27,6 +34,7 @@ from homeassistant.core import State, callback
 
 from .const import (
     CONF_NIGHT_FADE_IN,
+    EVENT_NIGHT_MODE,
     ROLE_BASS,
 )
 from .ramp import VolumeRamp
@@ -47,6 +55,7 @@ class NightMode:
         self.hass = ctrl.hass
         self._clamping: set[str] = set()
         self._ramps: dict[str, VolumeRamp] = {}
+        self._room_on: bool | None = None  # None: not looked yet (after a start of HA)
 
     # ------------------------------------------------------------------ state
 
@@ -121,6 +130,36 @@ class NightMode:
         if (hub := ctrl.hub) is not None:
             hub.async_schedule("night_mode")
         await ctrl.async_update("night_mode")
+
+    # ------------------------------------------------------------------ event
+
+    @callback
+    def async_check(self) -> None:
+        """After each update and source change: announce the night mode when the
+        room's devices are up (the room has a source, no power-on sequence)."""
+        ctrl = self.ctrl
+        if not ctrl._started or ctrl._stopped or not ctrl.source_watch.ready:
+            return
+        # on once it has a source: announced after its power-on sequence
+        on = ctrl.source_watch.source is not None
+        active = self.active
+        told = bool(ctrl.data.get("night_announced", False))
+        came_on = on and self._room_on is False  # (not at the first look after a start of HA)
+        self._room_on = on
+        if not on:
+            return
+        if came_on and (active or told != active):
+            self._fire(active, "room_on")
+        elif told != active:
+            self._fire(active, "switched")
+
+    @callback
+    def _fire(self, active: bool, reason: str) -> None:
+        ctrl = self.ctrl
+        ctrl.data["night_announced"] = active
+        ctrl._save()
+        _LOGGER.info("%s: night mode %s announced (%s)", ctrl.entry.title, "on" if active else "off", reason)
+        ctrl.async_fire(EVENT_NIGHT_MODE, {"night_mode": active, "reason": reason})
 
     # ------------------------------------------------------------ volume cap
 

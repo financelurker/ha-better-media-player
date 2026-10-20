@@ -30,10 +30,9 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.media_player import MediaPlayerState
 from homeassistant.core import CALLBACK_TYPE, callback
-from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_call_later
 
-from .const import DOMAIN, EVENT_SOURCE_CHANGED, SOURCE_AUDIO, SOURCE_VIDEO
+from .const import EVENT_SOURCE_CHANGED, SOURCE_AUDIO, SOURCE_VIDEO
 
 if TYPE_CHECKING:
     from .controller import RoomController
@@ -80,6 +79,11 @@ class SourceWatch:
     def ready(self) -> bool:
         """The first look after a start is done."""
         return self._announced is not _UNSET
+
+    @property
+    def source(self) -> str | None:
+        """The announced source (None: off, or not looked yet)."""
+        return None if self._announced is _UNSET else self._announced
 
     @property
     def active(self) -> bool:
@@ -209,23 +213,14 @@ class SourceWatch:
         else:
             reason = REASON_PLAYER
         self._requested = None
-        entry = ctrl.entry
-        entity_id = er.async_get(ctrl.hass).async_get_entity_id("media_player", DOMAIN, f"{entry.entry_id}_player")
         player = ctrl.sources[source].player if source is not None else None
-        _LOGGER.info("%s: source %s -> %s (%s)", entry.title, previous, source, reason)
+        _LOGGER.info("%s: source %s -> %s (%s)", ctrl.entry.title, previous, source, reason)
         ctrl._notify()  # controls that depend on it
-        ctrl.hass.bus.async_fire(
+        ctrl.async_fire(
             EVENT_SOURCE_CHANGED,
-            {
-                "entity_id": entity_id,
-                "entry_id": entry.entry_id,
-                "room": entry.title,
-                "source": source,
-                "previous": previous,
-                "player": player,
-                "reason": reason,
-            },
+            {"source": source, "previous": previous, "player": player, "reason": reason},
         )
+        ctrl.night.async_check()  # the room came on (or went off): the night mode's event
 
     @callback
     def async_stop(self) -> None:

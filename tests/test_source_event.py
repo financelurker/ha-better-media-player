@@ -158,7 +158,8 @@ async def test_device_triggers(hass, home, freezer):
     device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, entry.entry_id)})
     triggers = await async_get_device_automations(hass, DeviceAutomationType.TRIGGER, [device.id])
     types = sorted(t["type"] for t in triggers[device.id] if t["domain"] == DOMAIN)
-    assert types == ["source_audio", "source_changed", "source_off", "source_video"]
+    assert types == ["night_mode_off", "night_mode_on", "source_audio", "source_changed", "source_off", "source_video"]
+    types = [t for t in types if t.startswith("source")]  # (the night mode's: test_night_event.py)
 
     hits: list[str] = []
     hass.services.async_register("test", "hit", lambda call: hits.append(call.data["type"]))
