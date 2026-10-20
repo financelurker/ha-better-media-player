@@ -20,21 +20,22 @@ It is a custom integration in the spirit of Better Thermostat: you tell it what 
 - [Automations](#automations): actions, events, device triggers
 - [Dashboards](#dashboards)
 - [Reference](#reference): entities and states
+- [Releases](#releases), [roadmap](#roadmap), [license](#license)
 
 ## What it does
 
-- **Power in the right order:** devices are switched in a fixed order, so speakers never pop and a player is only used once it is ready.
+- **Power in the right order:** press play on Kodi → the TV comes on, Kodi wakes up, then the speakers; speakers never pop and a player is only used once it is ready.
 - **Shared speakers:** one set of speakers (plus subwoofer) serves both a video player such as Kodi and a music player such as Music Assistant.
-- **On and off by itself:** music that starts on the room's player – also as part of a Music Assistant group – powers the speakers. When nothing plays any more, everything runs down and goes off.
+- **On and off by itself:** music that starts on the room's player – also as part of a Music Assistant group – powers the speakers. When nothing plays any more, everything goes off after a while (e.g. the TV 10 min after Kodi is off).
 - **Plugs or devices:** TV, speakers and subwoofer can hang on switchable plugs, turn themselves on and off (a TV or AV receiver as media player, a remote), be switched by your own scripts (e.g. IR) – or a mix.
 - **Room off:** leaves a Music Assistant group, stops playback, turns the video player off and powers everything down.
 - **One volume per room**, with presets (quiet, normal, loud, party) – on the players or on an amplifier, AV receiver or soundbar.
 - **Night mode, sleep timer and wake up** with fades.
-- **Follow me:** the music moves with you from room to room, using the rooms' occupancy sensors and one Music Assistant group player.
-- **Media browser and search** across all of the room's players; picking a movie powers up TV and Kodi first.
+- **Follow me:** start it in a room and the music moves with you from room to room, using the rooms' occupancy sensors and one Music Assistant group player.
+- **Media browser and search** across all of the room's players, with their queues on top; picking a movie powers up TV and Kodi first.
 - **Manual override:** switch a plug (or turn a device on) by hand and the room steps back until everything is off again.
 - **Tidy dashboards:** controls that make no sense right now are hidden.
-- **Events and device triggers** for your own automations (source changes, night mode, sleep timer, wake up).
+- **For your own automations:** events for source changes, night mode, sleep timer and wake up; device triggers for source changes and night mode.
 
 ## Is it for you?
 
@@ -54,7 +55,7 @@ It is a custom integration in the spirit of Better Thermostat: you tell it what 
 
 Taken from the Home Assistant demo integration: two demo players stand in for Kodi and a Music Assistant player, the plugs are template switches ([how](scripts/screenshots/README.md)).
 
-**Movie night** (top): Kodi plays, so the TV, the speakers and the subwoofer have power. The room player shows what is playing and controls it.
+**Movie night** (the screenshot at the top): Kodi plays, so the TV, the speakers and the subwoofer have power. The room player shows what is playing and controls it.
 
 **Music only:** after switching the source to music, Kodi is turned off and the TV plug is cut. Speakers and subwoofer stay on for the music.
 
@@ -93,7 +94,7 @@ Without the button: HACS → ⋮ → **Custom repositories** → add `https://gi
 > **Before you start**
 >
 > - Every plug and device belongs to exactly one controller. Disable automations, scripts or helpers that switch the same plugs or devices (Settings → Entities → plug → **Related** shows them). Devices on a plug alone must start by themselves when they get power.
-> - **Kodi:** `turn_on` / `turn_off` only fire Kodi's device triggers. Keep your Wake-on-LAN and suspend automations for these triggers; they do the actual work.
+> - **Kodi:** Home Assistant cannot switch Kodi on or off by itself: `turn_on` / `turn_off` only fire Kodi's device triggers. Keep your Wake-on-LAN and suspend automations on these triggers; they do the actual work.
 
 [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=better_media_player)
 
@@ -120,15 +121,15 @@ Everything can be changed later via **Configure**. How the room behaves is set o
 | TV room | Kodi | TV, speakers |
 | Office | Music Assistant player | speakers |
 | Living room | Kodi + Music Assistant player | TV, speakers (shared), subwoofer |
-| Home cinema | Kodi + Music Assistant player | TV (webOS, as media player), AV receiver on a plug (plug, then the receiver), subwoofer by an IR script |
+| Home cinema | Kodi + Music Assistant player | TV (webOS, as media player; keep its [Wake-on-LAN automation](#devices-instead-of-plugs)), AV receiver on a plug (plug, then the receiver) with the room volume on the receiver, subwoofer by IR scripts (an on and an off action) |
 
 ### Settings on the device
 
-Each room is a device. Its page shows the status, what is needed right now, automatic power, the *All off* button and the room's controls:
+Each room is a device (Settings → Devices & services → Better Media Player → the room). Its page shows the status, what is needed right now, automatic power, the *All off* button and the room's controls:
 
 ![Device page](docs/images/device.png)
 
-How the room behaves – times, waits, standby, night mode, volume presets and follow me – is set under *Configuration* on that page. These are configuration entities: they take effect at once, can be set by automations and do not show up on auto-generated dashboards. A room only has the ones it can use:
+How the room behaves – times, waits, standby, night mode, volume presets and follow me – is set under *Configuration* on that page. These are configuration entities: they take effect at once, can be set by automations (`number.set_value`, `switch.turn_on`, `select.select_option`; entity ids under [Reference](#entities)) and do not show up on auto-generated dashboards. A room only has the ones it can use; to start, you can leave them all at their defaults:
 
 | Entity | Default | Present |
 |---|---|---|
@@ -171,7 +172,7 @@ If the player is not ready within the start timeout (90 s), everything switched 
 
 ### When devices go off
 
-| Device | Needed while … | Run-down |
+| Device | Needed while … | Run-down (default) |
 |---|---|---|
 | Display | the video player is on (menu, paused, playing) | 10 min |
 | Speakers, subwoofer | the video player is on **or** music is playing | 2 min |
@@ -201,10 +202,10 @@ With power sensors and a plug in the role (and the device's switch *Display: wai
 
 ### Switched by hand
 
-- **A plug switched by hand**, or a device turned on by hand while nothing needs it (e.g. live TV): **manual mode**. The room switches nothing by itself until everything is off again; commands to the room player still work.
+- **A plug switched by hand**, or a device turned on by hand while nothing needs it (e.g. live TV): **manual mode**. The room switches nothing by itself until everything is off again, or until you turn the room player on or off (that also ends it).
 - **A device turned off by hand** while it is needed (e.g. the TV with its own remote): it stays off until the next start; everything else goes on automatically.
 - **A device turned on by hand while it is needed** (e.g. woken by another device over HDMI-CEC) simply counts as on.
-- **Automatic power** (switch on the device) off: no automatic switching at all; commands to the room player still work.
+- **Automatic power** (switch on the device) off: no automatic switching at all; commands to the room player still work. Switching it back on ends manual mode too.
 
 ## Features
 
@@ -233,7 +234,7 @@ With an amplifier, AV receiver or soundbar that has its own volume, choose **Roo
 
 #### Presets
 
-Room volumes by name: **quiet**, **normal**, **loud** and **party** (default 15 / 30 / 50 / 70 %; 0 = not offered in the room). Their volumes are settings on the device (`Preset: Quiet` etc.). Changing the chosen preset's volume sets it right away; a preset set to 0 is no longer offered (the volume stays). Choose one with the select `Volume preset` or the action below; this works with players and with a volume device alike.
+Room volumes by name: **quiet**, **normal**, **loud** and **party** (default 15 / 30 / 50 / 70 %; 0 = not offered in the room). Their volumes are number entities on the device (`Preset: Quiet` etc., `number.<room>_preset_quiet`). Changing the chosen preset's volume sets it right away; a preset set to 0 is no longer offered (the volume stays). Choose one with the select `Volume preset` or the action below; this works with players and with a volume device alike.
 
 ```yaml
 action: better_media_player.set_volume_preset
@@ -258,7 +259,7 @@ The switch `Night mode` puts the room into night mode until it is turned off aga
 - **Groups:** a room's player in a group is limited like any other. The group itself is limited only when all its players belong to rooms in night mode. When a room leaves the night mode, its player fades back to the group's volume (follow me: the remembered volume plus the room's offset; other groups: the group's volume from before the night); the group volume itself is not raised, as that would raise the players still in night mode too. A limited volume is never remembered as follow me's volume.
 - **Afterwards:** the volume fades back to the room volume (default over 2 min); a volume change during the fade stops it. If nothing plays, the room volume is set at once. A restart during the fade continues it.
 - **Sleep timer:** turning the night mode on during the sleep timer's fade keeps the fade going, below the limit.
-- After a restart, or when the limit is lowered, the limit holds at once.
+- After a restart, or when the limit is lowered (number), the limit holds at once.
 - `media_player.play_media` on the room player accepts `extra: {night_mode: true}` (or `false`) to switch the night mode along with the playback; it is not passed on to the player.
 
 #### Anything else at night
@@ -296,7 +297,7 @@ The room turns itself off after a set time, whatever plays (video or music). Ove
 - Changing the volume during the fade stops the fade only: your volume stays, and the timer still ends the room.
 - *+15 min* during the fade sets the volume back; the fade starts again before the new end.
 - The timer survives a restart of Home Assistant. If it ran out while Home Assistant was down, the room is turned off at the start only if something still plays.
-- The event `better_media_player_sleep_timer_finished` (`entity_id`, `room`, `reason`: `expired`, `cancelled` or `room_off`) is fired when the timer ends.
+- The event `better_media_player_sleep_timer_finished` (`entity_id`, `entry_id`, `room`, `reason`: `expired`, `cancelled` or `room_off`) is fired when the timer ends.
 
 ```yaml
 action: better_media_player.set_sleep_timer
@@ -434,7 +435,8 @@ All of them target a room player (`media_player.<room>`).
 |---|---|
 | `better_media_player.set_volume_preset` | choose a [volume preset](#presets) (`preset`) |
 | `better_media_player.set_sleep_timer` / `cancel_sleep_timer` | [sleep timer](#sleep-timer) (`minutes`, optional `fade_minutes`) |
-| `better_media_player.wake`, `snooze`, `stop_wake` | [wake up](#wake-up) |
+| `better_media_player.wake` | [wake up](#wake-up) (`media_content_id`, `media_content_type`; optional `start_volume`, `target_volume`, `fade_minutes`, `max_duration_minutes`, `night_mode`, `source`, `follow`) |
+| `better_media_player.snooze` / `stop_wake` | snooze (optional `minutes`) / stop a wake |
 | `better_media_player.start_follow` / `stop_follow` | [follow me](#follow-me) |
 | `media_player.play_media` with `extra: {night_mode: true}` | play and switch the [night mode](#night-mode) along |
 
@@ -502,8 +504,6 @@ action:
 
 ### Entities
 
-The room's settings are listed under [settings on the device](#settings-on-the-device).
-
 | Entity | Description |
 |---|---|
 | `media_player.<room>` | the room player, with media browser and search |
@@ -524,6 +524,25 @@ The room's settings are listed under [settings on the device](#settings-on-the-d
 | `sensor.<room>_follow` | follow state of the room (with occupancy sensors only) |
 | `button.<room>_follow_me`, `button.<room>_stop_follow_me` | start / stop follow me |
 | `sensor.better_media_player_follow_rooms` | central: rooms in follow me; follow-me player, start room in the attributes |
+
+Settings ([what they do](#settings-on-the-device)); only those the room can use:
+
+| Entity | Unit |
+|---|---|
+| `number.<room>_display_run_down`, `_speaker_run_down`, `_player_hardware_run_down`, `_video_idle_timeout` | min |
+| `number.<room>_start_timeout`, `_wait_after_display_on`, `_wait_after_speakers_on`, `_wait_after_player_plug_on` | s |
+| `switch.<room>_display_wait_for_standby`, `switch.<room>_speakers_wait_for_standby` | on / off |
+| `number.<room>_display_standby_below`, `_speakers_standby_below` | W |
+| `number.<room>_display_wait_for_standby_at_most`, `_speakers_wait_for_standby_at_most` | min |
+| `number.<room>_night_maximum_volume` | %, 0 = no limit |
+| `number.<room>_night_video_idle_timeout`, `_night_display_run_down`, `_night_fade_back_up` | min |
+| `number.<room>_preset_quiet`, `_preset_normal`, `_preset_loud`, `_preset_party` | %, 0 = not offered |
+| `select.<room>_power_on_preset` | none or a preset |
+| `number.<room>_sleep_timer_fade_out`, `_snooze_time` | min |
+| `number.<room>_follow_me_leave_after` | min |
+| `number.<room>_follow_me_volume_offset` | percentage points |
+| `switch.<room>_follow_me_prewarm_speakers`, `switch.<room>_wake_detect_leaving_the_room` | on / off |
+| `number.better_media_player_follow_me_default_volume`, `_hide_delay`, `switch.better_media_player_dynamic_controls` | central: %, s, on / off |
 
 ### Status
 
