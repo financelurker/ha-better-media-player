@@ -370,8 +370,8 @@ A room's controls that make no sense right now are hidden (`hidden_by: integrati
 | All off | the room plays or is on, or a device still has power (run-down, manual mode) |
 | Sleep timer, Sleep timer +15 min | the room plays or is on, or a sleep timer runs |
 | Sleep timer end | a sleep timer runs |
-| Night mode | the room plays or is on, it is on, or follow me runs and the room takes part (occupancy sensors and a music player; music may come in: it joins limited) |
-| Quiet | follow me runs and the room takes part, or it is on (it only matters for follow me, also while nothing plays here) |
+| Night mode | always (it is set ahead, also while nothing plays) |
+| Quiet | always in a room that takes part in follow me (occupancy sensors, a music player, a follow-me player in the central settings); elsewhere while it is on |
 | Wake, Snooze, Stop wake | a wake runs |
 | Follow me / Stop follow me | it can be started here / follow me runs |
 | Volume preset | the room plays or is on |

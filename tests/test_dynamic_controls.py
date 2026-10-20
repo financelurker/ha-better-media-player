@@ -51,10 +51,10 @@ async def _music(hass, home, freezer, state="playing"):
     await _tick(hass, freezer, 1)
 
 
-async def test_nothing_plays_only_the_room_player(hass, home, freezer):
+async def test_nothing_plays_only_the_room_player_and_night_mode(hass, home, freezer):
     await setup_room(hass)
     await _tick(hass, freezer, 5)
-    assert _shown(hass) == set()
+    assert _shown(hass) == {NIGHT}  # night mode is set ahead: always shown
     assert not any(_hidden(hass, e) for e in ALWAYS)
 
 
@@ -74,7 +74,7 @@ async def test_controls_go_after_the_hide_delay(hass, home, freezer):
     await _tick(hass, freezer, 1)
     assert PRESET in _shown(hass), "not before the delay"
     await _tick(hass, freezer, 6)
-    assert _shown(hass) == set()
+    assert _shown(hass) == {NIGHT}
 
 
 async def test_all_off_stays_while_something_has_power(hass, home, freezer):
@@ -84,10 +84,10 @@ async def test_all_off_stays_while_something_has_power(hass, home, freezer):
     await _music(hass, home, freezer, "idle")  # music stopped: speakers run down (2 min)
     await _tick(hass, freezer, 10)
     assert home.on(SPEAKERS)
-    assert _shown(hass) == {ALL_OFF}
+    assert _shown(hass) == {ALL_OFF, NIGHT}
     await _tick(hass, freezer, 130, step=5)
     assert not home.on(SPEAKERS)
-    assert _shown(hass) == set()
+    assert _shown(hass) == {NIGHT}
 
 
 async def test_a_short_stop_between_two_items_hides_nothing(hass, home, freezer):
@@ -136,17 +136,26 @@ async def test_wake_shows_its_sensor(hass, home, freezer):
 # ---------------------------------------------------------------- follow me
 
 
-async def test_follow_me_shows_quiet_and_night_in_follow_rooms(hass, house, freezer):
+async def test_quiet_and_night_are_set_ahead_in_follow_rooms(hass, house, freezer):
     from .test_follow import follow_from
 
     await _tick(hass, freezer, 5)
-    assert _hidden(hass, QUIET) and _hidden(hass, NIGHT) and _hidden(hass, FOLLOW_ROOMS)
+    assert not _hidden(hass, QUIET), "set before follow me starts"
+    assert not _hidden(hass, NIGHT)
+    assert _hidden(hass, FOLLOW_ROOMS)
     hass.states.async_set("binary_sensor.kitchen_occupancy", "on")
     await follow_from(hass, house, player="media_player.kitchen_player", room="media_player.kitchen")
     await hass.async_block_till_done()
-    assert not _hidden(hass, QUIET), "follow me runs: the living room may get the music"
-    assert not _hidden(hass, NIGHT)
     assert not _hidden(hass, FOLLOW_ROOMS)
+
+
+async def test_quiet_without_follow_me_only_while_on(hass, home, freezer):
+    await setup_room(hass)  # no occupancy sensors, no central settings
+    await _tick(hass, freezer, 5)
+    assert _hidden(hass, QUIET)
+    await hass.services.async_call("switch", "turn_on", {"entity_id": QUIET}, blocking=True)
+    await hass.async_block_till_done()
+    assert not _hidden(hass, QUIET)
 
 
 async def test_quiet_stays_while_on(hass, house, freezer):
@@ -163,7 +172,7 @@ async def test_quiet_stays_while_on(hass, house, freezer):
 async def test_dynamic_controls_off_shows_everything(hass, home, freezer):
     await setup_room(hass)
     await _tick(hass, freezer, 5)
-    assert _shown(hass) == set()
+    assert _shown(hass) == {NIGHT}
     await setup_hub(hass, dynamic_controls=False)
     await _tick(hass, freezer, 5)
     assert _shown(hass) == set(ROOM_CONTROLS)
@@ -204,3 +213,23 @@ async def test_user_shown_control_stays_shown(hass, home, freezer):
     await hass.async_block_till_done()
     await _tick(hass, freezer, 10)
     assert PRESET in _shown(hass)
+
+
+async def test_night_mode_hidden_by_an_older_version_comes_back(hass, home, freezer):
+    entry = await setup_room(hass)
+    await _tick(hass, freezer, 5)
+    er.async_get(hass).async_update_entity(NIGHT, hidden_by=er.RegistryEntryHider.INTEGRATION)
+    entry.runtime_data.data["controls"][er.async_get(hass).async_get(NIGHT).unique_id] = "hidden"
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 5)
+    assert not _hidden(hass, NIGHT)
+
+
+async def test_quiet_shows_when_follow_me_is_set_up(hass, home, freezer):
+    await setup_room(hass, occupancy=[LIVING_OCC])
+    await _tick(hass, freezer, 5)
+    assert _hidden(hass, QUIET)
+    await setup_hub(hass)
+    await hass.async_block_till_done()
+    assert not _hidden(hass, QUIET)
