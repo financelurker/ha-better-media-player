@@ -26,6 +26,7 @@ the plugs are template switches. The cover art in `config/www/` is generated.
    ```
 
    `dashboard-music.png` is the dashboard after selecting the music source with the display
-   run-down set to 0.
+   run-down set to 0. `device-settings.png` is the *Configuration* card of the room's device
+   page (taken in a narrow window, so the names are not cut).
 
 `session.json` contains an access token for the throwaway instance; do not commit it.

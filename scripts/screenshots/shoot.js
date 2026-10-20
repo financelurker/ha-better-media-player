@@ -90,6 +90,17 @@ async function shotDialog(page, file) {
     console.log('device');
   }
 
+  if (want('device-settings')) {
+    // the room's settings: the Configuration card of the device page, in full
+    await page.setViewportSize({ width: 820, height: 4000 });  // one column: full names
+    await page.goto(`${BASE}/config/devices/device/${session.device_id}`);
+    await settle(page, 4000);
+    const card = page.locator('ha-card').filter({ hasText: 'Configuration' }).last();
+    await card.screenshot({ path: `${OUT}/device-settings.png` });
+    await page.setViewportSize({ width: 1400, height: 640 });
+    console.log('device-settings');
+  }
+
   if (want('options')) {
     await page.setViewportSize({ width: 1400, height: 1500 });
     await page.goto(`${BASE}/config/integrations/integration/better_media_player`);
