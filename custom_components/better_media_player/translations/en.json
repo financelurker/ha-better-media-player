@@ -672,7 +672,10 @@
       "message": "{room} cannot start follow me: {player} plays in the group {group}. Start the music on {player} itself (not in a group)."
     },
     "start_not_playing": {
-      "message": "{room} cannot start follow me: no music plays on {player} (it is {state}). Start the music on {player} itself."
+      "message": "{room} cannot start follow me: no music plays on {player}. Start the music on {player} itself."
+    },
+    "start_follow_paused": {
+      "message": "{room} cannot start follow me: {player} is still in the follow-me player {group}, which does not play. Resume {group}, or start the music on {player} itself."
     }
   },
   "device_automation": {

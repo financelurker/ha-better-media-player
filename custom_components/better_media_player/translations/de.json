@@ -672,7 +672,10 @@
       "message": "{room} kann Follow-Me nicht starten: {player} spielt in der Gruppe {group}. Starte die Musik direkt auf {player} (nicht in einer Gruppe)."
     },
     "start_not_playing": {
-      "message": "{room} kann Follow-Me nicht starten: Auf {player} läuft keine Musik (Zustand: {state}). Starte die Musik direkt auf {player}."
+      "message": "{room} kann Follow-Me nicht starten: Auf {player} läuft keine Musik. Starte die Musik direkt auf {player}."
+    },
+    "start_follow_paused": {
+      "message": "{room} kann Follow-Me nicht starten: {player} ist noch im Follow-Me-Player {group}, der gerade nicht spielt. Setze {group} fort oder starte die Musik direkt auf {player}."
     }
   },
   "device_automation": {

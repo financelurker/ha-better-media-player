@@ -320,14 +320,16 @@ class FollowManager:
         if room.audio_playing_directly:
             return None
         player = room.audio_player
-        if player in self.group_members(self.follow_player) and self.group_state(self.follow_player) in PLAYING:
-            return None  # already in the follow-me player, which plays without follow me
         names["player"] = self._name(player)
+        if player in self.group_members(self.follow_player):
+            if self.group_state(self.follow_player) in PLAYING:
+                return None  # already in the follow-me player, which plays without follow me
+            # left in the follow-me player, which does not play (e.g. paused)
+            return "start_follow_paused", {**names, "group": self._name(self.follow_player)}
         groups = room.groups_of(player)
         if groups:
             return "start_in_group", {**names, "group": ", ".join(self._name(g) for g in groups)}
-        state = self.hass.states.get(player)
-        return "start_not_playing", {**names, "state": state.state if state else "unknown"}
+        return "start_not_playing", names
 
     # ---------------------------------------------------------------- volume
 

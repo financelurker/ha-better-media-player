@@ -526,7 +526,7 @@ async def test_start_in_a_group_says_so(hass, house):
 async def test_start_without_music_says_so(hass, house):
     err = await _start_error(hass)
     assert err.translation_key == "start_not_playing"
-    assert err.translation_placeholders["state"] == "idle"
+    assert err.translation_placeholders == {"room": "Wohnzimmer", "player": "Office Player"}
 
 
 async def test_start_with_video_says_so(hass, house):
@@ -571,3 +571,11 @@ async def test_can_start_shows_no_blocker(hass, house):
     house.music("playing")
     await hass.async_block_till_done()
     assert hass.states.get("button.wohnzimmer_follow_me").attributes["blocked_by"] is None
+
+
+async def test_start_while_left_in_the_paused_follow_player_says_so(hass, house):
+    house.group("paused", [MUSIC], FOLLOW)
+    await hass.async_block_till_done()
+    err = await _start_error(hass)
+    assert err.translation_key == "start_follow_paused"
+    assert err.translation_placeholders["group"] == "All Players (follow)"
