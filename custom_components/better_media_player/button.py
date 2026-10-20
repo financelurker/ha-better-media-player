@@ -88,6 +88,13 @@ class FollowStartButton(ControlEntity, ButtonEntity):
         hub = get_hub(self.hass)
         return hub is not None and hub.can_start(self.ctrl)
 
+    @property
+    def extra_state_attributes(self) -> dict[str, str | None]:
+        """Why it cannot be started here right now (None: it can)."""
+        hub = get_hub(self.hass)
+        blocker = hub.start_blocker(self.ctrl) if hub is not None else ("no_follow_player", {})
+        return {"blocked_by": blocker[0] if blocker else None}
+
     async def async_press(self) -> None:
         hub = get_hub(self.hass)
         if hub is None:
