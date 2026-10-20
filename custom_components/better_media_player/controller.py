@@ -20,7 +20,7 @@ import asyncio
 import logging
 from collections import deque
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any
 
@@ -68,6 +68,9 @@ from .const import (
     CONF_PRESENCE_RUN_DOWN,
     CONF_PREWARM,
     CONF_SPEAKERS,
+    DEVICE_DOMAINS,
+    ROLE_ACTIONS,
+    SWITCH_DOMAINS,
     CONF_START_TIMEOUT,
     CONF_VOLUME_CONTROL,
     CONF_VOLUME_ENTITY,
@@ -114,6 +117,8 @@ ON_ORDER = (ROLE_VIDEO_HOST, ROLE_AUDIO_HOST, ROLE_DISPLAY, ROLE_AUDIO, ROLE_BAS
 OFF_ORDER = (ROLE_BASS, ROLE_AUDIO, ROLE_DISPLAY, ROLE_VIDEO_HOST, ROLE_AUDIO_HOST)
 
 COMMAND_RETRY_SECONDS = 30
+ACTION_ID = f"{DOMAIN}_action"  # virtual id of a role's own on/off actions
+DEVICE_OFF_SECONDS = 60  # a role's plugs wait at most this long for its devices to go off
 OWN_CHANGE_SECONDS = 30
 OWN_CONTEXTS = 50
 
@@ -160,11 +165,13 @@ class Role:
     run_down_key: str  # key in controller.data (minutes)
     prefix: str | None = None  # of its settings on the device ("display": display_on_wait, ...)
     power: list[str] | None = None  # power sensors (wait for standby)
+    actions: dict[str, tuple[str, str]] = field(default_factory=dict)  # own on/off actions per virtual id
     # runtime
     last_demand: float | None = None
     force_off: bool = False
     stop_since: float | None = None
     low_since: float | None = None
+    devices_off_since: float | None = None  # its devices were told to go off
 
 
 @dataclass
@@ -204,31 +211,28 @@ class RoomController:
 
         self.roles: dict[str, Role] = {}
         both = tuple(s for s in (SOURCE_VIDEO, SOURCE_AUDIO) if s in self.sources)
-        if o.get(CONF_DISPLAY):
-            self.roles[ROLE_DISPLAY] = Role(
-                key=ROLE_DISPLAY,
-                entities=list(o[CONF_DISPLAY]),
-                sources=(SOURCE_VIDEO,),
-                run_down_key="display_run_down",
-                prefix="display",
-                power=list(o.get(CONF_DISPLAY_POWER) or []),
-            )
-        if o.get(CONF_SPEAKERS):
-            self.roles[ROLE_AUDIO] = Role(
-                key=ROLE_AUDIO,
-                entities=list(o[CONF_SPEAKERS]),
-                sources=both,
-                run_down_key="audio_run_down",
-                prefix="audio",
-                power=list(o.get(CONF_AUDIO_POWER) or []),
-            )
-        if o.get(CONF_BASS):
-            self.roles[ROLE_BASS] = Role(
-                key=ROLE_BASS,
-                entities=list(o[CONF_BASS]),
-                sources=both,
-                run_down_key="audio_run_down",
-            )
+        for conf, role_key, sources, run_down, prefix, power in (
+            (CONF_DISPLAY, ROLE_DISPLAY, (SOURCE_VIDEO,), "display_run_down", "display", CONF_DISPLAY_POWER),
+            (CONF_SPEAKERS, ROLE_AUDIO, both, "audio_run_down", "audio", CONF_AUDIO_POWER),
+            (CONF_BASS, ROLE_BASS, both, "audio_run_down", None, None),
+        ):
+            # plugs and devices; own on/off actions count as one more device (assumed state)
+            entities = list(o.get(conf) or [])
+            on_k, off_k = ROLE_ACTIONS[conf]
+            actions = {}
+            if o.get(on_k) and o.get(off_k):
+                actions[f"{ACTION_ID}.{role_key}"] = (o[on_k], o[off_k])
+                entities.append(f"{ACTION_ID}.{role_key}")
+            if entities:
+                self.roles[role_key] = Role(
+                    key=role_key,
+                    entities=entities,
+                    sources=sources,
+                    run_down_key=run_down,
+                    prefix=prefix,
+                    power=list(o.get(power) or []) if power else None,
+                    actions=actions,
+                )
         for role_key, src_key in ((ROLE_VIDEO_HOST, SOURCE_VIDEO), (ROLE_AUDIO_HOST, SOURCE_AUDIO)):
             src = self.sources.get(src_key)
             if src is not None and src.host:
@@ -257,6 +261,9 @@ class RoomController:
 
         self.status = STATUS_OFF
         self.manual = False
+        # devices left off until the next start (turned off by hand while needed,
+        # or did not become available)
+        self.held: set[str] = set()
         self.error: str | None = None
 
         # follow me
@@ -440,19 +447,14 @@ class RoomController:
                     self.error = None
 
         if self._started and entity_id in self.power_entities and new is not None and old is not None:
+            was_on, is_on = self._on(entity_id, old), self._on(entity_id, new)
             if (
-                old.state in (STATE_ON, STATE_OFF)
-                and new.state in (STATE_ON, STATE_OFF)
-                and old.state != new.state
+                old.state not in NOT_AVAILABLE
+                and new.state not in NOT_AVAILABLE
+                and was_on != is_on
                 and not self._is_own_change(entity_id, new)
             ):
-                _LOGGER.info(
-                    "%s: %s switched %s from outside, switching to manual mode",
-                    self.entry.title,
-                    entity_id,
-                    new.state,
-                )
-                self.manual = True
+                self._outside_change(entity_id, is_on)
 
         if self._started:
             self._spawn(self.async_update(entity_id))
@@ -462,13 +464,34 @@ class RoomController:
         if self._started:
             self._spawn(self.async_update("tick"))
 
+    @callback
+    def _outside_change(self, entity_id: str, on: bool) -> None:
+        """A power device was switched by someone else.
+
+        A device (TV, AVR) turned off while needed stays off until the next start,
+        everything else goes on automatically; anything else (a plug, a device
+        turned on) is the user's: manual mode until everything is off."""
+        demanded = any(entity_id in r.entities and self.role_demand(r) for r in self.roles.values())
+        if self.kind(entity_id) == "device" and not on:
+            if demanded:
+                _LOGGER.info("%s: %s turned off from outside, left off until the next start", self.entry.title, entity_id)
+                self.held.add(entity_id)
+            return
+        _LOGGER.info(
+            "%s: %s switched %s from outside, switching to manual mode",
+            self.entry.title,
+            entity_id,
+            "on" if on else "off",
+        )
+        self.manual = True
+
     def _is_own_change(self, entity_id: str, new: State) -> bool:
         ctx = new.context
         if ctx is not None and (ctx.id in self._own_contexts or ctx.parent_id in self._own_contexts):
             return True
         now = _now()
         for on, ts in self._recent_commands.get(entity_id, ()):
-            if (new.state == STATE_ON) == on and now - ts < OWN_CHANGE_SECONDS:
+            if self._on(entity_id, new) == on and now - ts < OWN_CHANGE_SECONDS:
                 return True
         return False
 
@@ -501,7 +524,12 @@ class RoomController:
 
     def role_standby(self, role: Role) -> bool:
         """Wait for standby before its plug goes off (only with power sensors)."""
-        return bool(role.power) and role.prefix in ("display", "audio") and bool(self.setting(f"{role.prefix}_standby"))
+        return (
+            bool(role.power)
+            and role.prefix in ("display", "audio")
+            and any(self.kind(e) == "plug" for e in role.entities)
+            and bool(self.setting(f"{role.prefix}_standby"))
+        )
 
     @property
     def room_active(self) -> bool:
@@ -578,11 +606,30 @@ class RoomController:
             return state in POWERED_STATES
         return True
 
+    @staticmethod
+    def kind(entity_id: str) -> str:
+        """plug (switched power), device (turns itself on/off) or action (own on/off actions)."""
+        domain = entity_id.split(".", 1)[0]
+        if domain == ACTION_ID:
+            return "action"
+        return "plug" if domain in SWITCH_DOMAINS else "device"
+
+    @staticmethod
+    def _on(entity_id: str, state: State | None) -> bool:
+        if state is None:
+            return False
+        if entity_id.startswith("media_player."):
+            return state.state in POWERED_STATES
+        return state.state == STATE_ON
+
     def is_on(self, entity_id: str) -> bool:
-        state = self._state(entity_id)
-        return state is not None and state.state == STATE_ON
+        if self.kind(entity_id) == "action":
+            return bool(self.data.get("assumed", {}).get(entity_id))  # what was last sent
+        return self._on(entity_id, self._state(entity_id))
 
     def is_available(self, entity_id: str) -> bool:
+        if self.kind(entity_id) == "action":
+            return True
         state = self._state(entity_id)
         return state is not None and state.state not in NOT_AVAILABLE
 
@@ -595,8 +642,23 @@ class RoomController:
         return last is not None and last[0] and _now() - last[1] < COMMAND_RETRY_SECONDS
 
     def role_fully_on(self, role: Role) -> bool:
+        """Everything of the role is on (a device behind a plug of its role only once
+        it is there and on; something unavailable otherwise does not hold it up)."""
+        plugged = any(self.kind(e) == "plug" and self.is_on(e) for e in role.entities)
         return all(
-            self.is_on(e) or not self.is_available(e) or self._pending_on(e) for e in role.entities
+            self.is_on(e)
+            or self._pending_on(e)
+            or e in self.held
+            or (not self.is_available(e) and not (plugged and self.kind(e) == "device"))
+            for e in role.entities
+        )
+
+    def devices_on(self, role: Role) -> bool:
+        """A device of the role (not needed by another role) is still on: its plugs wait."""
+        needed = self._needed_elsewhere(role)
+        return any(
+            self.kind(e) != "plug" and e not in needed and self.is_on(e) and self.is_available(e)
+            for e in role.entities
         )
 
     def role_demand(self, role: Role) -> bool:
@@ -788,6 +850,7 @@ class RoomController:
                 self._was_on = True
             elif self._fully_off():
                 self._was_on = False
+                self.held.clear()  # the next start switches them again
             await self.sleep.async_apply_restores()
             self.source_watch.async_check()
             if self.sleep.active and self._started and self._fully_off():
@@ -875,8 +938,10 @@ class RoomController:
                     role.force_off = False
                 role.stop_since = None
                 role.low_since = None
+                role.devices_off_since = None
                 continue
             if self.role_demand(role):
+                role.devices_off_since = None
                 continue
             blocked = any(set(h.sources) & set(role.sources) for h in holding)
             due = role.force_off or (
@@ -887,10 +952,18 @@ class RoomController:
             if not due or blocked:
                 holding.append(role)
                 continue
+            # devices first; their plugs once they are off (or did not within
+            # DEVICE_OFF_SECONDS: the plug is what cuts them then), and in standby
+            await self._switch_devices_off(role)
+            if role.devices_off_since is None:
+                role.devices_off_since = now
+            if self.devices_on(role) and now - role.devices_off_since < DEVICE_OFF_SECONDS:
+                holding.append(role)
+                continue
             if self.role_standby(role) and not self._standby_reached(role, now):
                 holding.append(role)
                 continue
-            await self._switch_role(role, False)
+            await self._switch_plugs_off(role)
             if self.role_on(role) and self._off_recent(role, now):
                 holding.append(role)
 
@@ -953,28 +1026,71 @@ class RoomController:
             return
         self._last_command[entity_id] = (on, now)
         self._recent_commands.setdefault(entity_id, deque(maxlen=4)).append((on, now))
+        service = SERVICE_TURN_ON if on else SERVICE_TURN_OFF
+        kind = self.kind(entity_id)
+        if kind == "action":
+            # no feedback: the command is trusted
+            role = next(r for r in self.roles.values() if entity_id in r.actions)
+            await self._run_action(role.actions[entity_id][0 if on else 1], on)
+            self.data.setdefault("assumed", {})[entity_id] = on
+            self._save()
+            return
         domain = entity_id.split(".", 1)[0]
-        if domain not in ("switch", "light", "input_boolean"):
+        if domain not in (*SWITCH_DOMAINS, *DEVICE_DOMAINS):
             domain = "homeassistant"
-        await self._call(domain, SERVICE_TURN_ON if on else SERVICE_TURN_OFF, {ATTR_ENTITY_ID: entity_id})
+        await self._call(domain, service, {ATTR_ENTITY_ID: entity_id})
+
+    def _needed_elsewhere(self, role: Role) -> set[str]:
+        """What another (still demanded) role needs: never cut."""
+        return {e for r in self.roles.values() if r is not role and self.role_demand(r) for e in r.entities}
 
     async def _switch_role(self, role: Role, on: bool, force: bool = False) -> None:
-        needed: set[str] = set()
-        if not on:
-            # never cut a device that another (still demanded) role needs
-            needed = {
-                e
-                for r in self.roles.values()
-                if r is not role and self.role_demand(r)
-                for e in r.entities
-            }
-        for entity_id in role.entities:
-            if not on and entity_id in needed:
-                continue
-            await self._switch(entity_id, on, force)
+        """On: plugs first, then the devices behind them. Off: devices first, the
+        plugs only once the devices are off."""
         if on:
+            for entity_id in role.entities:
+                if self.kind(entity_id) == "plug":
+                    await self._switch(entity_id, True, force)
+            for entity_id in role.entities:
+                if self.kind(entity_id) != "plug" and entity_id not in self.held:
+                    await self._switch(entity_id, True, force)
             role.last_demand = _now()
+            return
+        await self._switch_devices_off(role, force)
+        if not self.devices_on(role):
+            await self._switch_plugs_off(role, force)
+        # else: _auto_off cuts the plugs once the devices are off
         # force_off / standby state are reset in _auto_off once the role is really off
+
+    async def _role_up(self, role: Role) -> None:
+        """Plugs on, then the devices behind them once they are there."""
+        await self._switch_role(role, True, force=True)
+        if not any(self.kind(e) == "plug" for e in role.entities):
+            return
+        waiting = [e for e in role.entities if self.kind(e) == "device" and e not in self.held and not self.is_available(e)]
+        if not waiting:
+            return
+        timeout = float(self.setting(CONF_START_TIMEOUT))
+        if not await self._wait_until(lambda: all(self.is_available(e) for e in waiting), timeout):
+            for entity_id in waiting:
+                if not self.is_available(entity_id):
+                    _LOGGER.warning(
+                        "%s: %s did not become available, left off until the next start", self.entry.title, entity_id
+                    )
+                    self.held.add(entity_id)
+        await self._switch_role(role, True, force=True)
+
+    async def _switch_devices_off(self, role: Role, force: bool = False) -> None:
+        needed = self._needed_elsewhere(role)
+        for entity_id in role.entities:
+            if self.kind(entity_id) != "plug" and entity_id not in needed:
+                await self._switch(entity_id, False, force)
+
+    async def _switch_plugs_off(self, role: Role, force: bool = False) -> None:
+        needed = self._needed_elsewhere(role)
+        for entity_id in role.entities:
+            if self.kind(entity_id) == "plug" and entity_id not in needed:
+                await self._switch(entity_id, False, force)
 
     async def _call(self, domain: str, service: str, data: dict) -> bool:
         ctx = Context()
@@ -1111,8 +1227,8 @@ class RoomController:
                 if not self.night.role_enabled(role.key):
                     continue
                 if not self.role_fully_on(role):
-                    await self._switch_role(role, True, force=True)
                     switched.append(role)
+                    await self._role_up(role)
                     await self._sleep(self.role_on_wait(role))
                 else:
                     role.last_demand = _now()
@@ -1133,8 +1249,8 @@ class RoomController:
                 if not self.night.role_enabled(role.key):
                     continue  # night mode switched on during the start
                 if not self.role_fully_on(role):
-                    await self._switch_role(role, True, force=True)
                     switched.append(role)
+                    await self._role_up(role)
                     await self._sleep(self.role_on_wait(role))
                 else:
                     role.last_demand = _now()
@@ -1159,6 +1275,7 @@ class RoomController:
     def _reset_overrides(self) -> None:
         self.manual = False
         self.error = None
+        self.held.clear()
 
     async def async_turn_on(self, source: str | None = None) -> None:
         """Explicit wish: power the room up with source (default: last used)."""
