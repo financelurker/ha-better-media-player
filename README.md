@@ -181,6 +181,8 @@ target:
 
 The room joins the follow-me player and its queue moves there (`music_assistant.transfer_queue`). The room's volume becomes follow me's volume (its offset taken out). While follow me runs, the **Follow me** buttons are hidden in every room and the **Stop follow me** buttons are shown ([dynamic controls](#dynamic-controls)); pressing *Follow me* while it runs, or *Stop follow me* while it does not, gives an error.
 
+If follow me cannot be started in a room, the error says why: the music plays in a group (which one), no music plays on the room's music player, the video player is on, the room is in quiet mode, follow me runs already, or the room takes no part (no occupancy sensors). The button's attribute `blocked_by` shows the same reason (`null` while it can be started).
+
 While it plays:
 
 - **Prewarm:** the speakers of all follow rooms are switched on, so the sound is there as soon as you walk in.

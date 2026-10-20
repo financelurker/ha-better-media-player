@@ -653,14 +653,26 @@
     "follow_running": {
       "message": "Follow me is on already."
     },
-    "follow_cannot_start": {
-      "message": "{room} cannot start follow me now: music has to play on its own player (no video, not in quiet mode)."
-    },
     "follow_not_running": {
       "message": "Follow me is not on."
     },
     "preset_not_offered": {
       "message": "The preset {preset} is not offered in {room}."
+    },
+    "start_not_follow_room": {
+      "message": "{room} takes no part in follow me: it needs a music player and occupancy sensors."
+    },
+    "start_quiet": {
+      "message": "{room} is in quiet mode: follow me cannot be started there."
+    },
+    "start_video": {
+      "message": "{room} cannot start follow me: the video player ({player}) is on."
+    },
+    "start_in_group": {
+      "message": "{room} cannot start follow me: {player} plays in the group {group}. Start the music on {player} itself (not in a group)."
+    },
+    "start_not_playing": {
+      "message": "{room} cannot start follow me: no music plays on {player} (it is {state}). Start the music on {player} itself."
     }
   },
   "device_automation": {

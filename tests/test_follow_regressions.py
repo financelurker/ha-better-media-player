@@ -500,3 +500,74 @@ async def test_stop_reports_a_failed_queue_move(hass, house):
         await hass.services.async_call(DOMAIN, "stop_follow", {"entity_id": LIVING}, blocking=True)
     assert not get_hub(hass).active
 
+
+
+# ------------------------------------------- why follow me cannot start here
+
+
+async def _start_error(hass, room=LIVING):
+    with pytest.raises(ServiceValidationError) as err:
+        await hass.services.async_call(DOMAIN, "start_follow", {"entity_id": room}, blocking=True)
+    return err.value
+
+
+async def test_start_in_a_group_says_so(hass, house):
+    from .conftest import GROUP
+
+    house.group("playing", [MUSIC], GROUP)  # started in the group "All Players"
+    await hass.async_block_till_done()
+    err = await _start_error(hass)
+    assert err.translation_key == "start_in_group"
+    assert err.translation_placeholders == {"room": "Wohnzimmer", "player": "Office Player", "group": "All Players"}
+    assert hass.states.get("button.wohnzimmer_follow_me").attributes["blocked_by"] == "start_in_group"
+    assert "All Players" in str(err)
+
+
+async def test_start_without_music_says_so(hass, house):
+    err = await _start_error(hass)
+    assert err.translation_key == "start_not_playing"
+    assert err.translation_placeholders["state"] == "idle"
+
+
+async def test_start_with_video_says_so(hass, house):
+    house.music("playing")
+    house.kodi("idle")  # Kodi in its menu
+    await hass.async_block_till_done()
+    err = await _start_error(hass)
+    assert err.translation_key == "start_video"
+    assert err.translation_placeholders["player"] == "Kodi"
+
+
+async def test_start_in_quiet_mode_says_so(hass, house):
+    house.music("playing")
+    await hass.services.async_call("switch", "turn_on", {"entity_id": "switch.wohnzimmer_quiet"}, blocking=True)
+    await hass.async_block_till_done()
+    assert (await _start_error(hass)).translation_key == "start_quiet"
+
+
+async def test_start_while_running_says_so(hass, house):
+    await follow_from(hass, house)
+    assert (await _start_error(hass, "media_player.kitchen")).translation_key == "follow_running"
+
+
+async def test_start_in_a_room_without_occupancy_says_so(hass, home):
+    home.group("idle", [], FOLLOW)
+    await setup_room(hass)
+    await setup_hub(hass)
+    home.music("playing")
+    await hass.async_block_till_done()
+    assert (await _start_error(hass)).translation_key == "start_not_follow_room"
+
+
+async def test_start_without_follow_player_says_so(hass, home):
+    await setup_room(hass, occupancy=[LIVING_OCC])
+    await setup_hub(hass, follow_player=None)
+    home.music("playing")
+    await hass.async_block_till_done()
+    assert (await _start_error(hass)).translation_key == "no_follow_player"
+
+
+async def test_can_start_shows_no_blocker(hass, house):
+    house.music("playing")
+    await hass.async_block_till_done()
+    assert hass.states.get("button.wohnzimmer_follow_me").attributes["blocked_by"] is None

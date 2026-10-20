@@ -653,14 +653,26 @@
     "follow_running": {
       "message": "Follow-Me läuft bereits."
     },
-    "follow_cannot_start": {
-      "message": "{room} kann Follow-Me gerade nicht starten: Auf dem eigenen Player muss Musik laufen (kein Video, kein Ruhe-Modus)."
-    },
     "follow_not_running": {
       "message": "Follow-Me läuft nicht."
     },
     "preset_not_offered": {
       "message": "Das Preset {preset} wird in {room} nicht angeboten."
+    },
+    "start_not_follow_room": {
+      "message": "{room} nimmt nicht an Follow-Me teil: Dafür braucht der Raum einen Musik-Player und Präsenzsensoren."
+    },
+    "start_quiet": {
+      "message": "{room} ist im Ruhe-Modus: Dort kann Follow-Me nicht gestartet werden."
+    },
+    "start_video": {
+      "message": "{room} kann Follow-Me nicht starten: Der Video-Player ({player}) ist an."
+    },
+    "start_in_group": {
+      "message": "{room} kann Follow-Me nicht starten: {player} spielt in der Gruppe {group}. Starte die Musik direkt auf {player} (nicht in einer Gruppe)."
+    },
+    "start_not_playing": {
+      "message": "{room} kann Follow-Me nicht starten: Auf {player} läuft keine Musik (Zustand: {state}). Starte die Musik direkt auf {player}."
     }
   },
   "device_automation": {

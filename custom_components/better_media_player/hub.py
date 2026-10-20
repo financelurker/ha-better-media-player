@@ -41,7 +41,7 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.components.media_player import DOMAIN as MP_DOMAIN
 from homeassistant.components.media_player import MediaPlayerState
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_ENTITY_ID, STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.const import ATTR_ENTITY_ID, ATTR_FRIENDLY_NAME, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import Context, Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
@@ -70,6 +70,7 @@ from .const import (
     FOLLOW_WAKING,
     HUB_DEFAULTS,
     MASS_TYPE_GROUP,
+    SOURCE_VIDEO,
     STORAGE_VERSION,
     TICK_SECONDS,
     WAKE_ARRIVAL_WINDOW,
@@ -296,16 +297,37 @@ class FollowManager:
 
     def can_start(self, room: RoomController) -> bool:
         """Follow me can be started in this room now: music plays on its own player."""
-        if self.follow_player is None or self.active or not room.follow_capable:
-            return False
-        if room.quiet or room.video_active:
-            return False
+        return self.start_blocker(room) is None
+
+    def _name(self, entity_id: str | None) -> str:
+        state = self.hass.states.get(entity_id) if entity_id else None
+        return str(state.attributes.get(ATTR_FRIENDLY_NAME) or entity_id) if state else str(entity_id)
+
+    def start_blocker(self, room: RoomController) -> tuple[str, dict[str, str]] | None:
+        """Why follow me cannot be started in this room right now (None: it can):
+        a translation key of the error and its placeholders."""
+        if self.follow_player is None:
+            return "no_follow_player", {}
+        if self.active:
+            return "follow_running", {}
+        names = {"room": room.entry.title}
+        if not room.follow_capable:
+            return "start_not_follow_room", names
+        if room.quiet:
+            return "start_quiet", names
+        if room.video_active:
+            return "start_video", {**names, "player": self._name(room.sources[SOURCE_VIDEO].player)}
         if room.audio_playing_directly:
-            return True
-        # already in the follow-me player, which plays without follow me
-        return room.audio_player in self.group_members(self.follow_player) and (
-            self.group_state(self.follow_player) in PLAYING
-        )
+            return None
+        player = room.audio_player
+        if player in self.group_members(self.follow_player) and self.group_state(self.follow_player) in PLAYING:
+            return None  # already in the follow-me player, which plays without follow me
+        names["player"] = self._name(player)
+        groups = room.groups_of(player)
+        if groups:
+            return "start_in_group", {**names, "group": ", ".join(self._name(g) for g in groups)}
+        state = self.hass.states.get(player)
+        return "start_not_playing", {**names, "state": state.state if state else "unknown"}
 
     # ---------------------------------------------------------------- volume
 
@@ -408,16 +430,11 @@ class FollowManager:
 
     async def async_follow_start(self, room: RoomController) -> None:
         """Follow me from this room: it joins the follow-me player, its queue moves there."""
-        if self.follow_player is None:
-            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="no_follow_player")
         async with self._lock:
-            if self.active:
-                raise ServiceValidationError(translation_domain=DOMAIN, translation_key="follow_running")
-            if not self.can_start(room):
+            if (blocker := self.start_blocker(room)) is not None:
+                key, placeholders = blocker
                 raise ServiceValidationError(
-                    translation_domain=DOMAIN,
-                    translation_key="follow_cannot_start",
-                    translation_placeholders={"room": room.entry.title},
+                    translation_domain=DOMAIN, translation_key=key, translation_placeholders=placeholders
                 )
             group, player = self.follow_player, room.audio_player
             # the volume the music had in this room becomes follow me's volume (at
