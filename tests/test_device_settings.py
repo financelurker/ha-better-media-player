@@ -220,3 +220,23 @@ async def test_migration_keeps_types_and_drops_old_markers(hass, home, hass_stor
     data = entry.runtime_data.data
     assert data["prewarm"] is False
     assert not [k for k in data if k.startswith("cfg_") and k != "cfg_volume"]
+
+
+async def test_settings_go_with_their_connection(hass, home):
+    from .conftest import TV_POWER as POWER
+
+    entry = await setup_room(hass, display_power=[POWER])
+    assert hass.states.get("switch.wohnzimmer_display_wait_for_standby") is not None
+    options = dict(entry.options)
+    options.pop("display_power")
+    hass.config_entries.async_update_entry(entry, options=options)
+    await hass.async_block_till_done()
+    reg = er.async_get(hass)
+    for entity_id in (
+        "switch.wohnzimmer_display_wait_for_standby",
+        "number.wohnzimmer_display_standby_below",
+        "number.wohnzimmer_display_wait_for_standby_at_most",
+    ):
+        assert reg.async_get(entity_id) is None, entity_id
+        assert hass.states.get(entity_id) is None, entity_id
+    assert reg.async_get("number.wohnzimmer_wait_after_display_on") is not None

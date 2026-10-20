@@ -90,7 +90,7 @@ class RoomVolume:
     @property
     def presets(self) -> dict[str, float]:
         """The room's presets (0..1), in their order; 0 is not offered. The
-        values are the number entities' (set from the options)."""
+        values are the number entities'."""
         out: dict[str, float] = {}
         for name in PRESETS:
             key = CONF_PRESET.format(name)
@@ -164,7 +164,7 @@ class RoomVolume:
             self._choose(None)  # no longer offered: the volume stays
 
     async def async_started(self) -> None:
-        """HA is up: a chosen preset whose value was changed in the options."""
+        """HA is up: a chosen preset whose value no longer matches the room volume."""
         name = self.preset
         if name is not None and self.value is not None and abs(self.presets[name] - self.value) >= 0.0005:
             await self.async_set_preset(name)

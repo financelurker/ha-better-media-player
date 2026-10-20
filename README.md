@@ -265,7 +265,7 @@ With an amplifier, AV receiver or soundbar that has its own volume, choose **Roo
 
 #### Presets
 
-Room volumes by name: **quiet**, **normal**, **loud** and **party** (default 15 / 30 / 50 / 70 %; 0 = not offered in the room). Their volumes are number entities of the room (`Preset: Quiet` etc., like `Night: maximum volume`); Changing the chosen preset's volume sets it right away; a preset set to 0 is no longer offered (the volume stays). Choose one with the select `Volume preset` or the action below; this works with players and with a volume device alike.
+Room volumes by name: **quiet**, **normal**, **loud** and **party** (default 15 / 30 / 50 / 70 %; 0 = not offered in the room). Their volumes are number entities of the room (`Preset: Quiet` etc., like `Night: maximum volume`). Changing the chosen preset's volume sets it right away; a preset set to 0 is no longer offered (the volume stays). Choose one with the select `Volume preset` or the action below; this works with players and with a volume device alike.
 
 ```yaml
 action: better_media_player.set_volume_preset
@@ -394,7 +394,7 @@ A room's controls that make no sense right now are hidden (`hidden_by: integrati
 - "Plays or is on": one of its players is used (video player on, music playing or paused, or turned on with a source), or the room is being turned on.
 - A hidden control still works through actions and automations; a hidden button gives an error or does nothing.
 - A control you hid stays hidden; one you show again stays shown.
-- **Central settings:** the switch *Dynamic controls* (default on; off: nothing is hidden, in every room) and the number *Hide delay* (default 3 s) on its device. The follow-me player is optional there.
+- **Central settings:** the switch *Dynamic controls* (default on; off: nothing is hidden, in every room) and the number *Hide delay* (default 3 s) on its device. The follow-me player is optional there. Without central settings (none, disabled), the defaults apply.
 
 ## Entities
 

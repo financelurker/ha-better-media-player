@@ -83,7 +83,7 @@ class NightMode:
 
     async def async_started(self) -> None:
         """HA is up: the limit holds also for what changed while it was down
-        (or a lower limit from the options); a fade back that was cut by a
+        (or a lower limit); a fade back that was cut by a
         restart goes on from where the volume is now."""
         if self.cap is not None:
             for out, src in self._outputs():

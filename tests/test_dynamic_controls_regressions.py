@@ -6,7 +6,7 @@ from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import CoreState
 from homeassistant.helpers import entity_registry as er
 
-from custom_components.better_media_player.const import DOMAIN
+from custom_components.better_media_player.const import CONF_ENTRY_TYPE, DOMAIN, ENTRY_TYPE_HUB
 
 from .conftest import KITCHEN_OCC, SPEAKERS, setup_hub, setup_room
 from .test_dynamic_controls import NIGHT, PRESET, ROOM, SLEEP, SLEEP_PLUS, _hidden, _music, _shown, _tick
@@ -167,3 +167,42 @@ async def test_night_mode_stays_while_follow_me_runs(hass, house, freezer):
     await follow_from(hass, house, player="media_player.kitchen_player", room="media_player.kitchen")
     await _tick(hass, freezer, 10)
     assert not _hidden(hass, NIGHT)
+
+
+async def test_disabled_central_settings_use_the_defaults(hass, home, freezer):
+    from homeassistant.config_entries import ConfigEntryDisabler
+
+    hub = await setup_hub(hass, dynamic_controls=False)
+    await setup_room(hass)
+    await _tick(hass, freezer, 5)
+    assert PRESET in _shown(hass), "dynamic controls off: everything shown"
+    await hass.config_entries.async_set_disabled_by(hub.entry_id, ConfigEntryDisabler.USER)
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 5)
+    assert _hidden(hass, PRESET), "without central settings: dynamic controls on (default)"
+    await _music(hass, home, freezer)
+    await _tick(hass, freezer, 2)
+    assert PRESET in _shown(hass), "and they keep working"
+
+
+async def test_failed_central_settings_use_the_defaults(hass, home, freezer):
+    from unittest.mock import patch
+
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from homeassistant.config_entries import ConfigEntryState
+
+    hub = MockConfigEntry(
+        domain=DOMAIN, title="Better Media Player", data={CONF_ENTRY_TYPE: ENTRY_TYPE_HUB}, options={}, version=3
+    )
+    hub.add_to_hass(hass)
+    with patch("custom_components.better_media_player.hub.FollowManager.async_start", side_effect=RuntimeError):
+        await hass.config_entries.async_setup(hub.entry_id)
+        await hass.async_block_till_done()
+    assert hub.state is ConfigEntryState.SETUP_ERROR
+    await setup_room(hass)
+    await _tick(hass, freezer, 5)
+    assert _hidden(hass, PRESET)
+    await _music(hass, home, freezer)
+    await _tick(hass, freezer, 2)
+    assert PRESET in _shown(hass)

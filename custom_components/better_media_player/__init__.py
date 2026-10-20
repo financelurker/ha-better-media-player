@@ -7,10 +7,12 @@ A central entry adds "follow me" with a Music Assistant group player.
 
 from __future__ import annotations
 
-from homeassistant.config_entries import ConfigEntry, ConfigEntryState
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.config_entries import SIGNAL_CONFIG_ENTRY_CHANGED, ConfigEntry, ConfigEntryChange
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
@@ -95,18 +97,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: BetterMediaPlayerConfigE
         entry.runtime_data = hub
         await hass.config_entries.async_forward_entry_setups(entry, HUB_PLATFORMS)
 
-        @callback
-        def _state_changed() -> None:
-            if entry.state is ConfigEntryState.LOADED:
-                for room in get_rooms(hass).values():
-                    room.notify()  # the dynamic controls' settings are known now
-
-        entry.async_on_unload(entry.async_on_state_change(_state_changed))
     else:
         controller = RoomController(hass, entry)
         await controller.async_start()
         entry.runtime_data = controller
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+        @callback
+        def _central_changed(change: ConfigEntryChange, changed: ConfigEntry) -> None:
+            if is_hub(changed):  # loaded, disabled, failed, removed: the dynamic controls' settings
+                controller.notify()
+
+        entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_CONFIG_ENTRY_CHANGED, _central_changed))
+        @callback
+        def _started(_event: Event) -> None:
+            controller.notify()  # a central entry that is never set up (disabled): its defaults count from now
+
+        if not hass.is_running:
+            entry.async_on_unload(hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _started))
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
 

@@ -70,21 +70,36 @@ class BetterMediaPlayerEntity(Entity):
         self.async_on_remove(self.ctrl.async_add_listener(self.async_write_ha_state))
 
 
+_PENDING = (ConfigEntryState.SETUP_IN_PROGRESS, ConfigEntryState.UNLOAD_IN_PROGRESS)
+
+
 def controls_settings(hass) -> tuple[bool, float] | None:
     """Dynamic controls on (central device, default on) and the hide delay (s).
 
-    None while central settings exist but are not loaded (start, reload):
-    nothing changes until their values are known."""
+    None while the central settings are on their way (start, reload): nothing
+    changes until their values are known. Without them (none, disabled, failed)
+    the defaults apply."""
     entry = next(
         (e for e in hass.config_entries.async_entries(DOMAIN) if e.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_HUB), None
     )
-    if entry is None:
-        values = HUB_ENTITY_DEFAULTS
-        return bool(values[CONF_DYNAMIC_CONTROLS]), float(values[CONF_HIDE_DELAY])
     hub = hass.data.get(DOMAIN, {}).get("hub")
-    if entry.state is not ConfigEntryState.LOADED or hub is None:
+    if entry is not None and entry.state is ConfigEntryState.LOADED and hub is not None:
+        return bool(hub.setting(CONF_DYNAMIC_CONTROLS)), float(hub.setting(CONF_HIDE_DELAY) or 0)
+    if entry is not None and entry.disabled_by is None and (
+        entry.state in _PENDING or (entry.state is ConfigEntryState.NOT_LOADED and not hass.is_running)
+    ):
         return None
-    return bool(hub.setting(CONF_DYNAMIC_CONTROLS)), float(hub.setting(CONF_HIDE_DELAY) or 0)
+    return bool(HUB_ENTITY_DEFAULTS[CONF_DYNAMIC_CONTROLS]), float(HUB_ENTITY_DEFAULTS[CONF_HIDE_DELAY])
+
+
+def prune_entities(hass, entry: ConfigEntry, domain: str, entities: list[Entity]) -> None:
+    """Remove the entry's entities of this platform that are no longer created
+    (e.g. a standby setting after its power sensor was removed)."""
+    keep = {e.unique_id for e in entities}
+    reg = er.async_get(hass)
+    for item in er.async_entries_for_config_entry(reg, entry.entry_id):
+        if item.domain == domain and item.unique_id not in keep:
+            reg.async_remove(item.entity_id)
 
 
 class Visibility:

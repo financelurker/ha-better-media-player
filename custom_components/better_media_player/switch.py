@@ -11,7 +11,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import BetterMediaPlayerConfigEntry, is_hub
 from .const import CONF_DYNAMIC_CONTROLS, ROLE_AUDIO, ROLE_DISPLAY
-from .entity import BetterMediaPlayerEntity, ControlEntity, HubEntity
+from .entity import BetterMediaPlayerEntity, ControlEntity, HubEntity, prune_entities
 
 
 async def async_setup_entry(
@@ -35,6 +35,7 @@ async def async_setup_entry(
     if ctrl.follow_capable:
         entities.append(SettingSwitch(entry, ctrl, "prewarm", "mdi:speaker-wireless"))
         entities.append(SettingSwitch(entry, ctrl, "wake_detect_left", "mdi:exit-run"))
+    prune_entities(hass, entry, "switch", entities)
     async_add_entities(entities)
 
 

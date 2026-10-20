@@ -20,7 +20,7 @@ from .const import (
     ROLE_VIDEO_HOST,
     SOURCE_VIDEO,
 )
-from .entity import BetterMediaPlayerEntity, ControlEntity, HubEntity
+from .entity import BetterMediaPlayerEntity, ControlEntity, HubEntity, prune_entities
 from .sleep import MAX_MINUTES
 
 
@@ -73,6 +73,7 @@ async def async_setup_entry(
         entities.append(SettingNumber(entry, ctrl, "presence_run_down", 0, 60, 0.5, mins))
         entities.append(SettingNumber(entry, ctrl, "volume_offset", -50, 50, 1, PERCENTAGE))
     entities.append(SleepTimerNumber(entry, ctrl, "sleep_timer"))
+    prune_entities(hass, entry, "number", entities)
     async_add_entities(entities)
 
 
