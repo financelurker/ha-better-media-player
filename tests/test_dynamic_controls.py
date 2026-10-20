@@ -233,3 +233,10 @@ async def test_quiet_shows_when_follow_me_is_set_up(hass, home, freezer):
     await setup_hub(hass)
     await hass.async_block_till_done()
     assert not _hidden(hass, QUIET)
+
+
+async def test_quiet_hidden_with_central_settings_but_no_follow_player(hass, home, freezer):
+    await setup_hub(hass, follow_player=None)
+    await setup_room(hass, occupancy=[LIVING_OCC])
+    await _tick(hass, freezer, 5)
+    assert _hidden(hass, QUIET), "without a follow-me player there is no follow me"
