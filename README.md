@@ -315,10 +315,11 @@ Anything else at night (e.g. the AV receiver's night sound mode or dynamic range
 
 | `reason` | When |
 |---|---|
-| `switched` | the night mode was switched while the room is on |
-| `room_on` | the room came on in night mode (every time, e.g. for a receiver that forgets its night mode with its power), or for the first time after the night mode was switched off while the room was off |
+| `switched` | the night mode was switched while the room is on (during a power-on sequence: once it is done) |
+| `room_on` | the room came on (a source started after none) in night mode: every time, e.g. for a receiver that forgets its night mode with its power |
+| `source` | another source started in night mode, e.g. the TV for video after music |
 
-Data: `entity_id`, `entry_id`, `room`, `night_mode` (`true` / `false`), `reason`. It comes after the power-on sequence, after the [source change event](#source-changes). Also as **device triggers**: *Night mode on (devices up)*, *Night mode off (devices up)*.
+After the night mode was switched off while the room was off, the next `room_on` / `source` tells `night_mode: false` once. Data: `entity_id`, `entry_id`, `room`, `night_mode` (`true` / `false`), `reason`. It comes after the power-on sequence, right after the [source change event](#source-changes); like that event, not after a restart of Home Assistant with the room already on. Also as **device triggers**: *Night mode on (devices up)*, *Night mode off (devices up)*.
 
 ```yaml
 trigger:

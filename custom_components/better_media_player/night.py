@@ -20,9 +20,11 @@ mode): the event below says when, once the room's devices are up.
 
     better_media_player_night_mode:
         entity_id, entry_id, room, night_mode (true / false),
-        reason: switched (switched while the room is on) or room_on (the room
-        came on in night mode, or after it was switched off while the room was
-        off; after the power-on sequence, with the source event)
+        reason: switched (switched while the room is on), room_on (the room
+        came on: a source started after none) or source (another source
+        started, e.g. the TV for video after music) — at night, or the first
+        time after the night mode ended while nothing could be told; after the
+        power-on sequence, right after the source event
 """
 
 from __future__ import annotations
@@ -55,7 +57,6 @@ class NightMode:
         self.hass = ctrl.hass
         self._clamping: set[str] = set()
         self._ramps: dict[str, VolumeRamp] = {}
-        self._room_on: bool | None = None  # None: not looked yet (after a start of HA)
 
     # ------------------------------------------------------------------ state
 
@@ -135,23 +136,30 @@ class NightMode:
 
     @callback
     def async_check(self) -> None:
-        """After each update and source change: announce the night mode when the
-        room's devices are up (the room has a source, no power-on sequence)."""
+        """After each update: switched while the room is on (and no power-on
+        sequence runs: then once it is done)."""
         ctrl = self.ctrl
         if not ctrl._started or ctrl._stopped or not ctrl.source_watch.ready:
             return
-        # on once it has a source: announced after its power-on sequence
-        on = ctrl.source_watch.source is not None
-        active = self.active
-        told = bool(ctrl.data.get("night_announced", False))
-        came_on = on and self._room_on is False  # (not at the first look after a start of HA)
-        self._room_on = on
-        if not on:
+        if "night_announced" not in ctrl.data:
+            ctrl.data["night_announced"] = self.active  # (first look after an update: as it is)
+            ctrl._save()
             return
-        if came_on and (active or told != active):
-            self._fire(active, "room_on")
-        elif told != active:
-            self._fire(active, "switched")
+        watch = ctrl.source_watch
+        if watch.source is None or watch.changing or ctrl.sequence_running:
+            return  # told when the room (or its new source) is up
+        if bool(ctrl.data["night_announced"]) != self.active:
+            self._fire(self.active, "switched")
+
+    @callback
+    def async_source_changed(self, source: str | None, previous: str | None) -> None:
+        """A source started (after the source event; its devices are up): at night,
+        or the first time after the night mode ended while nothing told it."""
+        if source is None:
+            return
+        active = self.active
+        if active or bool(self.ctrl.data.get("night_announced", False)) != active:
+            self._fire(active, "room_on" if previous is None else "source")
 
     @callback
     def _fire(self, active: bool, reason: str) -> None:

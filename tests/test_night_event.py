@@ -7,6 +7,7 @@ from datetime import timedelta
 from pytest_homeassistant_custom_component.common import async_capture_events, async_fire_time_changed
 
 from homeassistant.components import automation
+from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.setup import async_setup_component
 from homeassistant.util import dt as dt_util
@@ -66,8 +67,8 @@ async def test_switched_while_the_room_is_off_waits_for_the_room(hass, home, fre
     await _night(hass, True)
     assert events == []
     order: list[str] = []
-    hass.bus.async_listen(EVENT_SOURCE_CHANGED, lambda e: order.append("source"))
-    hass.bus.async_listen(EVENT_NIGHT_MODE, lambda e: order.append(f"night:{home.on(SPEAKERS)}"))
+    hass.bus.async_listen(EVENT_SOURCE_CHANGED, callback(lambda e: order.append("source")))
+    hass.bus.async_listen(EVENT_NIGHT_MODE, callback(lambda e: order.append(f"night:{home.on(SPEAKERS)}")))
     await _music(hass, home, freezer)
     assert _data(events) == [(True, "room_on")]
     assert order == ["source", "night:True"], "after the source event, with the speakers on"
@@ -162,3 +163,43 @@ async def test_device_triggers(hass, home, freezer):
     await _night(hass, False)
     await hass.async_block_till_done()
     assert hits == ["night_mode_on", "night_mode_off"]
+
+
+# --------------------------------------------------------------- from review
+
+
+async def test_switched_during_a_source_switch_comes_when_it_is_done(hass, home, freezer):
+    await _room(hass, freezer, display_on_wait=8)
+    await _music(hass, home, freezer)
+    events = async_capture_events(hass, EVENT_NIGHT_MODE)
+    home.kodi_boots = True
+    hass.async_create_task(
+        hass.services.async_call("media_player", "select_source", {"entity_id": ROOM, "source": "Kodi"}, blocking=True)
+    )
+    await _tick(hass, freezer, 2)
+    await _night(hass, True)
+    assert events == [], "the TV is not up yet"
+    await _tick(hass, freezer, 15)
+    assert _data(events) == [(True, "source")]
+    assert hass.states.get("media_player.kodi").state != "off"
+
+
+async def test_the_tv_after_music_is_told_at_night(hass, home, freezer):
+    await _room(hass, freezer)
+    await _music(hass, home, freezer)
+    await _night(hass, True)
+    events = async_capture_events(hass, EVENT_NIGHT_MODE)
+    home.kodi_boots = True
+    await hass.services.async_call("media_player", "select_source", {"entity_id": ROOM, "source": "Kodi"}, blocking=True)
+    await _tick(hass, freezer, 10)
+    assert _data(events) == [(True, "source")]
+
+
+async def test_an_update_with_the_room_on_at_night_tells_nothing(hass, home, freezer):
+    entry = await _room(hass, freezer)
+    await _music(hass, home, freezer)
+    await _night(hass, True)
+    entry.runtime_data.data.pop("night_announced")  # (stored before this version)
+    events = async_capture_events(hass, EVENT_NIGHT_MODE)
+    await _tick(hass, freezer, 20)
+    assert events == []

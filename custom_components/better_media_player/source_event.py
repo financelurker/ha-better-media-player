@@ -86,6 +86,11 @@ class SourceWatch:
         return None if self._announced is _UNSET else self._announced
 
     @property
+    def changing(self) -> bool:
+        """Another source is about to be announced (settling)."""
+        return self._pending is not None
+
+    @property
     def active(self) -> bool:
         """The room has a source: one plays, or the announced one (stable)."""
         return bool(self._playing()) or self._announced not in (None, _UNSET)
@@ -220,7 +225,7 @@ class SourceWatch:
             EVENT_SOURCE_CHANGED,
             {"source": source, "previous": previous, "player": player, "reason": reason},
         )
-        ctrl.night.async_check()  # the room came on (or went off): the night mode's event
+        ctrl.night.async_source_changed(source, previous)  # its devices are up: the night mode's event
 
     @callback
     def async_stop(self) -> None:
