@@ -869,8 +869,6 @@ class RoomController:
             if on:
                 self._was_on = True
             elif self._fully_off():
-                if self._was_on:
-                    self.volume.async_off()
                 self._was_on = False
                 self.held.clear()  # the next start switches them again
             await self.sleep.async_apply_restores()
@@ -1514,6 +1512,7 @@ class RoomController:
         await self.wake.async_finish(WAKE_ROOM_OFF)
         self._cancel_sequence()
         self._reset_overrides()
+        self.volume.async_off()
         if (hub := _hub(self.hass)) is not None:
             hub.room_turned_off(self)
         self.prewarm = False

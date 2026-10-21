@@ -168,9 +168,9 @@ class RoomVolume:
                 await self.async_apply(src, fade=seconds)  # in a group: only remembered
 
     @callback
-    def async_power_on(self) -> None:
+    def async_power_on(self, fade: bool = True) -> None:
         """The room came on: the power-on preset is its volume (players get it
-        when they start)."""
+        when they start, fading from their volume)."""
         name = self.ctrl.setting(CONF_POWER_ON_PRESET)
         if not name or name == PRESET_NONE:
             return
@@ -178,7 +178,7 @@ class RoomVolume:
             _LOGGER.info("%s: power-on preset %s is not offered (0): skipped", self.ctrl.entry.title, name)
             return
         self._choose(name, self.presets[name])
-        self._fade_next = True
+        self._fade_next = fade and not self.ctrl.wake.active  # a wake sets its own volume
 
     async def async_preset_changed(self, name: str) -> None:
         """A preset's value was changed (number entity): the chosen one goes along."""
@@ -226,7 +226,6 @@ class RoomVolume:
         volume = round(max(0.0, min(1.0, self.ctrl.night.limit(float(volume)))), 3)
         if self.value is not None and abs(self.value - volume) < 0.0005:
             return
-        self._fade_next = False
         self.ctrl.data.pop("volume_preset", None)  # changed otherwise: no preset any more
         self.ctrl.data["room_volume"] = volume
         self.ctrl._save()
@@ -449,7 +448,10 @@ class RoomVolume:
             if not self.ctrl._stopped:
                 await self._restore_level(src, left_group)
             return
-        if self.ctrl._stopped or (not left_group and self._in_group(src)):
+        if self.ctrl._stopped:
+            return
+        if not left_group and self._in_group(src):
+            self._fade_next = False  # the group decides this start's volume
             return
         if self.ctrl.player_state(src) not in _POWERED:
             return
@@ -485,11 +487,11 @@ class RoomVolume:
 
     def _fade_for(self, fade: float | None, override: float | None) -> float:
         """The fade of this set: asked for, or the power-on preset's (once)."""
-        if override is not None:
-            return 0.0  # the wake's start volume: at once
         if fade is None and self._fade_next:
             fade = self.fade_seconds()
         self._fade_next = False
+        if override is not None:
+            return 0.0  # the wake's start volume: at once
         return fade or 0.0
 
     def fading(self, output_id: str) -> bool:
@@ -521,9 +523,30 @@ class RoomVolume:
 
     @callback
     def async_off(self) -> None:
-        """The room is off: no fade goes on."""
+        """The room is turned off: no fade goes on."""
         self._fade_next = False
         self.async_cancel_fades()
+
+    def recent_sets(self, output_id: str) -> list[float]:
+        """The volumes a preset fade set lately (their reports may still come)."""
+        ramp = self._fades.get(output_id)
+        return ramp.recent() if ramp is not None else []
+
+    @callback
+    def async_pause_fades(self) -> float:
+        """Stop the running fades; returns the longest time they had left."""
+        left = max((r.remaining for r in self._fades.values()), default=0.0)
+        self.async_cancel_fades()
+        return left
+
+    async def async_resume_fades(self, seconds: float) -> None:
+        """Fade on to the room volume (as it is limited now) in seconds."""
+        if seconds <= 0:
+            return
+        if self.ctrl.volume_device is not None:
+            await self.async_apply_device(fade=seconds)
+        elif (src := self.ctrl.active_source) is not None:
+            await self.async_apply(src, fade=seconds)
 
     @callback
     def async_cancel_fades(self) -> None:

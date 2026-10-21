@@ -291,9 +291,11 @@ class SleepTimer:
             unchanged = pending and self._unchanged(current, pending.get("left"), out.tolerance)
             start = pending["volume"] if unchanged else None
             s["fade_player"] = out.id
+            # a preset fade's last steps may still be reported: they are no change
+            preset_steps = self.ctrl.volume.recent_sets(out.id)
             self.ctrl.volume.async_cancel_fade(out.id)
             s["fade_from"] = start if start is not None else current
-            s["recent"] = [current]
+            s["recent"] = [current, *preset_steps]
             self._save(now=True)
         elif self._external(s, current, out.tolerance):
             self._abort_fade(s, current)
