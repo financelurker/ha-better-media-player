@@ -107,7 +107,7 @@ async def test_power_on_preset_on_the_device(hass, home, freezer):
     entry.runtime_data.data["room_volume"] = 0.7
     home.music("playing", volume_level=0.7)
     await hass.async_block_till_done()
-    await _tick(hass, freezer, 3)
+    await _tick(hass, freezer, 6)  # settle, then the preset fade
     assert hass.states.get("media_player.office_player").attributes["volume_level"] == 0.15
 
 

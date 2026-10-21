@@ -53,6 +53,7 @@ async def async_setup_entry(
         entities.append(MinutesNumber(entry, ctrl, "night_display_run_down", 0, 120))
     entities.append(PercentNumber(entry, ctrl, "night_max_volume"))
     entities += [PresetNumber(entry, ctrl, name) for name in PRESETS]
+    entities.append(SettingNumber(entry, ctrl, "preset_fade", 0, 30, 0.5, UnitOfTime.SECONDS))
     # how the room behaves (set on the device, not in the options)
     s, mins = UnitOfTime.SECONDS, UnitOfTime.MINUTES
     entities.append(SettingNumber(entry, ctrl, "start_timeout", 10, 600, 5, s))

@@ -141,7 +141,7 @@ How the room behaves – times, waits, standby, night mode, volume presets and f
 | Wait after display on, Wait after speakers on, Wait after player plug on | 0 s | with that device |
 | Display / Speakers: wait for standby, … standby below, … wait for standby at most | off; 5 / 3 W; 20 / 5 min | with power sensors and a plug for it |
 | Night: maximum volume, Night: video idle timeout, Night: display run-down, Night: fade back up | | see [night mode](#night-mode) |
-| Preset: Quiet / Normal / Loud / Party, Power-on preset | 15 / 30 / 50 / 70 %, none | see [presets](#presets) |
+| Preset: Quiet / Normal / Loud / Party, Power-on preset, Preset fade | 15 / 30 / 50 / 70 %, none, 3 s | see [presets](#presets) |
 | Sleep timer fade-out, Snooze time | 5 / 9 min | always |
 | Follow me: leave after, Follow me: volume offset, Follow me: prewarm speakers, Wake: detect leaving the room | | in follow rooms, see [follow me](#follow-me) |
 
@@ -244,12 +244,13 @@ target:
   entity_id: media_player.living_room
 data:
   preset: loud
+  fade_seconds: 5           # optional; default: the room's preset fade, 0 = at once
 ```
 
-- The preset becomes the room volume and is set right away on what plays. In a group (Music Assistant groups, follow me) it is only remembered: there the group decides; the room gets it with its next playback on its own (with a volume device: right away on the device).
+- The preset becomes the room volume at once (the select shows it right away); the volume of what plays **fades** there: *Preset fade* on the device (default 3 s, slow at the start and at the end; 0 = it jumps), or `fade_seconds` of the action. Changing the volume during the fade stops it there (that is the room volume then, *manual*); choosing another preset fades on from where the volume is. The night mode, the sleep timer and a wake take over from a fade. In a group (Music Assistant groups, follow me) it is only remembered: there the group decides; the room gets it with its next playback on its own (with a volume device: right away on the device).
 - It stays chosen until the volume is changed otherwise; then the select shows **manual** (choosing *manual* keeps the volume as it is). The room player shows it in the attribute `volume_preset`.
 - **Night mode:** a preset above the limit is limited, stays chosen and comes back when the night ends.
-- **Power-on preset** (select on the device, default none; skipped while its volume is 0): the room volume whenever the room comes on (one of its players is used again after everything was off), e.g. not at last night's party volume. Not after a restart of Home Assistant with the room already on, not when a player drops out for a moment, and not for follow me's prewarm.
+- **Power-on preset** (select on the device, default none; skipped while its volume is 0): the room volume whenever the room comes on (one of its players is used again after everything was off), e.g. not at last night's party volume. It fades too, from the volume the player starts with. Not after a restart of Home Assistant with the room already on, not when a player drops out for a moment, and not for follow me's prewarm.
 
 ### Night mode
 
@@ -456,7 +457,7 @@ All of them target a room player (`media_player.<room>`).
 
 | Action | What it does |
 |---|---|
-| `better_media_player.set_volume_preset` | choose a [volume preset](#presets) (`preset`) |
+| `better_media_player.set_volume_preset` | choose a [volume preset](#presets) (`preset`, optional `fade_seconds`) |
 | `better_media_player.set_sleep_timer` / `cancel_sleep_timer` | [sleep timer](#sleep-timer) (`minutes`, optional `fade_minutes`) |
 | `better_media_player.wake` | [wake up](#wake-up) (`media_content_id`, `media_content_type`; optional `start_volume`, `target_volume`, `fade_minutes`, `max_duration_minutes`, `night_mode`, `source`, `follow`) |
 | `better_media_player.snooze` / `stop_wake` | snooze (optional `minutes`) / stop a wake |
@@ -564,6 +565,7 @@ Settings ([what they do](#settings-on-the-device)); only those the room can use:
 | `number.<room>_night_video_idle_timeout`, `_night_display_run_down`, `_night_fade_back_up` | min |
 | `number.<room>_preset_quiet`, `_preset_normal`, `_preset_loud`, `_preset_party` | %, 0 = not offered |
 | `select.<room>_power_on_preset` | none or a preset |
+| `number.<room>_preset_fade` | s, 0 = at once |
 | `number.<room>_sleep_timer_fade_out`, `_snooze_time` | min |
 | `number.<room>_follow_me_leave_after` | min |
 | `number.<room>_follow_me_volume_offset` | percentage points |

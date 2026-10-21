@@ -253,6 +253,7 @@ class WakeAlarm:
         if night_mode is not None:
             await ctrl.night.async_set(night_mode)
         ctrl.night.async_cancel_ramp(out.id)
+        ctrl.volume.async_cancel_fade(out.id)
         self._changed(now=True)
         _LOGGER.info("%s: wake up on %s", ctrl.entry.title, player)
         self._spawn_start()

@@ -117,6 +117,7 @@ class NightMode:
         ctrl.data["night_mode"] = on
         ctrl._save_now()
         _LOGGER.info("%s: night mode %s", ctrl.entry.title, "on" if on else "off")
+        ctrl.volume.async_cancel_fades()  # the limit, or the fade back, decides now
         if on:
             self._cancel_ramps()
             ctrl.data.pop("night_fade_back", None)

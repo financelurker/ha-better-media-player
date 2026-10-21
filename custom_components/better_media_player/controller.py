@@ -869,6 +869,8 @@ class RoomController:
             if on:
                 self._was_on = True
             elif self._fully_off():
+                if self._was_on:
+                    self.volume.async_off()
                 self._was_on = False
                 self.held.clear()  # the next start switches them again
             await self.sleep.async_apply_restores()
@@ -1583,8 +1585,8 @@ class RoomController:
             )
         await self.sleep.async_extend(minutes)
 
-    async def async_set_volume_preset(self, preset: str | None) -> None:
-        await self.volume.async_set_preset(preset)
+    async def async_set_volume_preset(self, preset: str | None, fade: float | None = None) -> None:
+        await self.volume.async_set_preset(preset, fade)
 
     async def async_media_call(self, service: str, data: dict | None = None) -> None:
         """Forward a media command to the active source."""

@@ -5,13 +5,23 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+import pytest
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from homeassistant.util import dt as dt_util
 
 from custom_components.better_media_player.backend import groups_of
+from custom_components.better_media_player.const import CONF_PRESET_FADE, ENTITY_DEFAULTS
 
 from .conftest import FOLLOW, GROUP, MUSIC, setup_room
+
+
+@pytest.fixture(autouse=True)
+def _jump(monkeypatch):
+    """These tests cover what a preset sets: it jumps there (the fade has
+    tests of its own, test_preset_fade.py)."""
+    monkeypatch.setitem(ENTITY_DEFAULTS, CONF_PRESET_FADE, 0)
+
 
 PRESET = "select.wohnzimmer_volume_preset"
 

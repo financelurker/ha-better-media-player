@@ -291,6 +291,7 @@ class SleepTimer:
             unchanged = pending and self._unchanged(current, pending.get("left"), out.tolerance)
             start = pending["volume"] if unchanged else None
             s["fade_player"] = out.id
+            self.ctrl.volume.async_cancel_fade(out.id)
             s["fade_from"] = start if start is not None else current
             s["recent"] = [current]
             self._save(now=True)
