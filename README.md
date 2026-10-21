@@ -21,7 +21,7 @@ It is a custom integration in the spirit of Better Thermostat: you tell it what 
 - [Dashboards](#dashboards)
 - [Reference](#reference): entities and states
 - [Players of other systems](#players-of-other-systems)
-- [Releases](#releases), [roadmap](#roadmap), [license](#license)
+- [License](#license)
 
 ## What it does
 
@@ -613,15 +613,6 @@ What a particular system does on top, or differently, lives in a backend of its 
 | Music Assistant | `music_assistant.py` | its group players (not taken as a room's player), the queue in the browser, moving a queue with the position of the current track (follow me, handover) |
 
 Another system is one more module with a subclass of `VideoBackend` or `MusicBackend`, added to the list in `backend.py` (contributions welcome). Follow me works with Music Assistant only: it needs a group player and a system that can move a queue.
-
-## Releases
-
-The version is set only by the release tag (e.g. `v1.2.3`, or a pre-release such as `v1.3.0b1`). Publishing a release on GitHub runs a workflow that writes the tag's version into `manifest.json`, zips the integration and attaches `better_media_player.zip` to the release; HACS installs that ZIP. In the repository itself `manifest.json` carries the placeholder `0.0.0`, which is what a manual copy from the repository shows.
-
-## Roadmap
-
-- Check via power measurement whether a device really runs.
-- Support for group players with static members (contributions welcome).
 
 ## License
 
