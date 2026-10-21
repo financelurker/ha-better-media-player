@@ -117,6 +117,8 @@ class NightMode:
         ctrl.data["night_mode"] = on
         ctrl._save_now()
         _LOGGER.info("%s: night mode %s", ctrl.entry.title, "on" if on else "off")
+        # a preset fade on its way: on with the limit (or the fade back takes over)
+        fade_left = ctrl.volume.async_pause_fades()
         if on:
             self._cancel_ramps()
             ctrl.data.pop("night_fade_back", None)
@@ -125,6 +127,7 @@ class NightMode:
                 bass.force_off = True  # no run-down
             for out, src in self._outputs():
                 await self._clamp(out, src)
+            await ctrl.volume.async_resume_fades(fade_left)
         else:
             await self._fade_back()
         ctrl.wake.async_night_changed()

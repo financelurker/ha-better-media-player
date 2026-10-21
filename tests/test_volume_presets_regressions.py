@@ -2,15 +2,27 @@
 
 from __future__ import annotations
 
+import pytest
+
 from custom_components.better_media_player.const import (
+    CONF_PRESET_FADE,
     CONF_VOLUME_CONTROL,
     CONF_VOLUME_ENTITY,
     DOMAIN,
+    ENTITY_DEFAULTS,
     VOLUME_DEVICE,
 )
 
 from .conftest import AVR, SPEAKERS, setup_room
 from .test_volume_presets import SELECT, _room_volume, _select, _tick, _vol, _wake
+
+
+@pytest.fixture(autouse=True)
+def _jump(monkeypatch):
+    """These tests cover what a preset sets: it jumps there (the fade has
+    tests of its own, test_preset_fade.py)."""
+    monkeypatch.setitem(ENTITY_DEFAULTS, CONF_PRESET_FADE, 0)
+
 
 MUSIC_ONLY = {"video_player": None, "display": None, "speakers": None, "bass": None}
 

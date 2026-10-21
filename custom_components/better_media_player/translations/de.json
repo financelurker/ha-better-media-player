@@ -409,6 +409,9 @@
       "audio_standby_max": {
         "name": "Lautsprecher: höchstens auf Standby warten"
       },
+      "preset_fade": {
+        "name": "Preset überblenden"
+      },
       "sleep_fade": {
         "name": "Sleep-Timer ausblenden"
       },
@@ -567,6 +570,10 @@
         "preset": {
           "name": "Preset",
           "description": "Leise, Normal, Laut oder Party."
+        },
+        "fade_seconds": {
+          "name": "Überblenden",
+          "description": "Sekunden bis zum Preset (0: sofort). Standard: das Preset-Überblenden des Raums."
         }
       }
     },

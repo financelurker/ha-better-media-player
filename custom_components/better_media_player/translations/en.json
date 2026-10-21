@@ -409,6 +409,9 @@
       "audio_standby_max": {
         "name": "Speakers: wait for standby at most"
       },
+      "preset_fade": {
+        "name": "Preset fade"
+      },
       "sleep_fade": {
         "name": "Sleep timer fade-out"
       },
@@ -567,6 +570,10 @@
         "preset": {
           "name": "Preset",
           "description": "Quiet, normal, loud or party."
+        },
+        "fade_seconds": {
+          "name": "Fade",
+          "description": "Seconds to fade to the preset (0: at once). Default: the room's preset fade."
         }
       }
     },

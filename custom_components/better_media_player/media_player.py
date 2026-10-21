@@ -44,6 +44,7 @@ from .const import (
     SERVICE_STOP_WAKE,
     SERVICE_WAKE,
     ATTR_FADE_MINUTES,
+    ATTR_FADE_SECONDS,
     ATTR_NIGHT_MODE,
     DOMAIN,
     ATTR_MINUTES,
@@ -138,7 +139,12 @@ async def async_setup_entry(
     )
     platform.async_register_entity_service(SERVICE_STOP_WAKE, None, "async_stop_wake")
     platform.async_register_entity_service(
-        SERVICE_SET_VOLUME_PRESET, {vol.Required(ATTR_PRESET): vol.In(PRESETS)}, "async_set_volume_preset"
+        SERVICE_SET_VOLUME_PRESET,
+        {
+            vol.Required(ATTR_PRESET): vol.In(PRESETS),
+            vol.Optional(ATTR_FADE_SECONDS): vol.All(vol.Coerce(float), vol.Range(min=0, max=300)),
+        },
+        "async_set_volume_preset",
     )
     platform.async_register_entity_service(
         SERVICE_HANDOVER,
@@ -500,8 +506,8 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
             raise ServiceValidationError(translation_domain=DOMAIN, translation_key="follow_not_running")
         await hub.async_follow_stop(self.ctrl)
 
-    async def async_set_volume_preset(self, preset: str) -> None:
-        await self.ctrl.async_set_volume_preset(preset)
+    async def async_set_volume_preset(self, preset: str, fade_seconds: float | None = None) -> None:
+        await self.ctrl.async_set_volume_preset(preset, fade_seconds)
 
     async def async_handover(
         self, destination: str, source: str | None = None, keep_source_playing: bool = False

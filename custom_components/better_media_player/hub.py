@@ -768,6 +768,7 @@ class FollowManager:
             return  # nothing known: stays
         player = room.audio_player
         seconds = float(room.setting(CONF_NIGHT_FADE_IN)) * 60 if self.ma.state(group) in PLAYING else 0
+        room.volume.async_cancel_fade(player)
         ramp = self._group_ramps.get(player)
         if ramp is None:
             ramp = self._group_ramps[player] = VolumeRamp(
@@ -982,6 +983,7 @@ class FollowManager:
         volume = room.night.player_limit(volume / 100) * 100
         _LOGGER.info("Follow: %s joins %s at %.0f%%", room.entry.title, group, volume)
         room.volume.note_own(player, volume / 100)  # follow's volume, not a wish for the room
+        room.volume.async_cancel_fade(player)  # the group's volume from now on
         await self._call("volume_set", {ATTR_ENTITY_ID: player, "volume_level": volume / 100})
         return await self.ma.join(group, player)
 

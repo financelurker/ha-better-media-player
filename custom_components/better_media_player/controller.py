@@ -1512,6 +1512,7 @@ class RoomController:
         await self.wake.async_finish(WAKE_ROOM_OFF)
         self._cancel_sequence()
         self._reset_overrides()
+        self.volume.async_off()
         if (hub := _hub(self.hass)) is not None:
             hub.room_turned_off(self)
         self.prewarm = False
@@ -1583,8 +1584,8 @@ class RoomController:
             )
         await self.sleep.async_extend(minutes)
 
-    async def async_set_volume_preset(self, preset: str | None) -> None:
-        await self.volume.async_set_preset(preset)
+    async def async_set_volume_preset(self, preset: str | None, fade: float | None = None) -> None:
+        await self.volume.async_set_preset(preset, fade)
 
     async def async_media_call(self, service: str, data: dict | None = None) -> None:
         """Forward a media command to the active source."""

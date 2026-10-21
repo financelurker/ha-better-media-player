@@ -56,6 +56,8 @@ PRESET_MANUAL = "manual"  # the volume was changed after the preset
 PRESET_NONE = "none"
 CONF_PRESET = "preset_{}"  # .format(name)
 CONF_POWER_ON_PRESET = "power_on_preset"
+CONF_PRESET_FADE = "preset_fade"  # s, 0 = the volume jumps to the preset
+ATTR_FADE_SECONDS = "fade_seconds"
 PRESET_DEFAULTS = {"quiet": 15, "normal": 30, "loud": 50, "party": 70}
 SERVICE_SET_VOLUME_PRESET = "set_volume_preset"
 SERVICE_HANDOVER = "handover"
@@ -197,6 +199,7 @@ ENTITY_DEFAULTS: dict = {
     CONF_PRESENCE_RUN_DOWN: 2,
     CONF_VOLUME_OFFSET: 0,
     CONF_POWER_ON_PRESET: PRESET_NONE,
+    CONF_PRESET_FADE: 3,
     CONF_PREWARM: True,
     CONF_WAKE_DETECT_LEFT: True,
     CONF_SLEEP_FADE: 5,

@@ -135,6 +135,14 @@ set_volume_preset:
             - normal
             - loud
             - party
+    fade_seconds:
+      example: 3
+      selector:
+        number:
+          min: 0
+          max: 300
+          step: 0.5
+          unit_of_measurement: s
 
 handover:
   target:

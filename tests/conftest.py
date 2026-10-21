@@ -11,7 +11,8 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from homeassistant.components.media_player import MediaPlayerEntityFeature as F
-from homeassistant.core import HomeAssistant, ServiceRegistry
+from homeassistant.core import HomeAssistant, ServiceRegistry, callback
+from homeassistant.helpers.event import async_call_later
 from homeassistant.util import dt as dt_util
 
 from custom_components.better_media_player.const import (
@@ -136,6 +137,7 @@ class FakeHome:
     clock_skew: float = 0.0  # s the clock of Music Assistant's server is ahead of HA's
     lg_on_plug: bool = False  # the LG TV hangs on the TV plug (unavailable without power)
     lg_obeys: bool = True  # the LG TV follows turn_on / turn_off
+    volume_lag: float = 0.0  # s a player reports a volume it was set to (in order)
 
     def now(self):
         """The time on Music Assistant's server."""
@@ -287,6 +289,15 @@ class FakeHome:
                         members.append(p)
                     self.set(entity_id, g.state, group_members=members)
                     self.set(p, g.state if g.state in ("playing", "paused") else "idle")
+            elif service == "volume_set" and self.volume_lag > 0:
+                level = data["volume_level"]
+
+                @callback
+                def _report(_now, entity_id=entity_id, level=level) -> None:
+                    cur = self.hass.states.get(entity_id)
+                    self.set(entity_id, cur.state, volume_level=level)
+
+                async_call_later(self.hass, self.volume_lag, _report)
             elif service == "volume_set":
                 self.set(entity_id, st.state, volume_level=data["volume_level"])
             elif service in ("media_play", "play_media") and entity_id in GROUPS:
