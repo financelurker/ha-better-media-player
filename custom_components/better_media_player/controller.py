@@ -120,6 +120,8 @@ ON_ORDER = (ROLE_VIDEO_HOST, ROLE_AUDIO_HOST, ROLE_DISPLAY, ROLE_AUDIO, ROLE_BAS
 OFF_ORDER = (ROLE_BASS, ROLE_AUDIO, ROLE_DISPLAY, ROLE_VIDEO_HOST, ROLE_AUDIO_HOST)
 
 COMMAND_RETRY_SECONDS = 30
+# a music player turned on (power control): its speakers are up at least this long
+MIN_ON_SECONDS = 30
 ACTION_ID = f"{DOMAIN}_action"  # virtual id of a role's own on/off actions
 DEVICE_OFF_SECONDS = 60  # a role's plugs wait at most this long for its devices to go off
 OWN_CHANGE_SECONDS = 30
@@ -461,8 +463,8 @@ class RoomController:
                 src.powered_at = _now()  # turned on: its devices come up for a while
             if new is not None and new.state in (STATE_OFF, *PLAYING_STATES):
                 src.powered_at = None  # off, or it plays: in use as usual
-            if new is not None and new.state == STATE_OFF:
-                src.off_sent = False
+            if new is None or new.state in (STATE_OFF, *PLAYING_STATES, *NOT_AVAILABLE):
+                src.off_sent = False  # off, or in use again: the next run-down turns it off again
             was_playing = old is not None and old.state in PLAYING_STATES
             is_playing = new is not None and new.state in PLAYING_STATES
             if is_playing and not was_playing:
@@ -631,7 +633,7 @@ class RoomController:
             src.powered_at is not None
             and not src.suppressed
             and self.player_state(src) in POWERED_STATES
-            and _now() - src.powered_at < float(self.setting(CONF_AUDIO_RUN_DOWN)) * 60
+            and _now() - src.powered_at < max(MIN_ON_SECONDS, float(self.setting(CONF_AUDIO_RUN_DOWN)) * 60)
         )
 
     def source_active_raw(self, src: Source) -> bool:
@@ -978,23 +980,26 @@ class RoomController:
         its speakers ran down (paused, stopped). Not in a group (the group
         decides), nor while its speakers are on or needed (manual mode, a
         wake's snooze)."""
+        automatic = self.auto_power and not self.manual and not self.sequence_running
         if src.powered_at is not None and not self._just_turned_on(src):
             src.powered_at = None
             if not self.source_playing(src):
                 for role in self.roles.values():
                     if SOURCE_AUDIO in role.sources and not self.role_demand(role):
                         role.force_off = True  # its run-down is over
-        audio_roles = [r for r in self.roles.values() if SOURCE_AUDIO in r.sources]
+        # its speakers (the player's own hardware plug goes off after it)
+        audio_roles = [r for r in self.roles.values() if SOURCE_AUDIO in r.sources and r.key != ROLE_AUDIO_HOST]
         if (
             src.off_sent
             or not self._started
             or not audio_roles
-            or not self.auto_power
-            or self.sequence_running
+            or not automatic
             or self.player_state(src) not in POWERED_STATES
             or self.source_playing(src)
             or self._just_turned_on(src)
             or src.backend.groups_of(src.player)
+            # not yet reported (e.g. after a restart): no "off" to follow
+            or not all(self.is_available(e) for r in audio_roles for e in r.entities if self.kind(e) == "plug")
             or any(self.role_on(r) or self.role_demand(r) for r in audio_roles)
         ):
             return

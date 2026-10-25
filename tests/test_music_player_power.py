@@ -280,3 +280,83 @@ async def test_without_speakers_of_the_room_it_is_left_alone(hass, home, freezer
     await hass.async_block_till_done()
     await _tick(hass, freezer, 300)
     assert not _calls(home, MUSIC, "turn_off"), "no devices to go off with"
+
+
+# ------------------------------------------------------------------ review
+
+
+async def test_speakers_not_reported_yet_after_a_restart(hass, home, freezer):
+    entry = await _room(hass, home)
+    home.music("playing")
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 10)
+    home.music("paused")
+    await hass.async_block_till_done()
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    hass.states.async_set(SPEAKERS, "unavailable")  # the plug has not reported yet
+    hass.states.async_set(BASS, "unavailable")
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 10)
+    assert not _calls(home, MUSIC, "turn_off"), "no off to follow before they reported"
+
+
+async def test_turned_off_again_after_a_failed_off(hass, home, freezer):
+    await _room(hass, home)
+    home.music("idle")
+    await hass.async_block_till_done()
+    home.ma_power = False  # its first turn_off does not get through
+    await _tick(hass, freezer, 135)
+    assert len(_calls(home, MUSIC, "turn_off")) == 1
+    home.ma_power = True
+    home.music("playing")  # in use again
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 10)
+    home.music("paused")
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 150)
+    assert hass.states.get(MUSIC).state == "off", "the next run-down turns it off again"
+
+
+async def test_automatic_power_off_cuts_nothing(hass, home, freezer):
+    await _room(hass, home)
+    await hass.services.async_call(
+        "switch", "turn_off", {"entity_id": "switch.wohnzimmer_automatic_power"}, blocking=True
+    )
+    await hass.async_block_till_done()
+    for plug in (SPEAKERS, BASS):
+        hass.states.async_set(plug, "on")
+    home.music("idle")  # on in the app
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 300)
+    assert home.on(SPEAKERS), "no automatic switching"
+    assert not _calls(home, MUSIC, "turn_off")
+
+
+async def test_it_goes_off_before_its_hardware_plug(hass, home, freezer):
+    host = "switch.player_plug_2"
+    hass.states.async_set(host, "on")  # the player's hardware is up
+    home.ma_power = True
+    home.music("off")
+    entry = await setup_room(hass, video_player=None, display=None, audio_host=host)
+    entry.runtime_data.data["last_source"] = "audio"
+    await entry.runtime_data.async_set_setting("host_run_down", 10)
+    home.music("playing")
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 10)
+    home.music("paused")
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 135)  # speakers ran down; the hardware plug's run-down goes on
+    assert not home.on(SPEAKERS)
+    assert home.on(host)
+    assert hass.states.get(MUSIC).state == "off", "with its speakers, before its plug"
+
+
+async def test_a_run_down_of_zero_still_brings_the_speakers_up(hass, home, freezer):
+    entry = await _room(hass, home)
+    await entry.runtime_data.async_set_setting("audio_run_down", 0)
+    home.music("idle")
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 10)
+    assert home.on(SPEAKERS)
