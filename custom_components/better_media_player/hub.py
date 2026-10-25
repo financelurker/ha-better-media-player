@@ -41,7 +41,14 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.components.media_player import DOMAIN as MP_DOMAIN
 from homeassistant.components.media_player import MediaPlayerState
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_ENTITY_ID, ATTR_FRIENDLY_NAME, STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.const import (
+    ATTR_ENTITY_ID,
+    ATTR_FRIENDLY_NAME,
+    SERVICE_TURN_ON,
+    STATE_OFF,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+)
 from homeassistant.core import Context, Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import entity_registry as er
@@ -69,6 +76,7 @@ from .const import (
     FOLLOW_WAITING,
     FOLLOW_WAKING,
     HUB_ENTITY_DEFAULTS,
+    SOURCE_AUDIO,
     SOURCE_VIDEO,
     STORAGE_VERSION,
     TICK_SECONDS,
@@ -973,6 +981,9 @@ class FollowManager:
         player = room.audio_player
         if not self._due(player, f"join:{group}"):
             return True  # MA has not reported the last join yet
+        src = room.sources[SOURCE_AUDIO]
+        if room.power_controlled(src) and room.player_state(src) == STATE_OFF:
+            await room._player(src, SERVICE_TURN_ON)  # its own on/off (e.g. Music Assistant's fake power)
         if keep_volume:
             _LOGGER.info("Follow: %s joins %s", room.entry.title, group)
             return await self.ma.join(group, player)

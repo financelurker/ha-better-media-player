@@ -62,6 +62,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_AUDIO_POWER,
+    CONF_AUDIO_RUN_DOWN,
     CONF_BASS,
     CONF_DISPLAY,
     CONF_DISPLAY_POWER,
@@ -119,6 +120,8 @@ ON_ORDER = (ROLE_VIDEO_HOST, ROLE_AUDIO_HOST, ROLE_DISPLAY, ROLE_AUDIO, ROLE_BAS
 OFF_ORDER = (ROLE_BASS, ROLE_AUDIO, ROLE_DISPLAY, ROLE_VIDEO_HOST, ROLE_AUDIO_HOST)
 
 COMMAND_RETRY_SECONDS = 30
+# a music player turned on (power control): its speakers are up at least this long
+MIN_ON_SECONDS = 30
 ACTION_ID = f"{DOMAIN}_action"  # virtual id of a role's own on/off actions
 DEVICE_OFF_SECONDS = 60  # a role's plugs wait at most this long for its devices to go off
 OWN_CHANGE_SECONDS = 30
@@ -189,6 +192,8 @@ class Source:
     # runtime
     suppressed: bool = False
     idle_since: float | None = None
+    powered_at: float | None = None  # a music player with power control was turned on
+    off_sent: bool = False  # ... and turned off by the room (once, until it is off)
 
 
 class RoomController:
@@ -448,6 +453,18 @@ class RoomController:
             self.volume.async_on_state(src, old, new)
             self.night.async_on_state(src, new)
             self.wake.async_on_state(src, old, new)
+            if (
+                self.power_controlled(src)
+                and old is not None
+                and new is not None
+                and old.state == STATE_OFF
+                and new.state in POWERED_STATES
+            ):
+                src.powered_at = _now()  # turned on: its devices come up for a while
+            if new is not None and new.state in (STATE_OFF, *PLAYING_STATES):
+                src.powered_at = None  # off, or it plays: in use as usual
+            if new is None or new.state in (STATE_OFF, *PLAYING_STATES, *NOT_AVAILABLE):
+                src.off_sent = False  # off, or in use again: the next run-down turns it off again
             was_playing = old is not None and old.state in PLAYING_STATES
             is_playing = new is not None and new.state in PLAYING_STATES
             if is_playing and not was_playing:
@@ -600,6 +617,25 @@ class RoomController:
     def source_playing(self, src: Source) -> bool:
         return self.player_state(src) in PLAYING_STATES
 
+    def power_controlled(self, src: Source) -> bool:
+        """A music player with an on/off of its own (e.g. Music Assistant's
+        power control, also its fake one)."""
+        return (
+            src.key == SOURCE_AUDIO
+            and self.player_supports(src, MediaPlayerEntityFeature.TURN_ON)
+            and self.player_supports(src, MediaPlayerEntityFeature.TURN_OFF)
+        )
+
+    def _just_turned_on(self, src: Source) -> bool:
+        """Turned on (in Music Assistant, say) and nothing plays yet: its devices
+        are up for the speaker run-down."""
+        return (
+            src.powered_at is not None
+            and not src.suppressed
+            and self.player_state(src) in POWERED_STATES
+            and _now() - src.powered_at < max(MIN_ON_SECONDS, float(self.setting(CONF_AUDIO_RUN_DOWN)) * 60)
+        )
+
     def source_active_raw(self, src: Source) -> bool:
         """Active from the player's point of view (ignores suppression)."""
         return src.backend.is_active(self.player_state(src))
@@ -702,7 +738,9 @@ class RoomController:
         if self.prewarm and role.key in (ROLE_AUDIO, ROLE_BASS, ROLE_AUDIO_HOST) and not self.quiet:
             return True
         return any(
-            self.source_active(self.sources[s]) for s in role.sources if s in self.sources
+            self.source_active(self.sources[s]) or self._just_turned_on(self.sources[s])
+            for s in role.sources
+            if s in self.sources
         )
 
     # ------------------------------------------------------------- follow me
@@ -933,6 +971,41 @@ class RoomController:
                     self._spawn(self._source_off(src))
             else:
                 src.idle_since = None
+            if self.power_controlled(src):
+                self._power_follows(src)
+
+    def _power_follows(self, src: Source) -> None:
+        """A music player with power control goes off with its devices: turned on
+        but nothing played (its run-down is over: the devices go off with it), or
+        its speakers ran down (paused, stopped). Not in a group (the group
+        decides), nor while its speakers are on or needed (manual mode, a
+        wake's snooze)."""
+        automatic = self.auto_power and not self.manual and not self.sequence_running
+        if src.powered_at is not None and not self._just_turned_on(src):
+            src.powered_at = None
+            if not self.source_playing(src):
+                for role in self.roles.values():
+                    if SOURCE_AUDIO in role.sources and not self.role_demand(role):
+                        role.force_off = True  # its run-down is over
+        # its speakers (the player's own hardware plug goes off after it)
+        audio_roles = [r for r in self.roles.values() if SOURCE_AUDIO in r.sources and r.key != ROLE_AUDIO_HOST]
+        if (
+            src.off_sent
+            or not self._started
+            or not audio_roles
+            or not automatic
+            or self.player_state(src) not in POWERED_STATES
+            or self.source_playing(src)
+            or self._just_turned_on(src)
+            or src.backend.groups_of(src.player)
+            # not yet reported (e.g. after a restart): no "off" to follow
+            or not all(self.is_available(e) for r in audio_roles for e in r.entities if self.kind(e) == "plug")
+            or any(self.role_on(r) or self.role_demand(r) for r in audio_roles)
+        ):
+            return
+        _LOGGER.info("%s: %s goes off with its speakers", self.entry.title, src.player)
+        src.off_sent = True
+        self._spawn(self._player(src, SERVICE_TURN_OFF))
 
     async def _auto_on(self, now: float) -> None:
         missing = [

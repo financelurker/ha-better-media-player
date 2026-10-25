@@ -138,6 +138,7 @@ class FakeHome:
     lg_on_plug: bool = False  # the LG TV hangs on the TV plug (unavailable without power)
     lg_obeys: bool = True  # the LG TV follows turn_on / turn_off
     volume_lag: float = 0.0  # s a player reports a volume it was set to (in order)
+    ma_power: bool = False  # the music players have Music Assistant's (fake) power control
 
     def now(self):
         """The time on Music Assistant's server."""
@@ -158,8 +159,11 @@ class FakeHome:
     def kodi(self, state: str, **attrs: Any) -> None:
         self.set(KODI, state, supported_features=KODI_FEATURES, friendly_name="Kodi", **attrs)
 
+    def _ma_features(self) -> int:
+        return MA_FEATURES | (int(F.TURN_ON | F.TURN_OFF) if self.ma_power else 0)
+
     def music(self, state: str, **attrs: Any) -> None:
-        self.set(MUSIC, state, supported_features=MA_FEATURES, friendly_name="Office Player",
+        self.set(MUSIC, state, supported_features=self._ma_features(), friendly_name="Office Player",
                  mass_player_type="player", **attrs)
 
     def group(self, state: str, members: list[str], entity_id: str = GROUP, **attrs: Any) -> None:
@@ -171,7 +175,7 @@ class FakeHome:
                 self.set(m, state)
 
     def kitchen(self, state: str, **attrs: Any) -> None:
-        self.set(KITCHEN, state, supported_features=MA_FEATURES, friendly_name="Kitchen Player",
+        self.set(KITCHEN, state, supported_features=self._ma_features(), friendly_name="Kitchen Player",
                  mass_player_type="player", **attrs)
 
     def members(self, group: str) -> list[str]:
@@ -277,6 +281,12 @@ class FakeHome:
                 self.set(entity_id, "idle", supported_features=KODI_FEATURES)
             elif entity_id in (KODI, KODI2) and service == "turn_off" and self.kodi_suspends:
                 self.set(entity_id, "off")
+            elif entity_id in (MUSIC, KITCHEN) and service == "turn_on" and self.ma_power:
+                if st.state == "off":
+                    self.set(entity_id, "idle")
+            elif entity_id in (MUSIC, KITCHEN) and service == "turn_off" and self.ma_power:
+                self._leave_groups(entity_id)
+                self.set(entity_id, "off")  # Music Assistant stops it too
             elif service == "unjoin":
                 self._leave_groups(entity_id)
                 self.set(entity_id, "idle")
