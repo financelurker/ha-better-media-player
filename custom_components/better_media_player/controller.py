@@ -190,6 +190,8 @@ class Source:
     # runtime
     suppressed: bool = False
     idle_since: float | None = None
+    powered_at: float | None = None  # a music player with power control was turned on
+    off_sent: bool = False  # ... and turned off by the room (once, until it is off)
 
 
 class RoomController:
@@ -449,6 +451,18 @@ class RoomController:
             self.volume.async_on_state(src, old, new)
             self.night.async_on_state(src, new)
             self.wake.async_on_state(src, old, new)
+            if (
+                self.power_controlled(src)
+                and old is not None
+                and new is not None
+                and old.state == STATE_OFF
+                and new.state in POWERED_STATES
+            ):
+                src.powered_at = _now()  # turned on: its devices come up for a while
+            if new is not None and new.state in (STATE_OFF, *PLAYING_STATES):
+                src.powered_at = None  # off, or it plays: in use as usual
+            if new is not None and new.state == STATE_OFF:
+                src.off_sent = False
             was_playing = old is not None and old.state in PLAYING_STATES
             is_playing = new is not None and new.state in PLAYING_STATES
             if is_playing and not was_playing:
@@ -603,20 +617,26 @@ class RoomController:
 
     def power_controlled(self, src: Source) -> bool:
         """A music player with an on/off of its own (e.g. Music Assistant's
-        power control, also its fake one): its on means something, as a video
-        player's does."""
+        power control, also its fake one)."""
         return (
             src.key == SOURCE_AUDIO
             and self.player_supports(src, MediaPlayerEntityFeature.TURN_ON)
             and self.player_supports(src, MediaPlayerEntityFeature.TURN_OFF)
         )
 
+    def _just_turned_on(self, src: Source) -> bool:
+        """Turned on (in Music Assistant, say) and nothing plays yet: its devices
+        are up for the speaker run-down."""
+        return (
+            src.powered_at is not None
+            and not src.suppressed
+            and self.player_state(src) in POWERED_STATES
+            and _now() - src.powered_at < float(self.setting(CONF_AUDIO_RUN_DOWN)) * 60
+        )
+
     def source_active_raw(self, src: Source) -> bool:
         """Active from the player's point of view (ignores suppression)."""
-        state = self.player_state(src)
-        if self.power_controlled(src):
-            return state in POWERED_STATES  # on: its devices come up
-        return src.backend.is_active(state)
+        return src.backend.is_active(self.player_state(src))
 
     def source_active(self, src: Source) -> bool:
         if not self.source_active_raw(src) or src.suppressed:
@@ -716,7 +736,9 @@ class RoomController:
         if self.prewarm and role.key in (ROLE_AUDIO, ROLE_BASS, ROLE_AUDIO_HOST) and not self.quiet:
             return True
         return any(
-            self.source_active(self.sources[s]) for s in role.sources if s in self.sources
+            self.source_active(self.sources[s]) or self._just_turned_on(self.sources[s])
+            for s in role.sources
+            if s in self.sources
         )
 
     # ------------------------------------------------------------- follow me
@@ -924,20 +946,18 @@ class RoomController:
 
     def _update_sources(self, now: float) -> None:
         for src in self.sources.values():
-            video = src.key == SOURCE_VIDEO
-            powered = self.power_controlled(src)
-            stopped = VIDEO_STOPPED if video or powered else AUDIO_STOPPED
+            stopped = VIDEO_STOPPED if src.key == SOURCE_VIDEO else AUDIO_STOPPED
             if src.suppressed and self.player_state(src) in stopped:
                 src.suppressed = False
-            idle = IDLE_STATES if video else {*IDLE_STATES, MediaPlayerState.PAUSED}
-            if (video or powered) and self.source_active(src) and self.player_state(src) in idle:
+            if (
+                src.key == SOURCE_VIDEO
+                and self.source_active(src)
+                and self.player_state(src) in IDLE_STATES
+            ):
                 if src.idle_since is None:
                     src.idle_since = now
-                if video:
-                    key = "night_video_idle_timeout" if self.night.active else "video_idle_timeout"
-                else:
-                    key = CONF_AUDIO_RUN_DOWN  # on, but nothing plays: as long as the speakers' run-down
-                timeout = float(self.setting(key) or 0) * 60
+                key = "night_video_idle_timeout" if self.night.active else "video_idle_timeout"
+                timeout = float(self.data.get(key, 0)) * 60
                 if (
                     self.auto_power
                     and timeout > 0
@@ -947,13 +967,40 @@ class RoomController:
                     src.idle_since = None
                     src.suppressed = True
                     self._spawn(self._source_off(src))
-                    if powered:
-                        # its run-down is over: what only it needed goes off with it
-                        for role in self.roles.values():
-                            if SOURCE_AUDIO in role.sources and not self.role_demand(role):
-                                role.force_off = True
             else:
                 src.idle_since = None
+            if self.power_controlled(src):
+                self._power_follows(src)
+
+    def _power_follows(self, src: Source) -> None:
+        """A music player with power control goes off with its devices: turned on
+        but nothing played (its run-down is over: the devices go off with it), or
+        its speakers ran down (paused, stopped). Not in a group (the group
+        decides), nor while its speakers are on or needed (manual mode, a
+        wake's snooze)."""
+        if src.powered_at is not None and not self._just_turned_on(src):
+            src.powered_at = None
+            if not self.source_playing(src):
+                for role in self.roles.values():
+                    if SOURCE_AUDIO in role.sources and not self.role_demand(role):
+                        role.force_off = True  # its run-down is over
+        audio_roles = [r for r in self.roles.values() if SOURCE_AUDIO in r.sources]
+        if (
+            src.off_sent
+            or not self._started
+            or not audio_roles
+            or not self.auto_power
+            or self.sequence_running
+            or self.player_state(src) not in POWERED_STATES
+            or self.source_playing(src)
+            or self._just_turned_on(src)
+            or src.backend.groups_of(src.player)
+            or any(self.role_on(r) or self.role_demand(r) for r in audio_roles)
+        ):
+            return
+        _LOGGER.info("%s: %s goes off with its speakers", self.entry.title, src.player)
+        src.off_sent = True
+        self._spawn(self._player(src, SERVICE_TURN_OFF))
 
     async def _auto_on(self, now: float) -> None:
         missing = [

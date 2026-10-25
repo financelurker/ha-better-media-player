@@ -602,7 +602,7 @@ Settings ([what they do](#settings-on-the-device)); only those the room can use:
 
 ## Players of other systems
 
-Any media player can be the room's video or music player. The room then uses what Home Assistant offers for every media player: on, off, play, volume and browsing; a video player counts as active while it is on (also in its menu) and is browsed only while it is on (Home Assistant's media sources stand in while it is off); a music player counts as active while it plays (one with an on/off of its own, e.g. Music Assistant's power control: while it is on, and turned off after the speaker run-down when nothing plays) and can be browsed while it is off; a player in a group is noticed by the group's members, and turning the room off takes it out with `media_player.unjoin`.
+Any media player can be the room's video or music player. The room then uses what Home Assistant offers for every media player: on, off, play, volume and browsing; a video player counts as active while it is on (also in its menu) and is browsed only while it is on (Home Assistant's media sources stand in while it is off); a music player counts as active while it plays and can be browsed while it is off (one with an on/off of its own, e.g. Music Assistant's power control: turned on, its speakers come up for the speaker run-down; it goes off once its speakers have run down, not while it is in a group or a wake is on); a player in a group is noticed by the group's members, and turning the room off takes it out with `media_player.unjoin`.
 
 What a particular system does on top, or differently, lives in a backend of its own (`backend.py`):
 
@@ -612,7 +612,7 @@ What a particular system does on top, or differently, lives in a backend of its 
 | Better Kodi | `kodi.py` | its queue is lifted to the room's root; its own play next / add entries are read; handover (also playing on) |
 | Music Assistant | `music_assistant.py` | its group players (not taken as a room's player), the queue in the browser, moving a queue with the position of the current track (follow me, handover) |
 
-**Music Assistant's power control:** the room switches the devices (speakers, subwoofer, plugs). Don't set a plug the room switches as a player's *Power Control* in Music Assistant as well: two systems would switch it. To see on/off in Music Assistant, set *Fake power control*: the room then turns the player on with the room (also before follow me joins it) and off with it; turned on in Music Assistant, the speakers come up, and when nothing plays for the speaker run-down, the player and the speakers go off.
+**Music Assistant's power control:** the room switches the devices (speakers, subwoofer, plugs). Don't set a plug the room switches as a player's *Power Control* in Music Assistant as well: two systems would switch it. To see on/off in Music Assistant, set *Fake power control*: the room then turns the player on with the room (also before follow me joins it) and off with it. Turned on in Music Assistant, the speakers come up; if nothing plays within the speaker run-down, the player and the speakers go off. Paused or stopped, the player goes off once its speakers have run down.
 
 Another system is one more module with a subclass of `VideoBackend` or `MusicBackend`, added to the list in `backend.py` (contributions welcome). Follow me works with Music Assistant only: it needs a group player and a system that can move a queue.
 
