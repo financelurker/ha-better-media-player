@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import CoreState, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_state_change_event
 
 from custom_components.better_media_player.const import CONF_VOLUME_CONTROL, CONF_VOLUME_ENTITY, VOLUME_DEVICE
@@ -257,6 +257,7 @@ async def test_the_sleep_timer_takes_over(hass, home, freezer):
     sleep = entry.runtime_data.sleep
     assert sleep.fading_player(MUSIC), "the sleep fade goes on"
     assert not entry.runtime_data.volume.fading(MUSIC)
+    assert not entry.runtime_data.data["preset_fades"], "nothing to go on with after a restart"
 
 
 async def test_a_wake_takes_over(hass, home, freezer):
@@ -467,9 +468,37 @@ async def test_stopped_during_the_restart_drops_the_fade(hass, home, freezer):
     cut = _vol(hass)
     await _restart(hass, entry, lambda: home.music("paused", volume_level=cut))
     steps = _track(hass)
-    await _tick(hass, freezer, 5, 0.5)
+    await _tick(hass, freezer, 125, 5)  # it waits for the player for a while
     assert steps == []
     assert not entry.runtime_data.data.get("preset_fades")
+    home.music("playing", volume_level=cut)  # much later: the room volume as usual
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 3, 0.5)
+    assert steps == [0.7], "at once, no fade any more"
+
+
+async def test_a_player_back_late_after_the_restart_fades_on(hass, home, freezer):
+    entry = await _music_at(hass, home, freezer, volume=0.2)
+    await _select(hass, "party")
+    await _tick(hass, freezer, 1, 0.5)
+    cut = _vol(hass)
+    await _restart(hass, entry, lambda: home.music("unavailable"))
+    await _tick(hass, freezer, 10, 1)
+    steps = _track(hass)
+    home.music("playing", volume_level=cut)  # Music Assistant is back
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 6, 0.5)
+    assert len(steps) >= 3 and steps == sorted(steps) and steps[-1] == 0.7, steps
+
+
+async def test_the_rest_of_a_cut_fade_takes_its_share_of_the_time(hass, home, freezer):
+    entry = await _music_at(hass, home, freezer, volume=0.2)
+    await _preset(hass, "party", fade_seconds=20)
+    await _tick(hass, freezer, 16, 0.5)  # most of the way
+    assert _vol(hass) > 0.6
+    await _restart(hass, entry)
+    await _tick(hass, freezer, 2.5 + 2, 0.5)  # settle, then a short rest
+    assert _vol(hass) == 0.7, "not the whole 20 s again"
 
 
 async def test_a_finished_fade_is_not_kept(hass, home, freezer):
@@ -478,6 +507,27 @@ async def test_a_finished_fade_is_not_kept(hass, home, freezer):
     assert entry.runtime_data.data["preset_fades"]
     await _tick(hass, freezer, 4, 0.5)
     assert not entry.runtime_data.data["preset_fades"]
+
+
+async def test_a_device_fade_waits_for_something_to_play(hass, home, freezer):
+    home.avr("on", volume_level=0.2)
+    entry = await setup_room(hass, **{CONF_VOLUME_CONTROL: VOLUME_DEVICE, CONF_VOLUME_ENTITY: AVR})
+    home.music("playing")
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 3)
+    home.avr("on", volume_level=0.2)
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 3)
+    await _select(hass, "loud")
+    await _tick(hass, freezer, 1, 0.5)
+    cut = _vol(hass, AVR)
+    await _restart(hass, entry, lambda: home.music("idle"))
+    await _tick(hass, freezer, 5, 0.5)
+    assert _vol(hass, AVR) == cut, "nothing plays: it waits"
+    home.music("playing")
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 6, 0.5)
+    assert _vol(hass, AVR) == 0.5
 
 
 async def test_a_device_fade_cut_by_a_restart_goes_on(hass, home, freezer):
@@ -497,3 +547,47 @@ async def test_a_device_fade_cut_by_a_restart_goes_on(hass, home, freezer):
     assert _vol(hass, AVR) == 0.5
     assert hass.states.get(SELECT).state == "loud"
 
+
+
+async def test_in_a_group_after_the_restart_drops_the_fade(hass, home, freezer):
+    entry = await _music_at(hass, home, freezer, volume=0.2)
+    await _select(hass, "party")
+    await _tick(hass, freezer, 1, 0.5)
+    cut = _vol(hass)
+    await _restart(hass, entry, lambda: home.music("idle", volume_level=cut))
+    steps = _track(hass)
+    home.music("playing", volume_level=cut)
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 1, 0.5)
+    home.group("playing", [MUSIC], GROUP)  # the group lists it a moment later
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 5, 0.5)
+    assert steps == [], "the group decides"
+    assert not entry.runtime_data.data.get("preset_fades")
+
+
+async def test_a_preset_chosen_while_a_cut_fade_waits(hass, home, freezer):
+    entry = await _music_at(hass, home, freezer, volume=0.2)
+    await _select(hass, "party")
+    await _tick(hass, freezer, 1, 0.5)
+    await _restart(hass, entry, lambda: hass.states.async_set(MUSIC, "unavailable", {}))
+    await _select(hass, "quiet")  # chosen anew before it is back
+    home.music("playing", volume_level=0.1)  # back, at a volume of its own
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 6, 0.5)
+    assert _vol(hass) == 0.15
+    assert hass.states.get(SELECT).state == "quiet"
+
+
+async def test_home_assistant_stopping_keeps_the_fade(hass, home, freezer):
+    entry = await _music_at(hass, home, freezer, volume=0.2)
+    await _select(hass, "party")
+    await _tick(hass, freezer, 1, 0.5)
+    hass.set_state(CoreState.stopping)
+    try:
+        hass.states.async_set(MUSIC, "unavailable", {})  # Music Assistant goes down first: the fade stops
+        await hass.async_block_till_done()
+        await _tick(hass, freezer, 1, 0.5)
+        assert entry.runtime_data.data["preset_fades"], "kept for after the restart"
+    finally:
+        hass.set_state(CoreState.running)
