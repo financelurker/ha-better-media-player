@@ -5,8 +5,11 @@ by name. A preset stays chosen until the volume is changed otherwise; above
 the night mode's limit it is limited, and comes back after the night. The
 power-on preset (option) is the room volume whenever the room comes on.
 The volume fades to a preset (preset fade, eased in and out; 0: it jumps);
-the power-on preset fades from the volume the player starts with. A change
-from outside during the fade stops it (and is the room's volume then).
+the power-on preset fades up from the volume the player starts with (down it
+is set at once: not a moment at last night's volume). A change from outside
+during the fade stops it (and is the room's volume then). A fade cut by a
+restart of Home Assistant goes on afterwards, unless the volume was changed
+meanwhile.
 
 The room remembers the volume last chosen for it, wherever it was changed:
 through the room player, or directly on one of its players (Music Assistant
@@ -190,7 +193,9 @@ class RoomVolume:
             self._choose(None)  # no longer offered: the volume stays
 
     async def async_started(self) -> None:
-        """HA is up: a chosen preset whose value no longer matches the room volume."""
+        """HA is up: a fade cut by the restart goes on; a chosen preset whose
+        value no longer matches the room volume."""
+        await self._resume_cut_fades()
         name = self.preset
         if name is not None and self.value is not None and abs(self.presets[name] - self.value) >= 0.0005:
             await self.async_set_preset(name)
@@ -415,7 +420,7 @@ class RoomVolume:
         target = self.ctrl.night.limit(target)
         if self.ctrl.data.get("volume_restore", {}).pop(device.id, None) is not None:
             self.ctrl._save()
-        fade = self._fade_for(fade, override)
+        fade = self._fade_for(fade, override, current, target)
         if current is not None and abs(current - target) <= device.tolerance:
             self.async_cancel_fade(device.id)
             return
@@ -476,7 +481,7 @@ class RoomVolume:
         # the room's volume supersedes a restore the sleep timer still has to do
         if self.ctrl.data.get("volume_restore", {}).pop(src.player, None) is not None:
             self.ctrl._save()
-        fade = self._fade_for(fade, override)
+        fade = self._fade_for(fade, override, current, target)
         if current is not None and abs(current - target) <= TOLERANCE:
             self.async_cancel_fade(src.player)
             return
@@ -485,13 +490,15 @@ class RoomVolume:
 
     # ------------------------------------------------------------------ fading
 
-    def _fade_for(self, fade: float | None, override: float | None) -> float:
-        """The fade of this set: asked for, or the power-on preset's (once)."""
-        if fade is None and self._fade_next:
-            fade = self.fade_seconds()
+    def _fade_for(self, fade: float | None, override: float | None, current: float | None, target: float) -> float:
+        """The fade of this set: asked for, or the power-on preset's (once;
+        only up, down it is set at once)."""
+        power_on = fade is None and self._fade_next
         self._fade_next = False
         if override is not None:
             return 0.0  # the wake's start volume: at once
+        if power_on:
+            return self.fade_seconds() if current is not None and current < target else 0.0
         return fade or 0.0
 
     def fading(self, output_id: str) -> bool:
@@ -508,18 +515,65 @@ class RoomVolume:
                 if ramp is not None:
                     ramp.stop()
                 ramp = self._fades[out.id] = VolumeRamp(
-                    self.hass, out, self.ctrl._spawn, step_seconds=FADE_STEP_SECONDS, curve=ease_in_out
+                    self.hass,
+                    out,
+                    self.ctrl._spawn,
+                    on_done=lambda out_id=out.id: self._forget_fade(out_id),
+                    step_seconds=FADE_STEP_SECONDS,
+                    curve=ease_in_out,
                 )
             if ramp.start(target, fade):
+                # a restart of Home Assistant in between: it goes on afterwards
+                self._cut_fades[out.id] = {"from": current, "to": target, "seconds": fade}
+                self.ctrl._save()
                 return
         self.async_cancel_fade(out.id)
         await out.async_set(target)
+
+    @property
+    def _cut_fades(self) -> dict[str, dict[str, float]]:
+        """The running preset fades (output: from, to, seconds), stored."""
+        return self.ctrl.data.setdefault("preset_fades", {})
+
+    @callback
+    def _forget_fade(self, output_id: str) -> None:
+        if self._cut_fades.pop(output_id, None) is not None:
+            self.ctrl._save()
+
+    async def _resume_cut_fades(self) -> None:
+        """HA is up: a fade cut by the restart goes on from where the volume is
+        now; changed meanwhile (outside from..to): that is the room volume."""
+        cut = self.ctrl.data.pop("preset_fades", None)
+        if not cut:
+            return
+        self.ctrl._save()
+        for output_id, fade in cut.items():
+            out, src = self.ctrl.output(output_id)
+            if out is None:
+                continue
+            if src is not None and (not self.ctrl.source_playing(src) or self._in_group(src)):
+                continue  # stopped or in a group meanwhile: nothing to go on with
+            if src is None and self.ctrl.active_source is None:
+                continue  # the volume device, with nothing playing
+            current = out.level()
+            if current is None:
+                continue
+            low, high = sorted((float(fade["from"]), float(fade["to"])))
+            if not low - out.tolerance <= current <= high + out.tolerance:
+                _LOGGER.info("%s: %s changed during the restart, keeping %.2f", self.ctrl.entry.title, out.id, current)
+                self.learn(current)
+                continue
+            if src is None:
+                await self.async_apply_device(fade=float(fade["seconds"]))
+            else:
+                await self.async_apply(src, fade=float(fade["seconds"]))
 
     @callback
     def async_cancel_fade(self, output_id: str) -> None:
         """Someone else sets this output's volume now (night, sleep, wake)."""
         if (ramp := self._fades.get(output_id)) is not None:
             ramp.stop()
+        self._forget_fade(output_id)
 
     @callback
     def async_off(self) -> None:
@@ -550,8 +604,8 @@ class RoomVolume:
 
     @callback
     def async_cancel_fades(self) -> None:
-        for ramp in self._fades.values():
-            ramp.stop()
+        for output_id in list(self._fades):
+            self.async_cancel_fade(output_id)
 
     @callback
     def async_cancel_apply(self, player: str) -> None:
@@ -565,4 +619,5 @@ class RoomVolume:
             unsub()
         self._pending.clear()
         self._learning.clear()
-        self.async_cancel_fades()
+        for ramp in self._fades.values():
+            ramp.stop()  # (shutdown: stored, it goes on after the restart)

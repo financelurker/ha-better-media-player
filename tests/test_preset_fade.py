@@ -308,33 +308,56 @@ async def test_a_volume_device_fades(hass, home, freezer):
     assert hass.states.get(SELECT).state == "loud"
 
 
-async def test_the_power_on_preset_fades_from_the_start_volume(hass, home, freezer):
-    entry = await setup_room(hass, power_on_preset="quiet")
-    entry.runtime_data.data["room_volume"] = 0.7  # last night's party
-    home.music("playing", volume_level=0.7)
+async def test_the_power_on_preset_fades_up_from_the_start_volume(hass, home, freezer):
+    entry = await setup_room(hass, power_on_preset="normal")
+    entry.runtime_data.data["room_volume"] = 0.05  # quiet last night
+    home.music("playing", volume_level=0.05)
     await hass.async_block_till_done()
     await _tick(hass, freezer, 2.5, 0.5)  # the room settles
     await _tick(hass, freezer, 1, 0.5)
-    assert 0.15 < _vol(hass) < 0.7, "fading"
+    assert 0.05 < _vol(hass) < 0.3, "fading up"
     await _tick(hass, freezer, 3, 0.5)
-    assert _vol(hass) == 0.15
+    assert _vol(hass) == 0.3
+    assert hass.states.get(SELECT).state == "normal"
+
+
+async def test_the_power_on_preset_down_is_at_once(hass, home, freezer):
+    entry = await setup_room(hass, power_on_preset="quiet")
+    entry.runtime_data.data["room_volume"] = 0.7  # last night's party
+    steps = _track(hass)
+    home.music("playing", volume_level=0.7)
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 6, 0.5)
+    assert steps == [0.7, 0.15], "no moment at the party volume"
     assert hass.states.get(SELECT).state == "quiet"
 
 
-async def test_the_power_on_fade_is_once(hass, home, freezer):
-    entry = await setup_room(hass, power_on_preset="quiet")
-    entry.runtime_data.data["room_volume"] = 0.7
+async def test_a_chosen_preset_still_fades_down(hass, home, freezer):
+    await setup_room(hass, power_on_preset="quiet")
     home.music("playing", volume_level=0.7)
     await hass.async_block_till_done()
+    await _tick(hass, freezer, 6, 0.5)
+    await _select(hass, "loud")
+    await _tick(hass, freezer, 4, 0.5)
+    steps = _track(hass)
+    await _select(hass, "quiet")
+    await _tick(hass, freezer, 4, 0.5)
+    assert len(steps) >= 5 and steps[-1] == 0.15
+
+
+async def test_the_power_on_fade_is_once(hass, home, freezer):
+    entry = await setup_room(hass, power_on_preset="normal")
+    entry.runtime_data.data["room_volume"] = 0.05
+    home.music("playing", volume_level=0.05)
+    await hass.async_block_till_done()
     await _tick(hass, freezer, 8, 0.5)
-    assert _vol(hass) == 0.15
-    # the video player starts later: it gets the room volume at once
+    assert _vol(hass) == 0.3
+    # the video player starts later (lower): it gets the room volume at once
     steps = _track(hass, KODI)
-    home.kodi("idle", volume_level=0.6)
+    home.kodi("idle", volume_level=0.1)
     await hass.async_block_till_done()
     await _tick(hass, freezer, 2.5, 0.5)
-    assert steps[-1] == 0.15 and len(steps) <= 2, steps
-
+    assert steps == [0.1, 0.3], steps
 
 
 async def test_turned_off_during_the_fade(hass, home, freezer):
@@ -395,3 +418,82 @@ async def test_a_power_on_in_a_group_leaves_no_fade_behind(hass, home, freezer):
     await hass.async_block_till_done()
     await _tick(hass, freezer, 4, 0.5)
     assert steps == [0.3], f"at once: {steps}"
+
+
+# ------------------------------------------------------------------ restart
+
+
+async def _restart(hass, entry, meanwhile=None):
+    """Home Assistant restarts (unload, things happen, set up again)."""
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    if meanwhile is not None:
+        meanwhile()
+    await hass.async_block_till_done()
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+
+async def test_a_fade_cut_by_a_restart_goes_on(hass, home, freezer):
+    entry = await _music_at(hass, home, freezer, volume=0.2)
+    await _select(hass, "party")
+    await _tick(hass, freezer, 1, 0.5)
+    cut = _vol(hass)
+    assert 0.2 < cut < 0.7
+    await _restart(hass, entry)
+    await _tick(hass, freezer, 0.5, 0.5)
+    assert cut <= _vol(hass) < 0.7, "fading on, from where it was"
+    await _tick(hass, freezer, 4, 0.5)
+    assert _vol(hass) == 0.7
+    assert hass.states.get(SELECT).state == "party"
+    assert not entry.runtime_data.data.get("preset_fades")
+
+
+async def test_changed_during_the_restart_is_kept(hass, home, freezer):
+    entry = await _music_at(hass, home, freezer, volume=0.2)
+    await _select(hass, "party")
+    await _tick(hass, freezer, 1, 0.5)
+    await _restart(hass, entry, lambda: home.music("playing", volume_level=0.1))
+    await _tick(hass, freezer, 5, 0.5)
+    assert _vol(hass) == 0.1
+    assert _room_volume(hass) == 0.1
+    assert hass.states.get(SELECT).state == "manual"
+
+
+async def test_stopped_during_the_restart_drops_the_fade(hass, home, freezer):
+    entry = await _music_at(hass, home, freezer, volume=0.2)
+    await _select(hass, "party")
+    await _tick(hass, freezer, 1, 0.5)
+    cut = _vol(hass)
+    await _restart(hass, entry, lambda: home.music("paused", volume_level=cut))
+    steps = _track(hass)
+    await _tick(hass, freezer, 5, 0.5)
+    assert steps == []
+    assert not entry.runtime_data.data.get("preset_fades")
+
+
+async def test_a_finished_fade_is_not_kept(hass, home, freezer):
+    entry = await _music_at(hass, home, freezer, volume=0.2)
+    await _select(hass, "party")
+    assert entry.runtime_data.data["preset_fades"]
+    await _tick(hass, freezer, 4, 0.5)
+    assert not entry.runtime_data.data["preset_fades"]
+
+
+async def test_a_device_fade_cut_by_a_restart_goes_on(hass, home, freezer):
+    home.avr("on", volume_level=0.2)
+    entry = await setup_room(hass, **{CONF_VOLUME_CONTROL: VOLUME_DEVICE, CONF_VOLUME_ENTITY: AVR})
+    home.music("playing")
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 3)
+    home.avr("on", volume_level=0.2)
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 3)
+    await _select(hass, "loud")
+    await _tick(hass, freezer, 1, 0.5)
+    assert 0.2 < _vol(hass, AVR) < 0.5
+    await _restart(hass, entry)
+    await _tick(hass, freezer, 5, 0.5)
+    assert _vol(hass, AVR) == 0.5
+    assert hass.states.get(SELECT).state == "loud"
+
