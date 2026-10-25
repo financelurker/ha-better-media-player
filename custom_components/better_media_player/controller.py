@@ -62,6 +62,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_AUDIO_POWER,
+    CONF_AUDIO_RUN_DOWN,
     CONF_BASS,
     CONF_DISPLAY,
     CONF_DISPLAY_POWER,
@@ -600,9 +601,22 @@ class RoomController:
     def source_playing(self, src: Source) -> bool:
         return self.player_state(src) in PLAYING_STATES
 
+    def power_controlled(self, src: Source) -> bool:
+        """A music player with an on/off of its own (e.g. Music Assistant's
+        power control, also its fake one): its on means something, as a video
+        player's does."""
+        return (
+            src.key == SOURCE_AUDIO
+            and self.player_supports(src, MediaPlayerEntityFeature.TURN_ON)
+            and self.player_supports(src, MediaPlayerEntityFeature.TURN_OFF)
+        )
+
     def source_active_raw(self, src: Source) -> bool:
         """Active from the player's point of view (ignores suppression)."""
-        return src.backend.is_active(self.player_state(src))
+        state = self.player_state(src)
+        if self.power_controlled(src):
+            return state in POWERED_STATES  # on: its devices come up
+        return src.backend.is_active(state)
 
     def source_active(self, src: Source) -> bool:
         if not self.source_active_raw(src) or src.suppressed:
@@ -910,18 +924,20 @@ class RoomController:
 
     def _update_sources(self, now: float) -> None:
         for src in self.sources.values():
-            stopped = VIDEO_STOPPED if src.key == SOURCE_VIDEO else AUDIO_STOPPED
+            video = src.key == SOURCE_VIDEO
+            powered = self.power_controlled(src)
+            stopped = VIDEO_STOPPED if video or powered else AUDIO_STOPPED
             if src.suppressed and self.player_state(src) in stopped:
                 src.suppressed = False
-            if (
-                src.key == SOURCE_VIDEO
-                and self.source_active(src)
-                and self.player_state(src) in IDLE_STATES
-            ):
+            idle = IDLE_STATES if video else {*IDLE_STATES, MediaPlayerState.PAUSED}
+            if (video or powered) and self.source_active(src) and self.player_state(src) in idle:
                 if src.idle_since is None:
                     src.idle_since = now
-                key = "night_video_idle_timeout" if self.night.active else "video_idle_timeout"
-                timeout = float(self.data.get(key, 0)) * 60
+                if video:
+                    key = "night_video_idle_timeout" if self.night.active else "video_idle_timeout"
+                else:
+                    key = CONF_AUDIO_RUN_DOWN  # on, but nothing plays: as long as the speakers' run-down
+                timeout = float(self.setting(key) or 0) * 60
                 if (
                     self.auto_power
                     and timeout > 0
@@ -931,6 +947,11 @@ class RoomController:
                     src.idle_since = None
                     src.suppressed = True
                     self._spawn(self._source_off(src))
+                    if powered:
+                        # its run-down is over: what only it needed goes off with it
+                        for role in self.roles.values():
+                            if SOURCE_AUDIO in role.sources and not self.role_demand(role):
+                                role.force_off = True
             else:
                 src.idle_since = None
 
