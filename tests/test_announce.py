@@ -290,16 +290,17 @@ async def test_no_source_change_and_no_snooze_meanwhile(hass, home, freezer):
 
 
 async def test_the_action_speaks_a_message(hass, home, freezer):
-    import homeassistant.components.tts  # noqa: F401 (loaded for the patch)
+    import sys
+    import types
+    from unittest.mock import MagicMock
 
     await _room(hass, home, freezer)
-    with patch(
-        "homeassistant.components.tts.generate_media_source_id", return_value="media-source://tts/hello"
-    ) as generate:
+    tts = types.ModuleType("homeassistant.components.tts")  # (the real one needs extra packages)
+    tts.generate_media_source_id = MagicMock(return_value="media-source://tts/hello")
+    with patch.dict(sys.modules, {"homeassistant.components.tts": tts}):
         await hass.services.async_call(DOMAIN, "announce", {"entity_id": ROOM, "message": "Hello"}, blocking=True)
-    assert generate.call_args.args[1] == "Hello"
+    assert tts.generate_media_source_id.call_args.args[1] == "Hello"
     assert home.announcements[0][1]["media_content_id"] == "media-source://tts/hello"
-
 
 async def test_a_wake_is_not_snoozed_by_it(hass, home, freezer):
     from .test_wake import WAKE, _wake_playing
