@@ -14,6 +14,11 @@ DOCS = ROOT / "docs"
 PAGES = sorted(DOCS.glob("*.md"))
 REPO_BLOB = "https://github.com/financelurker/ha-better-media-player/blob/main/"
 REPO_RAW = "https://raw.githubusercontent.com/financelurker/ha-better-media-player/main/"
+BADGES = (
+    "https://img.shields.io/",
+    "https://my.home-assistant.io/badges/",
+    "https://github.com/financelurker/ha-better-media-player/actions/workflows/",
+)
 YAML_PAGES = {"automations.md", "dashboards.md"}
 
 _spec = importlib.util.spec_from_file_location("readme_images", ROOT / "scripts" / "readme_images.py")
@@ -21,7 +26,8 @@ readme_images = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(readme_images)
 
 FENCE_RE = re.compile(r"^```.*?^```", re.M | re.S)
-LINK_RE = re.compile(r"\]\(([^)\s]+)\)|<img [^>]*src=\"([^\"]+)\"")
+LINK_RE = re.compile(r"\]\(([^)\s]+)\)|<(?:img|a) [^>]*(?:src|href)=\"([^\"]+)\"|<(https?://[^>\s]+)>|^\[[^\]]+\]: *(\S+)", re.M)
+IMAGE_RE = re.compile(r"!\[[^\]]*\]\(([^)\s]+)\)|<img [^>]*src=\"([^\"]+)\"")
 
 
 def _prose(text: str) -> str:
@@ -44,7 +50,7 @@ def anchors(file: Path) -> set[str]:
 
 
 def links(file: Path) -> list[str]:
-    return [a or b for a, b in LINK_RE.findall(_prose(file.read_text(encoding="utf-8")))]
+    return [next(filter(None, groups)) for groups in LINK_RE.findall(_prose(file.read_text(encoding="utf-8")))]
 
 
 def _check(file: Path, link: str) -> str | None:
@@ -59,6 +65,8 @@ def _check(file: Path, link: str) -> str | None:
     else:
         path, _, anchor = link.partition("#")
         target = (file.parent / path).resolve() if path else file
+    if not target.resolve().is_relative_to(ROOT):
+        return f"{link}: outside the repository"
     if not target.exists():
         return f"{link}: {target.relative_to(ROOT)} does not exist"
     if anchor and anchor not in anchors(target):
@@ -84,6 +92,18 @@ def test_readme_image_urls_are_stamped(tmp_path):
     assert readme_images.versioned(updated, tmp_path)[0] != updated
 
 
+def test_readme_images_versioned():
+    """Every README image is a raw URL with a version marker (else a cache shows an old image)."""
+    images = [a or b for a, b in IMAGE_RE.findall(README.read_text(encoding="utf-8"))]
+    assert images
+    unversioned = [
+        url for url in images
+        if not url.startswith(BADGES)
+        and not re.fullmatch(re.escape(REPO_RAW) + r"docs/images/[\w.-]+\?v=[0-9a-f]{10}", url)
+    ]
+    assert unversioned == []
+
+
 def test_readme_links_absolute():
     """HACS shows the README inside Home Assistant: relative links do not work there."""
     relative = [link for link in links(README) if not link.startswith(("https://", "http://"))]
@@ -102,7 +122,13 @@ def test_page_structure(file: Path):
     assert text.startswith("# ")
     assert "[← Back to the overview](../README.md)" in text
     assert ("```yaml" in text) == (file.name in YAML_PAGES), "YAML belongs on automations.md / dashboards.md"
+    if file.name not in YAML_PAGES:
+        assert "```" not in text, "code blocks belong on automations.md / dashboards.md"
     assert REPO_BLOB not in text, "pages link each other relatively"
+
+
+def test_readme_without_code_blocks():
+    assert "```" not in README.read_text(encoding="utf-8")
 
 
 def test_every_page_in_readme():

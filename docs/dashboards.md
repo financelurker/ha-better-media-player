@@ -6,7 +6,7 @@ The room on a dashboard, and how its controls show and hide themselves.
 
 ## The room on a dashboard
 
-Taken from the Home Assistant demo integration: two demo players stand in for Kodi and a Music Assistant player, the plugs are template switches ([how](../scripts/screenshots/README.md)).
+The screenshots are taken from the Home Assistant demo integration: two demo players stand in for Kodi and a Music Assistant player, the plugs are template switches ([how](../scripts/screenshots/README.md)).
 
 **Movie night:** Kodi plays, so the TV, the speakers and the subwoofer have power. The room player shows what is playing and controls it.
 
@@ -28,7 +28,7 @@ The device page and the settings of a room: [Setup](setup.md#settings-on-the-dev
 
 ## Dynamic controls
 
-**Dynamic controls:** a room's controls that make no sense right now are hidden (`hidden_by: integration`), so the automatic dashboards only show what can be used. A control is shown at once when it makes sense again and hidden only after the hide delay (default 3 s), so a short stop between two items changes nothing. The room player and the night mode are always shown; settings and diagnostic entities are left alone.
+A room's controls that make no sense right now are hidden (`hidden_by: integration`), so the automatic dashboards only show what can be used. A control is shown at once when it makes sense again and hidden only after the hide delay (default 3 s), so a short stop between two items changes nothing. The room player and the night mode are always shown; settings and diagnostic entities are left alone.
 
 | Control | Shown while |
 |---|---|

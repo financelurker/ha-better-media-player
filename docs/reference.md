@@ -34,12 +34,12 @@ How the room behaves, set under *Configuration* on its device ([Settings on the 
 
 | Setting | Entity | Default | Present |
 |---|---|---|---|
-| Display run-down, Speaker run-down, Player hardware run-down | `number.<room>_display_run_down`, `_speaker_run_down`, `_player_hardware_run_down` | 10 / 2 / 2 min | with that device |
+| Display run-down, Speaker run-down, Player hardware run-down | `number.<room>_display_run_down`, `_speaker_run_down`, `_player_hardware_run_down` | 10 / 2 / 2 min | with that device (speaker run-down: also with a subwoofer alone) |
 | Video idle timeout | `number.<room>_video_idle_timeout` | 30 min | with a video player |
 | Start timeout | `number.<room>_start_timeout` | 90 s | always |
 | Wait after display on, Wait after speakers on, Wait after player plug on | `number.<room>_wait_after_display_on`, `_wait_after_speakers_on`, `_wait_after_player_plug_on` | 0 s | with that device |
 | Display / Speakers: wait for standby | `switch.<room>_display_wait_for_standby`, `switch.<room>_speakers_wait_for_standby` | off | with power sensors and a plug for it |
-| Display / Speakers: standby below | `number.<room>_display_standby_below`, `_speakers_standby_below` | 5 / 3 W | with power sensors and a plug for it |
+| Display / Speakers standby below | `number.<room>_display_standby_below`, `_speakers_standby_below` | 5 / 3 W | with power sensors and a plug for it |
 | Display / Speakers: wait for standby at most | `number.<room>_display_wait_for_standby_at_most`, `_speakers_wait_for_standby_at_most` | 20 / 5 min | with power sensors and a plug for it |
 | Night: maximum volume | `number.<room>_night_maximum_volume` | 30 %, 0 = no limit | always |
 | Night: video idle timeout | `number.<room>_night_video_idle_timeout` | 5 min | with a video player |

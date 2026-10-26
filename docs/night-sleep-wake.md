@@ -35,14 +35,14 @@ Example: [the AV receiver's sound mode at night](automations.md#night-mode-event
 
 The room turns itself off after a set time, whatever plays (video or music). Over the last minutes the volume of the active player fades out; then the normal *room off* runs and the volume from before the fade is set again, so the next playback does not start at zero. A player that is suspended at the end (e.g. Kodi) gets its volume when it is up again.
 
-- Set it with the number `Sleep timer` (minutes, 0 = off; shows the minutes left), the button `Sleep timer +15 min` or the actions below. Only while the room is on.
+- Set it with the number `Sleep timer` (minutes, 0 = off; shows the minutes left), the button `Sleep timer +15 min` or the actions `better_media_player.set_sleep_timer` / `cancel_sleep_timer` ([example](automations.md#sleep-timer)). Only while the room is on.
 - Turning the room off, or the room going off by itself, ends the timer. Cancelling during the fade sets the volume back.
 - Changing the volume during the fade stops the fade only: your volume stays, and the timer still ends the room.
 - *+15 min* during the fade sets the volume back; the fade starts again before the new end.
 - The timer survives a restart of Home Assistant. If it ran out while Home Assistant was down, the room is turned off at the start only if something still plays.
 - The event `better_media_player_sleep_timer_finished` (`entity_id`, `entry_id`, `room`, `reason`: `expired`, `cancelled` or `room_off`) is fired when the timer ends.
 
-`better_media_player.cancel_sleep_timer` stops it. Example: [set a sleep timer](automations.md#sleep-timer).
+`better_media_player.cancel_sleep_timer` stops it.
 
 ## Wake up
 

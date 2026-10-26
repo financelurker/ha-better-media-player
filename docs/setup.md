@@ -42,7 +42,7 @@ Each room is a device (Settings → Devices & services → Better Media Player �
 
 ![Device page](images/device.png)
 
-How the room behaves – times, waits, standby, night mode, volume presets and follow me – is set under *Configuration* on that page. These are configuration entities: they take effect at once, can be set by automations (`number.set_value`, `switch.turn_on`, `select.select_option`; entity ids under [Reference](reference.md#settings)) and do not show up on auto-generated dashboards. A room only has the ones it can use; to start, you can leave them all at their defaults. All of them, with their defaults and when a room has them: [Reference](reference.md#settings).
+How the room behaves – times, waits, standby, night mode, volume presets and follow me – is set under *Configuration* on that page. These are configuration entities: they take effect at once, can be set by automations (`number.set_value`, `switch.turn_on`, `select.select_option`) and do not show up on auto-generated dashboards. A room only has the ones it can use; to start, you can leave them all at their defaults. All of them, with their entity ids, defaults and when a room has them: [Reference](reference.md#settings).
 
 <details>
 <summary>Screenshot: the settings of a room</summary>
