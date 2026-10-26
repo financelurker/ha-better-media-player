@@ -98,6 +98,9 @@ STATE_MAP = {
 }
 
 DEFAULT_SOURCE_NAMES = {SOURCE_VIDEO: "Video", SOURCE_AUDIO: "Music"}
+SOURCE_ICONS = {SOURCE_VIDEO: "mdi:television-play", SOURCE_AUDIO: "mdi:music"}
+ICON_ON = "mdi:television-speaker"
+ICON_OFF = "mdi:television-speaker-off"
 
 
 async def async_setup_entry(
@@ -208,6 +211,16 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
             if src is not None and not src.suppressed:
                 return STATE_MAP[child.state]
         return MediaPlayerState.ON
+
+    @property
+    def icon(self) -> str:
+        """The active source's icon (in code: icons.json cannot follow the source)."""
+        if not self.ctrl.room_on:
+            return ICON_OFF
+        src = self.ctrl.active_source
+        if src is not None and not src.suppressed:
+            return SOURCE_ICONS[src.key]
+        return ICON_ON
 
     @property
     def supported_features(self) -> MediaPlayerEntityFeature:

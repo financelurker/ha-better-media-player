@@ -45,7 +45,6 @@ class AnnounceVideoSelect(BetterMediaPlayerEntity, SelectEntity):
     """A film while the music player announces: paused, overlaid or turned down."""
 
     _attr_entity_category = EntityCategory.CONFIG
-    _attr_icon = "mdi:bullhorn"
     _attr_options = ANNOUNCE_VIDEO_MODES
 
     @property
@@ -60,7 +59,6 @@ class PowerOnPresetSelect(BetterMediaPlayerEntity, SelectEntity):
     """The room's volume whenever it comes on (none: as it was)."""
 
     _attr_entity_category = EntityCategory.CONFIG
-    _attr_icon = "mdi:volume-source"
     _attr_options = [PRESET_NONE, *PRESETS]
 
     @property
@@ -79,7 +77,6 @@ class VolumePresetSelect(ControlEntity, SelectEntity):
     def usable(self) -> bool:
         return self.ctrl.room_active
 
-    _attr_icon = "mdi:volume-equal"
 
     @property
     def options(self) -> list[str]:
@@ -96,7 +93,6 @@ class VolumePresetSelect(ControlEntity, SelectEntity):
 class HandoverSelect(ControlEntity, SelectEntity):
     """Continue what plays here in another room (by its name); this room goes off."""
 
-    _attr_icon = "mdi:transfer-right"
 
     def _targets(self) -> dict[str, RoomController]:
         rooms = sorted(get_rooms(self.hass).values(), key=lambda r: r.entry.title)

@@ -34,8 +34,8 @@ async def async_setup_entry(
         hub = entry.runtime_data
         async_add_entities(
             [
-                HubNumber(entry, hub, CONF_DEFAULT_VOLUME, 1, 100, 1, PERCENTAGE, "mdi:volume-medium"),
-                HubNumber(entry, hub, CONF_HIDE_DELAY, 0, 300, 1, UnitOfTime.SECONDS, "mdi:timer-sand"),
+                HubNumber(entry, hub, CONF_DEFAULT_VOLUME, 1, 100, 1, PERCENTAGE),
+                HubNumber(entry, hub, CONF_HIDE_DELAY, 0, 300, 1, UnitOfTime.SECONDS),
             ]
         )
         return
@@ -105,7 +105,6 @@ class PercentNumber(MinutesNumber):
     """Night mode volume limit in %; 0 = no limit."""
 
     _attr_native_unit_of_measurement = PERCENTAGE
-    _attr_icon = "mdi:volume-medium"
 
     def __init__(self, entry, ctrl, key: str) -> None:
         super().__init__(entry, ctrl, key, 0, 100)
@@ -119,7 +118,6 @@ class PresetNumber(MinutesNumber):
     """The volume of a preset in %; 0 = not offered in the room."""
 
     _attr_native_unit_of_measurement = PERCENTAGE
-    _attr_icon = "mdi:volume-equal"
 
     def __init__(self, entry, ctrl, name: str) -> None:
         super().__init__(entry, ctrl, CONF_PRESET.format(name), 0, 100)
@@ -149,14 +147,13 @@ class HubNumber(HubEntity, NumberEntity):
     _attr_entity_category = EntityCategory.CONFIG
     _attr_mode = NumberMode.BOX
 
-    def __init__(self, entry, hub, key: str, minimum: float, maximum: float, step: float, unit: str, icon: str) -> None:
+    def __init__(self, entry, hub, key: str, minimum: float, maximum: float, step: float, unit: str) -> None:
         super().__init__(entry, hub, key)
         self._key = key
         self._attr_native_min_value = minimum
         self._attr_native_max_value = maximum
         self._attr_native_step = step
         self._attr_native_unit_of_measurement = unit
-        self._attr_icon = icon
 
     @property
     def native_value(self) -> float:
@@ -173,7 +170,6 @@ class SleepTimerNumber(ControlEntity, NumberEntity):
     def usable(self) -> bool:
         return self.ctrl.room_active or self.ctrl.sleep.active
 
-    _attr_icon = "mdi:sleep"
     _attr_mode = NumberMode.BOX
     _attr_native_min_value = 0
     _attr_native_max_value = MAX_MINUTES

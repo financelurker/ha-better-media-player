@@ -1,0 +1,289 @@
+{
+  "entity": {
+    "sensor": {
+      "status": {
+        "default": "mdi:television-speaker",
+        "state": {
+          "off": "mdi:power-off",
+          "starting": "mdi:timer-sand",
+          "on": "mdi:power",
+          "playing": "mdi:play",
+          "run_down": "mdi:timer-outline",
+          "stopping": "mdi:power-sleep",
+          "manual": "mdi:hand-back-right",
+          "error": "mdi:alert-circle",
+          "disabled": "mdi:power-plug-off"
+        }
+      },
+      "follow_state": {
+        "default": "mdi:account-music",
+        "state": {
+          "inactive": "mdi:account-off-outline",
+          "following": "mdi:account-music",
+          "waiting": "mdi:account-clock",
+          "override": "mdi:account-lock",
+          "excluded_quiet": "mdi:account-cancel",
+          "excluded_video": "mdi:account-cancel",
+          "excluded_off": "mdi:account-cancel",
+          "excluded_busy": "mdi:account-cancel",
+          "presence_unknown": "mdi:account-question",
+          "waking": "mdi:alarm",
+          "snoozed": "mdi:alarm-snooze",
+          "held_out": "mdi:account-clock-outline"
+        }
+      },
+      "follow": {
+        "default": "mdi:account-music",
+        "range": {
+          "0": "mdi:account-music-outline",
+          "1": "mdi:account-music"
+        }
+      },
+      "sleep_timer_end": {
+        "default": "mdi:sleep"
+      },
+      "wake": {
+        "default": "mdi:alarm",
+        "state": {
+          "idle": "mdi:alarm-off",
+          "starting": "mdi:alarm",
+          "fading": "mdi:alarm",
+          "playing": "mdi:alarm-check",
+          "snoozed": "mdi:alarm-snooze"
+        }
+      }
+    },
+    "binary_sensor": {
+      "display_demand": {
+        "default": "mdi:television",
+        "state": {
+          "on": "mdi:television",
+          "off": "mdi:television-off"
+        }
+      },
+      "audio_demand": {
+        "default": "mdi:speaker",
+        "state": {
+          "on": "mdi:speaker",
+          "off": "mdi:speaker-off"
+        }
+      }
+    },
+    "switch": {
+      "auto_power": {
+        "default": "mdi:auto-mode",
+        "state": {
+          "on": "mdi:auto-mode",
+          "off": "mdi:hand-back-right-off"
+        }
+      },
+      "quiet": {
+        "default": "mdi:volume-off",
+        "state": {
+          "on": "mdi:volume-off",
+          "off": "mdi:volume-high"
+        }
+      },
+      "night_mode": {
+        "default": "mdi:weather-night",
+        "state": {
+          "on": "mdi:weather-night",
+          "off": "mdi:weather-sunny"
+        }
+      },
+      "display_standby": {
+        "default": "mdi:power-sleep"
+      },
+      "audio_standby": {
+        "default": "mdi:power-sleep"
+      },
+      "prewarm": {
+        "default": "mdi:speaker-wireless"
+      },
+      "wake_detect_left": {
+        "default": "mdi:exit-run"
+      },
+      "dynamic_controls": {
+        "default": "mdi:eye-refresh-outline"
+      }
+    },
+    "number": {
+      "display_run_down": {
+        "default": "mdi:television-off"
+      },
+      "audio_run_down": {
+        "default": "mdi:speaker-off"
+      },
+      "host_run_down": {
+        "default": "mdi:power-plug-off"
+      },
+      "video_idle_timeout": {
+        "default": "mdi:television-pause"
+      },
+      "sleep_timer": {
+        "default": "mdi:sleep",
+        "range": {
+          "0": "mdi:sleep-off",
+          "1": "mdi:sleep"
+        }
+      },
+      "night_video_idle_timeout": {
+        "default": "mdi:weather-night"
+      },
+      "night_display_run_down": {
+        "default": "mdi:weather-night"
+      },
+      "night_max_volume": {
+        "default": "mdi:volume-medium"
+      },
+      "preset_quiet": {
+        "default": "mdi:volume-low"
+      },
+      "preset_normal": {
+        "default": "mdi:volume-medium"
+      },
+      "preset_loud": {
+        "default": "mdi:volume-high"
+      },
+      "preset_party": {
+        "default": "mdi:party-popper"
+      },
+      "start_timeout": {
+        "default": "mdi:timer-alert-outline"
+      },
+      "display_on_wait": {
+        "default": "mdi:timer-sand"
+      },
+      "audio_on_wait": {
+        "default": "mdi:timer-sand"
+      },
+      "host_on_wait": {
+        "default": "mdi:timer-sand"
+      },
+      "display_standby_w": {
+        "default": "mdi:flash-outline"
+      },
+      "display_standby_max": {
+        "default": "mdi:timer-cog-outline"
+      },
+      "audio_standby_w": {
+        "default": "mdi:flash-outline"
+      },
+      "audio_standby_max": {
+        "default": "mdi:timer-cog-outline"
+      },
+      "preset_fade": {
+        "default": "mdi:volume-equal"
+      },
+      "sleep_fade": {
+        "default": "mdi:sleep"
+      },
+      "snooze_minutes": {
+        "default": "mdi:alarm-snooze"
+      },
+      "night_fade_in": {
+        "default": "mdi:weather-sunset-up"
+      },
+      "presence_run_down": {
+        "default": "mdi:account-clock"
+      },
+      "volume_offset": {
+        "default": "mdi:plus-minus-variant"
+      },
+      "default_volume": {
+        "default": "mdi:volume-medium"
+      },
+      "hide_delay": {
+        "default": "mdi:timer-sand"
+      },
+      "announce_video_lower": {
+        "default": "mdi:volume-minus"
+      }
+    },
+    "button": {
+      "all_off": {
+        "default": "mdi:power"
+      },
+      "sleep_plus_15": {
+        "default": "mdi:timer-plus-outline"
+      },
+      "wake_snooze": {
+        "default": "mdi:alarm-snooze"
+      },
+      "wake_stop": {
+        "default": "mdi:alarm-off"
+      },
+      "follow_start": {
+        "default": "mdi:account-music"
+      },
+      "follow_stop": {
+        "default": "mdi:account-music-outline"
+      }
+    },
+    "select": {
+      "volume_preset": {
+        "default": "mdi:volume-equal",
+        "state": {
+          "quiet": "mdi:volume-low",
+          "normal": "mdi:volume-medium",
+          "loud": "mdi:volume-high",
+          "party": "mdi:party-popper",
+          "manual": "mdi:volume-equal"
+        }
+      },
+      "power_on_preset": {
+        "default": "mdi:volume-source",
+        "state": {
+          "none": "mdi:volume-source",
+          "quiet": "mdi:volume-low",
+          "normal": "mdi:volume-medium",
+          "loud": "mdi:volume-high",
+          "party": "mdi:party-popper"
+        }
+      },
+      "handover": {
+        "default": "mdi:transfer-right"
+      },
+      "announce_video": {
+        "default": "mdi:bullhorn",
+        "state": {
+          "pause": "mdi:pause",
+          "overlay": "mdi:layers",
+          "lower": "mdi:volume-minus"
+        }
+      }
+    }
+  },
+  "services": {
+    "set_sleep_timer": {
+      "service": "mdi:sleep"
+    },
+    "cancel_sleep_timer": {
+      "service": "mdi:sleep-off"
+    },
+    "wake": {
+      "service": "mdi:alarm"
+    },
+    "snooze": {
+      "service": "mdi:alarm-snooze"
+    },
+    "stop_wake": {
+      "service": "mdi:alarm-off"
+    },
+    "start_follow": {
+      "service": "mdi:account-music"
+    },
+    "stop_follow": {
+      "service": "mdi:account-music-outline"
+    },
+    "set_volume_preset": {
+      "service": "mdi:volume-equal"
+    },
+    "handover": {
+      "service": "mdi:transfer-right"
+    },
+    "announce": {
+      "service": "mdi:bullhorn"
+    }
+  }
+}
