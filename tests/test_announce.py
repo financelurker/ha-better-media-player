@@ -647,3 +647,19 @@ async def test_the_room_players_announce_extra_is_checked(hass, home, freezer):
     await hass.services.async_call("switch", "turn_on", {"entity_id": QUIET}, blocking=True)
     await _speak(hass, extra={"ignore_quiet": "false"})
     assert home.announcements == []
+
+
+async def test_a_room_that_is_off_announces_once_its_speakers_are_ready(hass, home, freezer):
+    home.ma_announce = True
+    home.music("off")
+    entry = await setup_room(hass, bass=None)  # the speakers are the last device
+    await entry.runtime_data.async_set_setting("audio_on_wait", 5)  # they need a moment
+    await hass.async_block_till_done()
+    task = _speak_later(hass)
+    await _settle(hass)
+    await _tick_held(hass, freezer, 3)
+    assert home.on(SPEAKERS)
+    assert home.announcements == [], "not before the speakers' wait is over"
+    await _tick_held(hass, freezer, 4)
+    await task
+    assert [a[0] for a in home.announcements] == [MUSIC]

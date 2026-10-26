@@ -382,7 +382,11 @@ class RoomAnnouncer:
         if roles:
             await ctrl.async_update("announce")
             wanted = [ctrl.roles[k] for k in roles]
-            if not await ctrl._wait_until(lambda: all(ctrl.role_fully_on(r) for r in wanted), timeout):
+            # until the power sequence is through: the devices report on and their
+            # waits after switching on (e.g. speakers that need a moment) are over
+            if not await ctrl._wait_until(
+                lambda: not ctrl.sequence_running and all(ctrl.role_fully_on(r) for r in wanted), timeout
+            ):
                 _LOGGER.warning("%s: devices not up for the announcement, announcing anyway", ctrl.entry.title)
         if ctrl.player_state(src) in _NOT_READY and ctrl.player_supports(src, MediaPlayerEntityFeature.TURN_ON):
             self._woken.add(src.key)
