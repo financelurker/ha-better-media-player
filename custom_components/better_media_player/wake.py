@@ -407,7 +407,10 @@ class WakeAlarm:
         progress = 1 - left / w["fade_s"] if w["fade_s"] else 1
         await self._set_volume(src, round(start + (target - start) * progress, 3))
         if self._w is w and w["phase"] == PHASE_FADING:
-            self._fade(src, target, left)
+            if left > 0:
+                self._fade(src, target, left)
+            else:
+                self._fade_done()  # its time is over meanwhile: at the target now
 
     @callback
     def _fade_done(self) -> None:
@@ -456,7 +459,6 @@ class WakeAlarm:
     # ---------------------------------------------------------------- events
 
     @callback
-    @callback
     def async_announce_begin(self) -> None:
         """An announcement plays: the wake's fade holds still."""
         if self._ramp is not None:
@@ -472,6 +474,7 @@ class WakeAlarm:
             return
         self.ctrl._spawn(self._fade_from_now(w, src))
 
+    @callback
     def async_on_state(self, src: Source, old: State | None, new: State | None) -> None:
         w = self._w
         if w is None or new is None or old is None or src.key != w["source"]:

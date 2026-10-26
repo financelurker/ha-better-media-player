@@ -687,13 +687,6 @@
         "loud": "Loud",
         "party": "Party"
       }
-    },
-    "announce_video": {
-      "options": {
-        "pause": "Pause the film",
-        "overlay": "Overlay",
-        "lower": "Turn the film down"
-      }
     }
   },
   "exceptions": {

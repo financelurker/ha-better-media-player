@@ -250,8 +250,8 @@ class SleepTimer:
                 return
             now = _now()
             if self.ctrl.announce.active:
-                pass  # an announcement plays: the timer goes on after it
-            elif now >= s["ends_at"]:
+                return  # an announcement plays: the timer goes on after it (async_announce_done)
+            if now >= s["ends_at"]:
                 finish = True
             elif s["fade"] > 0 and now >= s["ends_at"] - s["fade"] and not s.get("fade_aborted"):
                 await self._fade_step(s, now)
@@ -265,11 +265,11 @@ class SleepTimer:
         """An announcement is over: the volume it leaves behind is no change
         from outside (the fade goes on from there)."""
         s = self._s
-        if s is None or s.get("fade_player") is None:
+        if s is None:
             return
-        level = self._level(s["fade_player"])
-        if level is not None:
+        if s.get("fade_player") is not None and (level := self._level(s["fade_player"])) is not None:
             s["recent"] = [*s.get("recent", []), level][-RECENT_SETS:]
+        self._schedule()
 
     def _fade_output(self):
         """The output to fade: the active player's, or the volume device."""

@@ -687,13 +687,6 @@
         "loud": "Laut",
         "party": "Party"
       }
-    },
-    "announce_video": {
-      "options": {
-        "pause": "Film pausieren",
-        "overlay": "Überlagern",
-        "lower": "Film leiser"
-      }
     }
   },
   "exceptions": {

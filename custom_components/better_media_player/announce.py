@@ -26,7 +26,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable, Iterable
-from contextlib import AsyncExitStack
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.media_player import (
@@ -78,29 +77,32 @@ def announce_volume(volume: float | None, cap: float | None) -> int | None:
     return None if volume is None else round(max(0.0, min(1.0, volume)) * 100)
 
 
+
 class RoomAnnouncer:
-    """Announcements in one room."""
+    """Announcements in one room (they may overlap: all state is counted)."""
 
     def __init__(self, ctrl: RoomController) -> None:
         self.ctrl = ctrl
         self.hass = ctrl.hass
-        # players an announcement acts on (a count: announcements may overlap)
-        self._protected: dict[str, int] = {}
-        self._held: set[str] = set()  # roles kept on for it
+        self._protected: dict[str, int] = {}  # players an announcement acts on
+        self._held: dict[str, int] = {}  # roles kept on for an announcement
+        self._running = 0  # announcements in the room (until their settle time is over)
+        self._was_on = True  # the room was on before the first of them
+        self._fades = 0.0  # a preset fade held still (s it had left)
+        self._night = 0.0  # the night's fade back held still (s it had left)
 
     # -------------------------------------------------------------- queries
 
     @property
     def active(self) -> bool:
-        return bool(self._protected)
+        return self._running > 0
 
     def protects(self, entity_id: str | None) -> bool:
-        """An announcement acts on this player or output right now: what it
-        reports is no wish."""
+        """An announcement acts on this player right now: what it reports is no wish."""
         return entity_id is not None and self._protected.get(entity_id, 0) > 0
 
     def holds(self, role) -> bool:
-        return role.key in self._held
+        return self._held.get(role.key, 0) > 0
 
     def can(self, src: Source) -> bool:
         """The player announces itself (Home Assistant's announcements)."""
@@ -118,8 +120,7 @@ class RoomAnnouncer:
             current = ctrl.active_source if ctrl.active_source in active else active[0]
             if self.can(current):
                 return current
-            other = next((s for s in ctrl.sources.values() if s is not current and self.can(s)), None)
-            return other
+            return next((s for s in ctrl.sources.values() if s is not current and self.can(s)), None)
         for key in (SOURCE_AUDIO, SOURCE_VIDEO):
             src = ctrl.sources.get(key)
             if src is not None and self.can(src):
@@ -130,18 +131,22 @@ class RoomAnnouncer:
         """A quiet room: nothing from outside (unless asked to ignore it)."""
         return self.ctrl.quiet and not ignore_quiet
 
-    def resolve(self, volume: float | str | None) -> float | None:
-        """A volume as asked for: 0..1, or a preset of this room."""
-        return self.ctrl.volume.preset_value(volume) if isinstance(volume, str) else volume
-
-    def cap(self) -> float | None:
-        """The night mode's limit for the player (with a volume device the limit
-        is the device's)."""
-        return self.ctrl.night.cap if self.ctrl.volume_device is None else None
-
     def volume(self, volume: float | str | None) -> int | None:
-        """The announcement's volume for this room's player (night: at most the limit)."""
-        return announce_volume(self.resolve(volume), self.cap())
+        """The announcement's volume (0..100) for this room's player: asked for
+        (0..1, or a preset of the room), at night at most the limit. With a
+        volume device the room's volume is the device's: presets and the limit
+        are its, not the player's (a preset is not used for the player)."""
+        if self.ctrl.volume_device is not None:
+            return announce_volume(None if isinstance(volume, str) else volume, None)
+        level = self.ctrl.volume.preset_value(volume) if isinstance(volume, str) else volume
+        return announce_volume(level, self.ctrl.night.cap)
+
+    def film(self, src: Source) -> Source | None:
+        """The film that plays while another player announces."""
+        video = self.ctrl.sources.get(SOURCE_VIDEO)
+        if video is None or video is src or not self.ctrl.source_active(video):
+            return None
+        return video if self.ctrl.source_playing(video) else None
 
     # ---------------------------------------------------------- announcing
 
@@ -166,28 +171,23 @@ class RoomAnnouncer:
                 translation_key="announce_not_supported",
                 translation_placeholders={"room": ctrl.entry.title},
             )
-        was_on = ctrl.room_on
-        players = [src.player]
-        video = ctrl.sources.get(SOURCE_VIDEO)
-        film = (
-            video is not None
-            and video is not src
-            and ctrl.source_playing(video)
-        )
-        if film:
-            players.append(video.player)
-        async with self.protect(players):
-            await self._power_up(src)
-            undo_film = await self._film_before(video) if film else None
+        data = {**(extra or {})}
+        if (level := self.volume(volume)) is not None:  # (a bad preset fails before anything)
+            data[ANNOUNCE_VOLUME] = level
+        film = self.film(src)
+        roles = self._roles_for(src)
+        self.begin(roles)
+        try:
+            await self._power_up(src, roles)
+            self.protect([src.player, *([film.player] if film else [])])
+            undo_film = await self._film_before(film) if film else None
             try:
-                data = {**(extra or {})}
-                if (level := self.volume(volume)) is not None:
-                    data[ANNOUNCE_VOLUME] = level
                 await self._play(src.player, media_id, media_type, data)
             finally:
                 if undo_film is not None:
                     await undo_film()
-                self._release(was_on)
+        finally:
+            self.end_later(roles, [src.player, *([film.player] if film else [])])
 
     async def _play(self, player: str, media_id: str, media_type: str, extra: dict[str, Any]) -> None:
         data: dict[str, Any] = {
@@ -202,37 +202,29 @@ class RoomAnnouncer:
         # returns once the player's system is through (announcement and restore)
         await self.hass.services.async_call(MP_DOMAIN, "play_media", data, blocking=True)
 
-    async def _power_up(self, src: Source) -> None:
-        """The devices the player needs are kept on (and come up if off); a
-        player that is off is woken (unless the room is in manual mode)."""
+    def _roles_for(self, src: Source) -> list[str]:
+        """The roles kept on for the announcement (automatic power only)."""
         ctrl = self.ctrl
-        roles = [r for r in ctrl.roles.values() if src.key in r.sources and ctrl.night.role_enabled(r.key)]
-        if not roles or not ctrl.auto_power or ctrl.manual:
-            return
-        self._held = {r.key for r in roles}
-        await ctrl.async_update("announce")
+        if not ctrl.auto_power or ctrl.manual:
+            return []
+        return [k for k, r in ctrl.roles.items() if src.key in r.sources and ctrl.night.role_enabled(k)]
+
+    async def _power_up(self, src: Source, roles: list[str]) -> None:
+        """The devices the player needs come up (if off); a player that is off is woken."""
+        ctrl = self.ctrl
         timeout = float(ctrl.setting(CONF_START_TIMEOUT))
-        if not await ctrl._wait_until(lambda: all(ctrl.role_fully_on(r) for r in roles), timeout):
-            _LOGGER.warning("%s: devices not up for the announcement, announcing anyway", ctrl.entry.title)
+        if roles:
+            await ctrl.async_update("announce")
+            wanted = [ctrl.roles[k] for k in roles]
+            if not await ctrl._wait_until(lambda: all(ctrl.role_fully_on(r) for r in wanted), timeout):
+                _LOGGER.warning("%s: devices not up for the announcement, announcing anyway", ctrl.entry.title)
         if ctrl.player_state(src) in _NOT_READY and ctrl.player_supports(src, MediaPlayerEntityFeature.TURN_ON):
             await ctrl._source_on(src)
             await ctrl._wait_until(lambda: ctrl.player_state(src) not in _NOT_READY, timeout)
 
-    @callback
-    def _release(self, was_on: bool) -> None:
-        """Over: the devices kept on for it go off right away if nothing needs
-        them (the room was off before)."""
-        ctrl = self.ctrl
-        held, self._held = self._held, set()
-        if not was_on:
-            for key in held:
-                role = ctrl.roles.get(key)
-                if role is not None and not ctrl.role_demand(role):
-                    role.force_off = True  # no run-down: it only came on for the announcement
-
     async def _film_before(self, video: Source) -> Callable[[], Awaitable[None]] | None:
-        """The film meanwhile: paused, overlaid or turned down; returns what
-        undoes it afterwards."""
+        """The film meanwhile: paused (turned down if it cannot pause), overlaid
+        or turned down; returns what undoes it afterwards."""
         ctrl = self.ctrl
         mode = ctrl.setting(CONF_ANNOUNCE_VIDEO)
         if mode == ANNOUNCE_PAUSE and ctrl.player_supports(video, MediaPlayerEntityFeature.PAUSE):
@@ -243,7 +235,7 @@ class RoomAnnouncer:
                     await ctrl._player(video, "media_play")
 
             return _resume
-        if mode == ANNOUNCE_LOWER:
+        if mode in (ANNOUNCE_PAUSE, ANNOUNCE_LOWER):
             out, _src = ctrl.player_output(video.player)
             level = out.level() if out is not None else None
             if out is None or level is None or not out.can_set:
@@ -253,64 +245,86 @@ class RoomAnnouncer:
             await ctrl._player(video, "volume_set", {"volume_level": down})
 
             async def _back() -> None:
+                # back, unless someone set another volume meanwhile (the lowered
+                # one may not even be reported yet)
                 current = out.level()
-                if current is not None and abs(current - down) <= out.tolerance:
+                if current is None or min(abs(current - down), abs(current - level)) <= out.tolerance:
                     await ctrl._player(video, "volume_set", {"volume_level": level})
 
             return _back
         return None  # overlaid
 
-    def protect(self, players: Iterable[str]) -> _Protection:
-        return _Protection(self, list(players))
-
-
-class _Protection:
-    """While an announcement acts on the room's players: the room's own
-    reactions to them hold still (and catch up afterwards)."""
-
-    def __init__(self, announcer: RoomAnnouncer, players: list[str]) -> None:
-        self.announcer = announcer
-        self.players = players
-        self._fades = 0.0
-        self._night = False
-
-    async def __aenter__(self) -> None:
-        a = self.announcer
-        ctrl = a.ctrl
-        # (not the volume device: it comes up for the announcement and gets the
-        # room's volume as usual; the announcement's volume is the player's)
-        for player in self.players:
-            a._protected[player] = a._protected.get(player, 0) + 1
-        self._fades = ctrl.volume.async_pause_fades()
-        self._night = ctrl.night.async_pause_ramps()
-        ctrl.wake.async_announce_begin()
-
-    async def __aexit__(self, *exc) -> None:
-        # the players' last reports (the restore) may come a moment after the call
-        # returned: the room holds still a little longer
-        async_call_later(self.announcer.hass, SETTLE_SECONDS, self._end)
+    # ------------------------------------------------------- holding still
 
     @callback
-    def _end(self, _now=None) -> None:
-        a = self.announcer
-        for player in self.players:
-            if (count := a._protected.get(player, 0)) > 1:
-                a._protected[player] = count - 1
+    def begin(self, roles: list[str]) -> None:
+        """An announcement starts: its roles are kept on; the first holds the
+        room's fades still."""
+        ctrl = self.ctrl
+        if self._running == 0:
+            self._was_on = ctrl.room_on
+            self._fades = ctrl.volume.async_pause_fades()
+            self._night = ctrl.night.async_pause_ramps()
+            ctrl.wake.async_announce_begin()
+        self._running += 1
+        for key in roles:
+            self._held[key] = self._held.get(key, 0) + 1
+
+    @callback
+    def protect(self, players: Iterable[str]) -> None:
+        for player in players:
+            self._protected[player] = self._protected.get(player, 0) + 1
+
+    @callback
+    def end_later(self, roles: list[str], players: list[str]) -> None:
+        """The players' last reports (the restore) may come a moment after the
+        call returned: the room holds still a little longer."""
+
+        @callback
+        def _end(_now=None) -> None:
+            self._end(roles, players)
+
+        async_call_later(self.hass, SETTLE_SECONDS, _end)
+
+    @callback
+    def _end(self, roles: list[str], players: list[str]) -> None:
+        for player in players:
+            if (count := self._protected.get(player, 0)) > 1:
+                self._protected[player] = count - 1
             else:
-                a._protected.pop(player, None)
-        if not a.ctrl._stopped:
-            a.ctrl._spawn(self._catch_up())
+                self._protected.pop(player, None)
+        for key in roles:
+            if (count := self._held.get(key, 0)) > 1:
+                self._held[key] = count - 1
+            else:
+                self._held.pop(key, None)
+        self._running = max(0, self._running - 1)
+        if self._running or self.ctrl._stopped:
+            return
+        self._protected.clear()
+        self._held.clear()
+        ctrl = self.ctrl
+        if not self._was_on:
+            for role in ctrl.roles.values():
+                if role.key in roles and not ctrl.role_demand(role):
+                    role.force_off = True  # no run-down: it only came on for the announcement
+        ctrl._spawn(self._catch_up())
 
     async def _catch_up(self) -> None:
-        ctrl = self.announcer.ctrl
+        """All announcements are over: the room goes on where it held still."""
+        ctrl = self.ctrl
         ctrl.sleep.async_announce_done()
         ctrl.wake.async_announce_done()
         await ctrl.volume.async_resume_fades(self._fades)
         if self._night:
-            await ctrl.night.async_resume_ramps()
+            await ctrl.night.async_resume_ramps(self._night)
+        self._fades = self._night = 0.0
         await ctrl.async_update("announced")
         if (hub := ctrl.hub) is not None:
             hub.async_schedule("announced")
+
+
+# ------------------------------------------------------------- several rooms
 
 
 async def async_announce_rooms(
@@ -328,12 +342,11 @@ async def async_announce_rooms(
     plays get it once, through the group (in step, and the group goes on
     afterwards); the others each on their own player.
     """
-    rooms = [r for r in rooms if not r.announce.skipped(ignore_quiet)]
+    rooms = [r for r in dict.fromkeys(rooms) if not r.announce.skipped(ignore_quiet)]
     by_group: dict[str, list[RoomController]] = {}
     alone: list[RoomController] = []
     for room in rooms:
-        src = room.announce.choose()
-        group = _playing_group(room, src)
+        group = _playing_group(hass, room)
         if group is not None:
             by_group.setdefault(group, []).append(room)
         else:
@@ -350,19 +363,28 @@ async def async_announce_rooms(
         r.announce.async_announce(media_id, media_type, volume, extra, ignore_quiet=True) for r in alone
     ]
     results = await asyncio.gather(*tasks, return_exceptions=True)
-    errors = [e for e in results if isinstance(e, Exception)]
+    errors = [e for e in results if isinstance(e, BaseException)]
+    for err in errors[1:]:
+        _LOGGER.warning("Announcement: %s", err)
     if errors:
-        if len(errors) == len(results) or len(results) == 1:
-            raise errors[0]
-        for err in errors:
-            _LOGGER.warning("Announcement: %s", err)
+        raise errors[0]  # (the other rooms had theirs)
 
 
-def _playing_group(room: RoomController, src: Source | None) -> str | None:
-    if src is None or src.key != SOURCE_AUDIO:
+def _playing_group(hass: HomeAssistant, room: RoomController) -> str | None:
+    """The playing group whose member announces for the room (only when the
+    music player announces and no film plays: the group knows nothing of it)."""
+    src = room.announce.choose()
+    if src is None or src.key != SOURCE_AUDIO or room.announce.film(src) is not None:
         return None
-    groups = src.backend.groups_of(src.player)
-    return groups[0] if groups else None
+    for group in src.backend.groups_of(src.player):
+        state = hass.states.get(group)
+        if (
+            state is not None
+            and state.state == "playing"
+            and int(state.attributes.get("supported_features", 0) or 0) & MediaPlayerEntityFeature.MEDIA_ANNOUNCE
+        ):
+            return group
+    return None
 
 
 async def _announce_group(
@@ -376,31 +398,43 @@ async def _announce_group(
     """Once through the group: its rooms hold still meanwhile (the quietest
     room's volume and limit hold for all)."""
     levels = [v for r in rooms if (v := r.announce.volume(volume)) is not None]
-    level = min(levels) if levels else None
     data = {**(extra or {})}
-    if level is not None:
-        data[ANNOUNCE_VOLUME] = level
-    async with AsyncExitStack() as stack:
-        for room in rooms:
-            await stack.enter_async_context(room.announce.protect([room.sources[SOURCE_AUDIO].player]))
+    if levels:
+        data[ANNOUNCE_VOLUME] = min(levels)
+    players = {r: [r.sources[SOURCE_AUDIO].player] for r in rooms}
+    for room in rooms:
+        room.announce.begin([])
+        room.announce.protect(players[room])
+    try:
         await rooms[0].announce._play(group, media_id, media_type, data)
-
+    finally:
+        for room in rooms:
+            room.announce.end_later([], players[room])
 
 
 # ------------------------------------------------------------------ action
 
-ANNOUNCE_SCHEMA = vol.Schema(
+
+def _volume(value: Any) -> float | str:
+    """0..1 or a preset name (not a bool)."""
+    if isinstance(value, bool):
+        raise vol.Invalid("expected 0..1 or a preset")
+    if isinstance(value, str) and value in PRESETS:
+        return value
+    return vol.All(vol.Coerce(float), vol.Range(min=0, max=1))(value)
+
+
+ANNOUNCE_SCHEMA = cv.make_entity_service_schema(
     {
         vol.Exclusive("message", "what"): cv.string,
         vol.Exclusive(ATTR_MEDIA_CONTENT_ID, "what"): cv.string,
         vol.Optional(ATTR_MEDIA_CONTENT_TYPE, default="music"): cv.string,
         vol.Optional("tts_entity"): cv.entity_id,
         vol.Optional("language"): cv.string,
-        vol.Optional("volume"): vol.Any(vol.All(vol.Coerce(float), vol.Range(min=0, max=1)), vol.In(PRESETS)),
+        vol.Optional("volume"): _volume,
         vol.Optional(ATTR_IGNORE_QUIET, default=False): cv.boolean,
         vol.Optional("pre_announce"): cv.boolean,
-    },
-    extra=vol.ALLOW_EXTRA,  # the target (entity_id, area_id, device_id)
+    }
 )
 
 
@@ -413,11 +447,13 @@ def async_setup_services(hass: HomeAssistant) -> None:
         data = call.data
         if "message" not in data and ATTR_MEDIA_CONTENT_ID not in data:
             raise ServiceValidationError(translation_domain=DOMAIN, translation_key="announce_nothing")
-        rooms = [
-            room
-            for entity_id in sorted(await async_extract_entity_ids(call))
-            if (room := room_of(hass, entity_id)) is not None
-        ]
+        rooms = list(
+            dict.fromkeys(
+                room
+                for entity_id in sorted(await async_extract_entity_ids(call))
+                if entity_id.startswith(f"{MP_DOMAIN}.") and (room := room_of(hass, entity_id)) is not None
+            )
+        )
         if not rooms:
             raise ServiceValidationError(translation_domain=DOMAIN, translation_key="announce_no_room")
         if "message" in data:

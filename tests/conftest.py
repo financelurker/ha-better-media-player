@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any
@@ -142,6 +143,7 @@ class FakeHome:
     ma_announce: bool = False  # the music players announce (Music Assistant)
     announce_hold: Any = None  # an asyncio.Event: an announcement lasts until it is set
     announcements: list[tuple[str, dict]] = field(default_factory=list)
+    _announce_locks: dict = field(default_factory=dict)
 
     def now(self):
         """The time on Music Assistant's server."""
@@ -169,6 +171,11 @@ class FakeHome:
     async def announce(self, entity_id: str, data: dict) -> None:
         """Music Assistant's announcement: the player plays it (at the given
         volume), then everything is as before; the call returns after that."""
+        lock = self._announce_locks.setdefault(entity_id, asyncio.Lock())
+        async with lock:  # Music Assistant: one announcement after the other per player
+            await self._announce(entity_id, data)
+
+    async def _announce(self, entity_id: str, data: dict) -> None:
         self.calls.append(("media_player", "announce", entity_id))
         self.announcements.append((entity_id, dict(data)))
         st = self.hass.states.get(entity_id)
@@ -191,7 +198,7 @@ class FakeHome:
     def group(self, state: str, members: list[str], entity_id: str = GROUP, **attrs: Any) -> None:
         name = "All Players" if entity_id == GROUP else "All Players (follow)"
         self.set(entity_id, state, group_members=members, mass_player_type="group", friendly_name=name,
-                 supported_features=MA_FEATURES, **attrs)
+                 supported_features=MA_FEATURES | (int(F.MEDIA_ANNOUNCE) if self.ma_announce else 0), **attrs)
         if state in ("playing", "paused"):
             for m in members:
                 self.set(m, state)
