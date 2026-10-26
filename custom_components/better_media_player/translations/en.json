@@ -754,7 +754,7 @@
       "message": "{player} plays in a group ({group}): hand over the group in Music Assistant, or start the music on {player} itself."
     },
     "announce_not_supported": {
-      "message": "No player in {room} can make announcements."
+      "message": "No player in {room} can play the announcement (a player in a group is left alone)."
     },
     "announce_nothing": {
       "message": "Give a message or a media_content_id."

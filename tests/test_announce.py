@@ -107,13 +107,11 @@ async def test_the_room_player_offers_announcements(hass, home, freezer):
     assert hass.states.get(ROOM).attributes["supported_features"] & F.MEDIA_ANNOUNCE
 
 
-async def test_no_announcements_without_a_player_for_them(hass, home, freezer):
+async def test_without_a_player_that_announces_the_room_still_offers_them(hass, home, freezer):
     home.music("playing", volume_level=0.4)
     await setup_room(hass)
     await hass.async_block_till_done()
-    assert not hass.states.get(ROOM).attributes["supported_features"] & F.MEDIA_ANNOUNCE
-    with pytest.raises(ServiceValidationError):
-        await _announce(hass)
+    assert hass.states.get(ROOM).attributes["supported_features"] & F.MEDIA_ANNOUNCE, "the fallback"
 
 
 async def test_tts_speak_goes_to_the_music_player(hass, home, freezer):
@@ -501,15 +499,15 @@ async def test_a_preset_not_offered_fails_before_anything(hass, home, freezer):
     assert not entry.runtime_data.announce.active
 
 
-async def test_a_room_that_cannot_announce_fails_the_action_after_the_others(hass, house, freezer):
-    from .conftest import KITCHEN, MA_FEATURES
+async def test_a_room_that_fails_fails_the_action_after_the_others(hass, house, freezer):
+    from custom_components.better_media_player.hub import room_of
 
     house.ma_announce = True
     house.music("playing")
-    hass.states.async_set(KITCHEN, "idle", {"supported_features": MA_FEATURES, "mass_player_type": "player"})
     await hass.async_block_till_done()
+    await room_of(hass, "media_player.kitchen").async_set_number("preset_party", 0)
     with pytest.raises(ServiceValidationError):
-        await _announce(hass, entity_id=[ROOM, "media_player.kitchen"])
+        await _announce(hass, entity_id=[ROOM, "media_player.kitchen"], volume="party")
     assert [a[0] for a in house.announcements] == [MUSIC], "the room that can has it"
 
 

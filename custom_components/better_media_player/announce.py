@@ -10,6 +10,11 @@ supports Home Assistant's announcements, e.g. Music Assistant's):
    meanwhile is paused, overlaid or turned down (setting on the device).
 3. The room is off: the music player, else the video player. The room's
    devices (speakers, volume device) come up for it and go off right after.
+4. No player of the room announces (fallback): the active source's player,
+   else (room off) the music player, else the video player plays it as
+   usual media: what played is paused, the announcement plays, then what
+   played starts again where it was (best effort: a queue may be lost) and
+   the player's volume comes back.
 
 The announcing player's system does the rest (Music Assistant: chime, its
 announcement volume, pausing and resuming the music) and its call returns
@@ -37,10 +42,10 @@ from homeassistant.components.media_player import (
 )
 from homeassistant.components.media_player import DOMAIN as MP_DOMAIN
 from homeassistant.const import ATTR_ENTITY_ID, STATE_OFF
-from homeassistant.core import HomeAssistant, ServiceCall, callback
+from homeassistant.core import Event, EventStateChangedData, HomeAssistant, ServiceCall, State, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers.event import async_call_later
+from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 from homeassistant.helpers.service import async_extract_entity_ids
 
 import voluptuous as vol
@@ -58,6 +63,7 @@ from .const import (
     SOURCE_AUDIO,
     SOURCE_VIDEO,
 )
+from .position import Position
 
 if TYPE_CHECKING:
     from .controller import RoomController, Source
@@ -67,7 +73,12 @@ _LOGGER = logging.getLogger(__name__)
 ANNOUNCE_VOLUME = "announce_volume"  # in extra: 0..100 (Music Assistant's)
 SETTLE_SECONDS = 2  # the room holds still this long after the announcement
 PLAY_TIMEOUT = 300  # s: an announcement that is not over by then is taken as over
+START_SECONDS = 10  # fallback: the announcement starts within this
+RESTORE_SECONDS = 30  # fallback: what played starts again within this (e.g. a film from a NAS)
 _NOT_READY = {STATE_OFF, "standby", "unavailable", "unknown"}
+_PLAYING = {"playing", "buffering"}
+_HOLDS = {"playing", "buffering", "paused"}  # something to come back to
+_IDLE = {"idle", "on"}  # up, holding nothing
 
 
 def announce_volume(volume: float | None, cap: float | None) -> int | None:
@@ -91,6 +102,10 @@ class RoomAnnouncer:
         self._brought_up: set[str] = set()  # roles that were off: they go off again after
         self._woken: set[str] = set()  # players that were off: they go off again after
         self._fades = 0.0  # a preset fade held still (s it had left)
+        self._off = False  # the room was turned off during an announcement
+        self._film_count = 0  # announcements over the film right now
+        self._film_undo: Callable[[], Awaitable[None]] | None = None
+        self._fallback_locks: dict[str, asyncio.Lock] = {}
         self._night = 0.0  # the night's fade back held still (s it had left)
 
     # -------------------------------------------------------------- queries
@@ -112,7 +127,11 @@ class RoomAnnouncer:
 
     @property
     def available(self) -> bool:
-        return any(self.can(s) for s in self.ctrl.sources.values())
+        """Announcements are offered: a player announces, or plays media (fallback)."""
+        return any(
+            self.can(s) or self.ctrl.player_supports(s, MediaPlayerEntityFeature.PLAY_MEDIA)
+            for s in self.ctrl.sources.values()
+        )
 
     def choose(self) -> Source | None:
         """The player that announces (see the module's docstring)."""
@@ -128,6 +147,40 @@ class RoomAnnouncer:
             if src is not None and self.can(src):
                 return src
         return None
+
+    def choose_fallback(self) -> Source | None:
+        """No player announces. A film plays: the music player if it is up and
+        plays nothing (the film is handled as with the native way; paused music
+        comes back). Else the player of what plays. The room is off: the music
+        player, else the video player. Only players that play media and are in
+        no group (a group's queue would be lost)."""
+        ctrl = self.ctrl
+
+        def usable(src: Source | None) -> bool:
+            return (
+                src is not None
+                and ctrl.player_supports(src, MediaPlayerEntityFeature.PLAY_MEDIA)
+                and not src.backend.groups_of(src.player)
+            )
+
+        audio, video = ctrl.sources.get(SOURCE_AUDIO), ctrl.sources.get(SOURCE_VIDEO)
+        active = [s for s in ctrl.sources.values() if ctrl.source_active(s)]
+        if active:
+            current = ctrl.active_source if ctrl.active_source in active else active[0]
+            if current is video and usable(audio) and ctrl.player_state(audio) in _IDLE | {"paused"}:
+                return audio
+            return current if usable(current) else None  # (in a group: left alone)
+        return next((s for s in (audio, video) if usable(s)), None)
+
+    def fallback_volume(self, volume: float | str | None) -> float | None:
+        """The fallback's volume for the player (0..1): asked for, else the room
+        volume (the night mode's limit holds for everything the room sets on a
+        player). With a volume device the device has the room's volume: only a
+        number asked for is set on the player."""
+        if self.ctrl.volume_device is not None:
+            return None if volume is None or isinstance(volume, str) else volume
+        level = self.ctrl.volume.preset_value(volume) if isinstance(volume, str) else volume
+        return self.ctrl.volume.value if level is None else level
 
     def skipped(self, ignore_quiet: bool) -> bool:
         """A quiet room: nothing from outside (unless asked to ignore it)."""
@@ -148,7 +201,8 @@ class RoomAnnouncer:
         video = self.ctrl.sources.get(SOURCE_VIDEO)
         if video is None or video is src or not self.ctrl.source_active(video):
             return None
-        return video if self.ctrl.source_playing(video) else None
+        held = self._film_count > 0  # (paused by an announcement that still runs)
+        return video if held or self.ctrl.source_playing(video) else None
 
     # ---------------------------------------------------------- announcing
 
@@ -167,6 +221,9 @@ class RoomAnnouncer:
             _LOGGER.info("%s: quiet, announcement left out", ctrl.entry.title)
             return
         src = self.choose()
+        native = src is not None
+        if src is None:
+            src = self.choose_fallback()
         if src is None:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
@@ -174,17 +231,24 @@ class RoomAnnouncer:
                 translation_placeholders={"room": ctrl.entry.title},
             )
         data = {**(extra or {})}
-        if (level := self.volume(volume)) is not None:  # (a bad preset fails before anything)
-            data[ANNOUNCE_VOLUME] = level
+        fallback_level: float | None = None
+        if native:
+            if (level := self.volume(volume)) is not None:  # (a bad preset fails before anything)
+                data[ANNOUNCE_VOLUME] = level
+        else:
+            fallback_level = self.fallback_volume(volume)
         film = self.film(src)
         roles = self._roles_for(src)
         protected: list[str] = []
-        undo_film: Callable[[], Awaitable[None]] | None = None
+        film_counted = False
         play: asyncio.Task | None = None
 
         async def _finish() -> None:
-            if undo_film is not None:
-                await undo_film()
+            if film_counted:
+                self._film_count -= 1
+                if self._film_count == 0 and self._film_undo is not None:
+                    undo, self._film_undo = self._film_undo, None
+                    await undo()  # the last announcement over the film: it goes on
             self.end_later(roles, protected)
 
         self.begin(roles)
@@ -192,10 +256,17 @@ class RoomAnnouncer:
             await self._power_up(src, roles)
             protected = [src.player, *([film.player] if film else [])]
             self.protect(protected)
-            undo_film = await self._film_before(film) if film else None
+            if film is not None:
+                film_counted = True
+                self._film_count += 1
+                if self._film_count == 1:
+                    self._film_undo = await self._film_before(film)
             # its own task: the room holds still until the player's system is
             # through, also if our caller gives up (e.g. an automation restarts)
-            play = self.hass.async_create_task(self._play(src.player, media_id, media_type, data))
+            if native:
+                play = self.hass.async_create_task(self._play(src.player, media_id, media_type, data))
+            else:
+                play = self.hass.async_create_task(self._play_fallback(src, media_id, media_type, fallback_level))
             await asyncio.shield(play)
         finally:
             if play is not None and not play.done():
@@ -220,6 +291,82 @@ class RoomAnnouncer:
                 await self.hass.services.async_call(MP_DOMAIN, "play_media", data, blocking=True)
         except TimeoutError:
             _LOGGER.warning("%s: announcement on %s not over after %s s", self.ctrl.entry.title, player, PLAY_TIMEOUT)
+
+    async def _play_fallback(self, src: Source, media_id: str, media_type: str, level: float | None) -> None:
+        """The player cannot announce: pause what it holds, play the announcement
+        as usual media, then start what it held again where it was (best effort).
+        One after the other per player."""
+        lock = self._fallback_locks.setdefault(src.player, asyncio.Lock())
+        async with lock:
+            try:
+                # (every call on the player within: a player that hangs frees the room)
+                async with asyncio.timeout(PLAY_TIMEOUT + RESTORE_SECONDS + 60):
+                    await self._fallback(src, media_id, media_type, level)
+            except TimeoutError:
+                _LOGGER.warning("%s: announcement on %s did not finish", self.ctrl.entry.title, src.player)
+
+    async def _fallback(self, src: Source, media_id: str, media_type: str, level: float | None) -> None:
+        ctrl = self.ctrl
+        _LOGGER.info("%s: announcement on %s (it does not announce: played as media)", ctrl.entry.title, src.player)
+        state = self.hass.states.get(src.player)
+        before: dict[str, Any] | None = None
+        if state is not None and state.state in _HOLDS:
+            position = Position.of(self.hass, src.player)
+            duration = state.attributes.get("media_duration")
+            before = {
+                "id": state.attributes.get(ATTR_MEDIA_CONTENT_ID),
+                "type": state.attributes.get(ATTR_MEDIA_CONTENT_TYPE),
+                # a stream (no duration) starts anew: no position
+                "seconds": position.seconds if position is not None and duration else None,
+                "paused": state.state == "paused",
+            }
+            if state.state != "paused" and ctrl.player_supports(src, MediaPlayerEntityFeature.PAUSE):
+                await ctrl._player(src, "media_pause")
+        out, _src = ctrl.player_output(src.player)
+        volume_before = out.level() if out is not None else None
+        set_level = level is not None and volume_before is not None and out is not None and out.can_set
+        if set_level:
+            await ctrl._player(src, "volume_set", {"volume_level": level})
+        taken_over = False  # someone started something else meanwhile
+        try:
+            async with asyncio.timeout(PLAY_TIMEOUT):
+                async with _Watch(self.hass, src.player) as watch:
+                    if await ctrl._player(
+                        src, "play_media", {"media_content_id": media_id, "media_content_type": media_type}
+                    ):
+                        taken_over = not await watch.played(START_SECONDS)
+        except TimeoutError:
+            _LOGGER.warning("%s: announcement on %s not over after %s s", ctrl.entry.title, src.player, PLAY_TIMEOUT)
+        finally:
+            if set_level:
+                current, ours = out.level(), ctrl.night.player_limit(level)
+                if current is None or min(abs(current - ours), abs(current - volume_before)) <= out.tolerance:
+                    await ctrl._player(src, "volume_set", {"volume_level": volume_before})
+            if not self._off and not taken_over:
+                await self._restore(src, before)
+
+    async def _restore(self, src: Source, before: dict[str, Any] | None) -> None:
+        """What the player held starts again where it was (paused stays paused):
+        its media again if it can be played again by its id, else it resumes;
+        nothing held: it stops."""
+        ctrl = self.ctrl
+        if before is None:
+            if ctrl.player_state(src) in _PLAYING and ctrl.player_supports(src, MediaPlayerEntityFeature.STOP):
+                await ctrl._player(src, "media_stop")
+            return
+        content, kind = before["id"], before["type"]
+        replayed = False
+        if isinstance(content, str) and content and isinstance(kind, str) and kind:
+            async with _Watch(self.hass, src.player) as watch:
+                replayed = await ctrl._player(src, "play_media", {"media_content_id": content, "media_content_type": kind})
+                started = replayed and await watch.started(RESTORE_SECONDS)
+            if started and before["seconds"] and ctrl.player_supports(src, MediaPlayerEntityFeature.SEEK):
+                await ctrl._player(src, "media_seek", {"seek_position": round(before["seconds"], 1)})
+        if not replayed:
+            # the announcement took its place and there is no id to play it again by
+            _LOGGER.info("%s: what %s played cannot be started again", ctrl.entry.title, src.player)
+        if replayed and before["paused"] and ctrl.player_supports(src, MediaPlayerEntityFeature.PAUSE):
+            await ctrl._player(src, "media_pause")
 
     def _roles_for(self, src: Source) -> list[str]:
         """The roles kept on for the announcement (automatic power only)."""
@@ -285,6 +432,7 @@ class RoomAnnouncer:
             if (role := ctrl.roles.get(key)) is not None and not ctrl.role_on(role):
                 self._brought_up.add(key)
         if self._running == 0:
+            self._off = False
             self._fades = ctrl.volume.async_pause_fades()
             self._night = ctrl.night.async_pause_ramps()
             ctrl.wake.async_announce_begin()
@@ -332,6 +480,7 @@ class RoomAnnouncer:
         """The room is turned off during an announcement: what it keeps on
         goes off once it is over."""
         if self.active:
+            self._off = True  # (a fallback does not start what played again)
             self._brought_up |= set(self._held)
             self._woken |= set(self.ctrl.sources)
 
@@ -342,6 +491,7 @@ class RoomAnnouncer:
         fades, night, self._fades, self._night = self._fades, self._night, 0.0, 0.0
         brought_up, self._brought_up = self._brought_up, set()
         woken, self._woken = self._woken, set()
+        self._off = False
         for key in woken:
             src = ctrl.sources.get(key)
             if src is not None and not ctrl.source_playing(src) and ctrl.player_state(src) not in _NOT_READY:
@@ -517,3 +667,78 @@ def async_setup_services(hass: HomeAssistant) -> None:
         )
 
     hass.services.async_register(DOMAIN, SERVICE_ANNOUNCE, _announce, ANNOUNCE_SCHEMA)
+
+
+class _Watch:
+    """What a player reports from now on (a state seen before does not count:
+    a player may still show what it played a moment ago)."""
+
+    def __init__(self, hass: HomeAssistant, player: str) -> None:
+        self.hass = hass
+        self.player = player
+        self._unsub: Callable[[], None] | None = None
+        self._changed = asyncio.Event()
+        self._states: list[State] = []
+        self._seen = 0
+
+    async def __aenter__(self) -> _Watch:
+        st = self.hass.states.get(self.player)
+        self._before = (st.state, st.attributes.get(ATTR_MEDIA_CONTENT_ID)) if st is not None else (None, None)
+
+        @callback
+        def _on(event: Event[EventStateChangedData]) -> None:
+            if (new := event.data["new_state"]) is not None:
+                self._states.append(new)
+                self._changed.set()
+
+        self._unsub = async_track_state_change_event(self.hass, [self.player], _on)
+        return self
+
+    async def __aexit__(self, *exc) -> None:
+        if self._unsub is not None:
+            self._unsub()
+
+    async def _until(self, check: Callable[[State], bool], seconds: float) -> State | None:
+        """The next state reported (after the ones looked at before) that passes
+        check (None: not within seconds)."""
+        try:
+            async with asyncio.timeout(seconds):
+                while True:
+                    while self._seen < len(self._states):
+                        state = self._states[self._seen]
+                        self._seen += 1
+                        if check(state):
+                            return state
+                    self._changed.clear()
+                    await self._changed.wait()
+        except TimeoutError:
+            return None
+
+    def _new_playback(self, state: State) -> bool:
+        """It plays something new: another media than before (a player may report
+        the old one playing for a moment), or, without a media before, it plays
+        after it did not."""
+        was_state, was_media = self._before
+        if state.state not in _PLAYING:
+            return False
+        if was_media is not None:
+            return state.attributes.get(ATTR_MEDIA_CONTENT_ID) != was_media
+        return was_state not in _PLAYING
+
+    async def started(self, seconds: float) -> bool:
+        return await self._until(self._new_playback, seconds) is not None
+
+    async def played(self, seconds: float) -> bool:
+        """It starts (within seconds), then plays until it stops (its duration as a
+        bound, else PLAY_TIMEOUT). False: it plays something else by then
+        (someone started it)."""
+        playing = await self._until(self._new_playback, seconds)
+        if playing is None:
+            return True
+        media = playing.attributes.get(ATTR_MEDIA_CONTENT_ID)
+        duration = playing.attributes.get("media_duration")
+        bound = float(duration) + 5 if isinstance(duration, (int, float)) and duration > 0 else PLAY_TIMEOUT
+        end = await self._until(
+            lambda st: st.state not in _PLAYING or st.attributes.get(ATTR_MEDIA_CONTENT_ID) != media, bound
+        )
+        return end is None or end.state not in _PLAYING
