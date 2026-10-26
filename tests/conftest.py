@@ -17,20 +17,20 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.util import dt as dt_util
 
 from custom_components.better_media_player.const import (
-    CONF_FOLLOW_PLAYER,
-    CONF_OCCUPANCY,
-    ENTRY_TYPE_HUB,
-    ENTITY_DEFAULTS,
-    HUB_ENTITY_DEFAULTS,
     CONF_AUDIO_PLAYER,
     CONF_BASS,
     CONF_DISPLAY,
     CONF_ENTRY_TYPE,
+    CONF_FOLLOW_PLAYER,
+    CONF_OCCUPANCY,
     CONF_SPEAKERS,
     CONF_VIDEO_PLAYER,
     DEFAULTS,
     DOMAIN,
+    ENTITY_DEFAULTS,
+    ENTRY_TYPE_HUB,
     ENTRY_TYPE_ROOM,
+    HUB_ENTITY_DEFAULTS,
 )
 
 KODI = "media_player.kodi"
@@ -451,7 +451,7 @@ async def setup_room(hass: HomeAssistant, **overrides: Any) -> MockConfigEntry:
     options = room_options(**overrides)
     entry = MockConfigEntry(
         domain=DOMAIN,
-        title="Wohnzimmer",
+        title="Living Room",
         data={CONF_ENTRY_TYPE: ENTRY_TYPE_ROOM},
         options=options,
         version=_version(options, ENTITY_DEFAULTS),
@@ -514,5 +514,5 @@ async def start_follow(hass: HomeAssistant, home: FakeHome, base: float = 60, of
     (that volume becomes follow me's base volume)."""
     home.music("playing", volume_level=round((base + offset) / 100, 3))
     await hass.async_block_till_done()
-    await hass.services.async_call(DOMAIN, "start_follow", {"entity_id": "media_player.wohnzimmer"}, blocking=True)
+    await hass.services.async_call(DOMAIN, "start_follow", {"entity_id": "media_player.living_room"}, blocking=True)
     await hass.async_block_till_done()

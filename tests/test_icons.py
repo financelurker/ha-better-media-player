@@ -3,22 +3,18 @@
 from __future__ import annotations
 
 import json
-from datetime import timedelta
 from pathlib import Path
 
 import yaml
-from pytest_homeassistant_custom_component.common import async_fire_time_changed
-
-from homeassistant.util import dt as dt_util
 
 from custom_components.better_media_player.const import FOLLOW_STATES, STATUSES
 
 from .conftest import setup_room
+from .helpers import ROOM, tick
 
 COMPONENT = Path(__file__).resolve().parent.parent / "custom_components" / "better_media_player"
 ICONS = json.loads((COMPONENT / "icons.json").read_text(encoding="utf-8"))
 STRINGS = json.loads((COMPONENT / "translations" / "en.json").read_text(encoding="utf-8"))
-ROOM = "media_player.wohnzimmer"
 # their device class brings the icons
 DEVICE_CLASS_ICONS = {("binary_sensor", "problem")}
 
@@ -63,30 +59,23 @@ def test_no_icons_in_code():
     assert users == []
 
 
-async def _tick(hass, freezer, seconds: float) -> None:
-    for _ in range(int(seconds)):
-        freezer.tick(timedelta(seconds=1))
-        async_fire_time_changed(hass, dt_util.utcnow())
-        await hass.async_block_till_done()
-
-
 def _icon(hass) -> str:
     return hass.states.get(ROOM).attributes["icon"]
 
 
 async def test_room_player_icon_follows_the_source(hass, home, freezer):
     await setup_room(hass)
-    await _tick(hass, freezer, 3)
+    await tick(hass, freezer, 3)
     assert _icon(hass) == "mdi:television-speaker-off"
     home.music("playing")
     await hass.async_block_till_done()
-    await _tick(hass, freezer, 5)
+    await tick(hass, freezer, 5)
     assert _icon(hass) == "mdi:music"
     home.kodi("playing")  # a film cast to Kodi: the video takes over
     await hass.async_block_till_done()
-    await _tick(hass, freezer, 5)
+    await tick(hass, freezer, 5)
     assert _icon(hass) == "mdi:television-play"
     await hass.services.async_call("media_player", "turn_off", {"entity_id": ROOM}, blocking=True)
     await hass.async_block_till_done()
-    await _tick(hass, freezer, 5)
+    await tick(hass, freezer, 5)
     assert _icon(hass) == "mdi:television-speaker-off"

@@ -2,13 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
-
-from pytest_homeassistant_custom_component.common import async_fire_time_changed
-
-from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
-from homeassistant.util import dt as dt_util
 
 from custom_components.better_media_player.const import (
     CONF_BASS,
@@ -19,24 +13,7 @@ from custom_components.better_media_player.const import (
 )
 
 from .conftest import BASS, GROUP, KODI, MUSIC, SPEAKERS, TV, TV_POWER, setup_room
-
-ROOM = "media_player.wohnzimmer"
-
-
-async def _tick(hass: HomeAssistant, freezer, seconds: float) -> None:
-    """Advance time in steps so periodic checks and timeouts fire."""
-    step = 10.0
-    left = seconds
-    while left > 0:
-        freezer.tick(timedelta(seconds=min(step, left)))
-        async_fire_time_changed(hass, dt_util.utcnow())
-        await hass.async_block_till_done()
-        left -= step
-
-
-def _order(home, entities: list[str], service: str) -> list[str]:
-    return [c[2] for c in home.calls if c[2] in entities and c[1] == service]
-
+from .helpers import ROOM, call_order, tick
 
 # ------------------------------------------------------------------- start
 
@@ -50,14 +27,14 @@ async def test_turn_on_starts_kodi_in_order(hass, home, freezer):
     assert home.on(TV)
     assert ("media_player", "turn_on", KODI) in home.calls
     assert not home.on(SPEAKERS)
-    assert hass.states.get("sensor.wohnzimmer_status").state == "starting"
+    assert hass.states.get("sensor.living_room_status").state == "starting"
 
     home.kodi("idle")  # Kodi is up
     await hass.async_block_till_done()
     assert home.on(SPEAKERS) and home.on(BASS)
-    assert _order(home, [TV, KODI, SPEAKERS, BASS], "turn_on") == [TV, KODI, SPEAKERS, BASS]
+    assert call_order(home, [TV, KODI, SPEAKERS, BASS], "turn_on") == [TV, KODI, SPEAKERS, BASS]
     assert hass.states.get(ROOM).state == "idle"
-    assert hass.states.get("sensor.wohnzimmer_status").state == "on"
+    assert hass.states.get("sensor.living_room_status").state == "on"
 
 
 async def test_start_timeout_rolls_back(hass, home, freezer):
@@ -66,11 +43,11 @@ async def test_start_timeout_rolls_back(hass, home, freezer):
     await hass.async_block_till_done()
     assert home.on(TV)
 
-    await _tick(hass, freezer, 100)  # Kodi never answers (timeout 90 s)
+    await tick(hass, freezer, 100)  # Kodi never answers (timeout 90 s)
     assert not home.on(TV)
     assert not home.on(SPEAKERS)
-    assert hass.states.get("binary_sensor.wohnzimmer_problem").state == "on"
-    assert hass.states.get("sensor.wohnzimmer_status").state == "error"
+    assert hass.states.get("binary_sensor.living_room_problem").state == "on"
+    assert hass.states.get("sensor.living_room_status").state == "error"
 
 
 async def test_turn_on_music_only_switches_speakers(hass, home):
@@ -91,14 +68,14 @@ async def test_music_auto_on_and_run_down(hass, home, freezer):
     home.music("playing")
     await hass.async_block_till_done()
     assert home.on(SPEAKERS) and home.on(BASS) and not home.on(TV)
-    assert _order(home, [SPEAKERS, BASS], "turn_on") == [SPEAKERS, BASS]
+    assert call_order(home, [SPEAKERS, BASS], "turn_on") == [SPEAKERS, BASS]
 
     home.music("paused")
-    await _tick(hass, freezer, 60)
+    await tick(hass, freezer, 60)
     assert home.on(SPEAKERS), "run-down (2 min) not over yet"
-    await _tick(hass, freezer, 70)
+    await tick(hass, freezer, 70)
     assert not home.on(SPEAKERS) and not home.on(BASS)
-    assert _order(home, [SPEAKERS, BASS], "turn_off") == [BASS, SPEAKERS]
+    assert call_order(home, [SPEAKERS, BASS], "turn_off") == [BASS, SPEAKERS]
 
 
 async def test_group_playback_counts_as_demand(hass, home):
@@ -117,7 +94,7 @@ async def test_shared_speakers_stay_on_for_kodi(hass, home, freezer):
     assert home.on(TV) and home.on(SPEAKERS)
 
     home.music("idle")  # music stops, Kodi still plays
-    await _tick(hass, freezer, 300)
+    await tick(hass, freezer, 300)
     assert home.on(SPEAKERS) and home.on(TV)
 
 
@@ -126,10 +103,10 @@ async def test_kodi_off_display_run_down_longer_than_speakers(hass, home, freeze
     home.kodi("playing")
     await hass.async_block_till_done()
     home.kodi("off")
-    await _tick(hass, freezer, 130)
+    await tick(hass, freezer, 130)
     assert not home.on(SPEAKERS)
     assert home.on(TV), "display run-down is 10 min"
-    await _tick(hass, freezer, 480)
+    await tick(hass, freezer, 480)
     assert not home.on(TV)
 
 
@@ -138,19 +115,19 @@ async def test_video_idle_timeout_turns_kodi_off(hass, home, freezer):
     home.kodi("idle")
     await hass.async_block_till_done()
     assert home.on(TV)
-    await _tick(hass, freezer, 29 * 60)
+    await tick(hass, freezer, 29 * 60)
     assert ("media_player", "turn_off", KODI) not in home.calls
-    await _tick(hass, freezer, 70)
+    await tick(hass, freezer, 70)
     assert ("media_player", "turn_off", KODI) in home.calls
 
 
 async def test_auto_power_off_does_nothing_automatically(hass, home):
     await setup_room(hass)
-    await hass.services.async_call("switch", "turn_off", {"entity_id": "switch.wohnzimmer_automatic_power"}, blocking=True)
+    await hass.services.async_call("switch", "turn_off", {"entity_id": "switch.living_room_automatic_power"}, blocking=True)
     home.music("playing")
     await hass.async_block_till_done()
     assert not home.on(SPEAKERS)
-    assert hass.states.get("sensor.wohnzimmer_status").state == "disabled"
+    assert hass.states.get("sensor.living_room_status").state == "disabled"
 
 
 # --------------------------------------------------------------- room off
@@ -170,7 +147,7 @@ async def test_room_off_leaves_group_and_stays_off(hass, home, freezer):
     assert not home.on(SPEAKERS) and not home.on(BASS)
     assert hass.states.get(GROUP).attributes["group_members"] == []
 
-    await _tick(hass, freezer, 60)
+    await tick(hass, freezer, 60)
     assert not home.on(SPEAKERS)
     assert hass.states.get(ROOM).state == "off"
 
@@ -182,13 +159,13 @@ async def test_room_off_with_kodi_that_suspends_slowly(hass, home, freezer):
     await hass.async_block_till_done()
     assert home.on(TV)
 
-    await hass.services.async_call("button", "press", {"entity_id": "button.wohnzimmer_all_off"}, blocking=True)
+    await hass.services.async_call("button", "press", {"entity_id": "button.living_room_all_off"}, blocking=True)
     await hass.async_block_till_done()
     assert ("media_player", "turn_off", KODI) in home.calls
     assert not home.on(TV) and not home.on(SPEAKERS)
 
     # Kodi is still "idle" for a while: must not switch the room back on
-    await _tick(hass, freezer, 30)
+    await tick(hass, freezer, 30)
     assert not home.on(TV)
     home.kodi("off")
     await hass.async_block_till_done()
@@ -215,15 +192,15 @@ async def test_manual_switching_is_respected(hass, home, freezer):
     await setup_room(hass)
     hass.states.async_set(SPEAKERS, "on")  # someone switches the plug by hand
     await hass.async_block_till_done()
-    assert hass.states.get("sensor.wohnzimmer_status").state == "manual"
+    assert hass.states.get("sensor.living_room_status").state == "manual"
 
-    await _tick(hass, freezer, 600)
+    await tick(hass, freezer, 600)
     assert home.on(SPEAKERS), "manual mode: not switched off after run-down"
 
     home.music("playing")
     hass.states.async_set(SPEAKERS, "off")  # all off by hand -> manual mode ends
     await hass.async_block_till_done()
-    assert hass.states.get("sensor.wohnzimmer_status").state != "manual"
+    assert hass.states.get("sensor.living_room_status").state != "manual"
     assert not home.on(SPEAKERS), "still playing music must not switch it straight back on"
 
     home.music("idle")
@@ -283,12 +260,12 @@ async def test_display_waits_for_standby(hass, home, freezer):
     home.kodi("playing")
     await hass.async_block_till_done()
     home.kodi("off")
-    await _tick(hass, freezer, 11 * 60)
+    await tick(hass, freezer, 11 * 60)
     assert home.on(TV), "TV still draws power"
-    assert hass.states.get("sensor.wohnzimmer_status").state == "stopping"
+    assert hass.states.get("sensor.living_room_status").state == "stopping"
 
     hass.states.async_set(TV_POWER, "0.5")
-    await _tick(hass, freezer, 40)
+    await tick(hass, freezer, 40)
     assert not home.on(TV)
 
 
@@ -298,7 +275,7 @@ async def test_display_standby_max_wait(hass, home, freezer):
     home.kodi("playing")
     await hass.async_block_till_done()
     home.kodi("off")
-    await _tick(hass, freezer, 10 * 60 + 21 * 60)
+    await tick(hass, freezer, 10 * 60 + 21 * 60)
     assert not home.on(TV)
 
 
@@ -335,17 +312,17 @@ async def test_late_device_report_is_not_manual(hass, home, freezer):
     assert ("switch", "turn_on", SPEAKERS) in home.calls
     hass.states.async_set(SPEAKERS, "on")  # device reports, new context
     await hass.async_block_till_done()
-    assert hass.states.get("sensor.wohnzimmer_status").state == "playing"
+    assert hass.states.get("sensor.living_room_status").state == "playing"
 
 
 async def test_restart_with_plugs_on_runs_down(hass, home, freezer):
     hass.states.async_set(SPEAKERS, "on")
     hass.states.async_set(TV, "on")
     await setup_room(hass)
-    assert hass.states.get("sensor.wohnzimmer_status").state == "run_down"
-    await _tick(hass, freezer, 130)
+    assert hass.states.get("sensor.living_room_status").state == "run_down"
+    await tick(hass, freezer, 130)
     assert not home.on(SPEAKERS)
-    await _tick(hass, freezer, 500)
+    await tick(hass, freezer, 500)
     assert not home.on(TV)
 
 
@@ -364,7 +341,7 @@ async def test_player_behind_host_plug(hass, home, freezer):
     assert home.on(SPEAKERS)
     assert entry.runtime_data.status == "run_down"  # on, but nothing plays yet
 
-    await _tick(hass, freezer, 130)  # nothing played: speakers + hardware run down
+    await tick(hass, freezer, 130)  # nothing played: speakers + hardware run down
     assert not home.on(SPEAKERS)
     assert not home.on("switch.kodi_box_plug")
 
@@ -374,46 +351,46 @@ async def test_entity_ids_match_readme(hass, home):
     entry = await setup_room(hass, audio_host="switch.kodi_box_plug")
     ids = {e.entity_id for e in er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)}
     assert ids == {
-        "media_player.wohnzimmer",
-        "sensor.wohnzimmer_status",
-        "binary_sensor.wohnzimmer_problem",
-        "binary_sensor.wohnzimmer_display_needed",
-        "binary_sensor.wohnzimmer_speakers_needed",
-        "switch.wohnzimmer_automatic_power",
-        "switch.wohnzimmer_quiet",
-        "number.wohnzimmer_display_run_down",
-        "number.wohnzimmer_speaker_run_down",
-        "number.wohnzimmer_player_hardware_run_down",
-        "number.wohnzimmer_video_idle_timeout",
-        "button.wohnzimmer_all_off",
-        "number.wohnzimmer_sleep_timer",
-        "button.wohnzimmer_sleep_timer_15_min",
-        "sensor.wohnzimmer_sleep_timer_end",
-        "switch.wohnzimmer_night_mode",
-        "number.wohnzimmer_night_video_idle_timeout",
-        "number.wohnzimmer_night_display_run_down",
-        "number.wohnzimmer_night_maximum_volume",
-        "sensor.wohnzimmer_wake",
-        "button.wohnzimmer_snooze",
-        "button.wohnzimmer_stop_wake",
-        "button.wohnzimmer_stop_follow_me",
-        "select.wohnzimmer_volume_preset",
-        "select.wohnzimmer_hand_over_to",
-        "number.wohnzimmer_preset_quiet",
-        "number.wohnzimmer_preset_normal",
-        "number.wohnzimmer_preset_loud",
-        "number.wohnzimmer_preset_party",
-        "number.wohnzimmer_preset_fade",
-        "number.wohnzimmer_announcement_lower_film_by",
-        "select.wohnzimmer_announcement_during_video",
-        "number.wohnzimmer_start_timeout",
-        "number.wohnzimmer_wait_after_display_on",
-        "number.wohnzimmer_wait_after_speakers_on",
-        "number.wohnzimmer_wait_after_player_plug_on",
-        "number.wohnzimmer_sleep_timer_fade_out",
-        "number.wohnzimmer_snooze_time",
-        "number.wohnzimmer_night_fade_back_up",
-        "select.wohnzimmer_power_on_preset",
+        "media_player.living_room",
+        "sensor.living_room_status",
+        "binary_sensor.living_room_problem",
+        "binary_sensor.living_room_display_needed",
+        "binary_sensor.living_room_speakers_needed",
+        "switch.living_room_automatic_power",
+        "switch.living_room_quiet",
+        "number.living_room_display_run_down",
+        "number.living_room_speaker_run_down",
+        "number.living_room_player_hardware_run_down",
+        "number.living_room_video_idle_timeout",
+        "button.living_room_all_off",
+        "number.living_room_sleep_timer",
+        "button.living_room_sleep_timer_15_min",
+        "sensor.living_room_sleep_timer_end",
+        "switch.living_room_night_mode",
+        "number.living_room_night_video_idle_timeout",
+        "number.living_room_night_display_run_down",
+        "number.living_room_night_maximum_volume",
+        "sensor.living_room_wake",
+        "button.living_room_snooze",
+        "button.living_room_stop_wake",
+        "button.living_room_stop_follow_me",
+        "select.living_room_volume_preset",
+        "select.living_room_hand_over_to",
+        "number.living_room_preset_quiet",
+        "number.living_room_preset_normal",
+        "number.living_room_preset_loud",
+        "number.living_room_preset_party",
+        "number.living_room_preset_fade",
+        "number.living_room_announcement_lower_film_by",
+        "select.living_room_announcement_during_video",
+        "number.living_room_start_timeout",
+        "number.living_room_wait_after_display_on",
+        "number.living_room_wait_after_speakers_on",
+        "number.living_room_wait_after_player_plug_on",
+        "number.living_room_sleep_timer_fade_out",
+        "number.living_room_snooze_time",
+        "number.living_room_night_fade_back_up",
+        "select.living_room_power_on_preset",
     }
 
 
@@ -461,3 +438,106 @@ async def test_device_shows_manifest_version(hass, home):
     entry = await setup_room(hass)
     device = next(iter(dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)))
     assert device.sw_version == version
+
+
+HOST = "switch.kodi_box_plug"
+
+async def test_off_order_host_before_display_with_standby(hass, home, freezer):
+    hass.states.async_set(TV_POWER, "80")
+    hass.states.async_set(HOST, "on")
+    await setup_room(hass, **{CONF_DISPLAY_POWER: [TV_POWER], CONF_DISPLAY_STANDBY: True, "video_host": HOST})
+    home.set(KODI, "idle", supported_features=0)
+    await hass.async_block_till_done()
+    assert home.on(TV)
+    await hass.services.async_call("media_player", "turn_off", {"entity_id": ROOM}, blocking=True)
+    await hass.async_block_till_done()
+    assert home.on(TV)
+    assert home.on(HOST), "host cut before display (order violation)"
+
+async def test_turn_off_during_inflight_slow_on(hass, home, freezer):
+    await setup_room(hass)
+    await hass.services.async_call("switch", "turn_off", {"entity_id": "switch.living_room_automatic_power"}, blocking=True)
+    original = home.handle
+    def late(domain, service, entity_id, data, context):
+        if entity_id == SPEAKERS and service == "turn_on":
+            home.calls.append((domain, service, entity_id)); return True
+        return original(domain, service, entity_id, data, context)
+    home.handle = late
+    home.music("idle")
+    await hass.services.async_call("media_player", "select_source", {"entity_id": ROOM, "source": "Office Player"}, blocking=True)
+    await hass.async_block_till_done()
+    assert ("switch", "turn_on", SPEAKERS) in home.calls
+    await hass.services.async_call("media_player", "turn_off", {"entity_id": ROOM}, blocking=True)
+    await hass.async_block_till_done()
+    hass.states.async_set(SPEAKERS, "on")  # late report
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 3600)
+    assert not home.on(SPEAKERS), "speakers left on forever after room off"
+
+async def test_lost_off_command_force_off_cleared(hass, home, freezer):
+    await setup_room(hass)
+    home.music("playing"); await hass.async_block_till_done()
+    assert home.on(SPEAKERS)
+    await hass.services.async_call("switch", "turn_off", {"entity_id": "switch.living_room_automatic_power"}, blocking=True)
+    original = home.handle
+    lost = {"n": 0}
+    def drop(domain, service, entity_id, data, context):
+        if entity_id == SPEAKERS and service == "turn_off" and lost["n"] == 0:
+            lost["n"] += 1; home.calls.append((domain, service, entity_id)); return True
+        return original(domain, service, entity_id, data, context)
+    home.handle = drop
+    await hass.services.async_call("media_player", "turn_off", {"entity_id": ROOM}, blocking=True)
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 3600)
+    assert not home.on(SPEAKERS), "lost off command never retried"
+
+async def test_kodi_blip_after_room_off_turns_room_back_on(hass, home, freezer):
+    home.kodi_suspends = False
+    await setup_room(hass)
+    home.kodi("idle"); await hass.async_block_till_done()
+    await hass.services.async_call("media_player", "turn_off", {"entity_id": ROOM}, blocking=True)
+    await hass.async_block_till_done()
+    assert not home.on(TV)
+    home.kodi("unavailable"); await hass.async_block_till_done()
+    home.kodi("idle"); await hass.async_block_till_done()   # still suspending / reconnect
+    assert not home.on(TV), "room switched back on without fresh playback"
+
+async def test_unjoin_static_group_when_idle(hass, home):
+    await setup_room(hass)
+    home.group("off", [MUSIC])  # configured syncgroup, not playing
+    await hass.async_block_till_done()
+    await hass.services.async_call("media_player", "turn_off", {"entity_id": ROOM}, blocking=True)
+    await hass.async_block_till_done()
+    assert ("media_player", "unjoin", MUSIC) not in home.calls, "unjoined from idle static group"
+
+async def test_reload_during_sequence_leaves_zombie(hass, home, freezer):
+    entry = await setup_room(hass)
+    old = entry.runtime_data
+    await hass.services.async_call("media_player", "turn_on", {"entity_id": ROOM}, blocking=True)
+    await hass.async_block_till_done()
+    assert old.sequence_running
+    seen = []
+    orig0 = old.async_update
+    async def spy0(reason=""):
+        seen.append(reason); await orig0(reason)
+    old.async_update = spy0
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert "sequence_done" not in seen, "old controller ran async_update after unload"
+    await hass.async_block_till_done()
+    calls = []
+    orig = old.async_update
+    async def spy(reason=""):
+        calls.append(reason); await orig(reason)
+    old.async_update = spy
+    await hass.async_block_till_done()
+    assert not old._started
+
+async def test_manual_at_boot(hass, home):
+    # plug restored as off then integration reports on before HA started
+    from homeassistant.core import CoreState
+    hass.set_state(CoreState.starting)
+    entry = await setup_room(hass)
+    hass.states.async_set(SPEAKERS, "on")
+    await hass.async_block_till_done()
+    assert not entry.runtime_data.manual, "boot-time state report flagged as manual"

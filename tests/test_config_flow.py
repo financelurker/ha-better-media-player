@@ -31,7 +31,7 @@ async def _start(hass: HomeAssistant, area: str | None = None):
     assert result["type"] is FlowResultType.MENU
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "room"})
     assert result["type"] is FlowResultType.FORM
-    data = {"name": "Wohnzimmer"}
+    data = {"name": "Living Room"}
     if area:
         data[CONF_AREA] = area
     return await hass.config_entries.flow.async_configure(result["flow_id"], data)
@@ -49,7 +49,7 @@ async def test_full_flow(hass, home):
         {CONF_DISPLAY: [TV], CONF_SPEAKERS: [SPEAKERS], "actions": {}, "standby": {}, "follow": {"occupancy": [LIVING_OCC]}},
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["title"] == "Wohnzimmer"
+    assert result["title"] == "Living Room"
     assert result["data"] == {CONF_ENTRY_TYPE: ENTRY_TYPE_ROOM}
     assert result["options"] == {
         CONF_VIDEO_PLAYER: KODI,
@@ -60,8 +60,8 @@ async def test_full_flow(hass, home):
         "volume_control": "players",
     }, "only what is connected: no times, waits or other behaviour"
     await hass.async_block_till_done()
-    assert hass.states.get("media_player.wohnzimmer") is not None
-    assert float(hass.states.get("number.wohnzimmer_speaker_run_down").state) == 2  # the device's default
+    assert hass.states.get("media_player.living_room") is not None
+    assert float(hass.states.get("number.living_room_speaker_run_down").state) == 2  # the device's default
 
 
 async def test_validation(hass, home):
@@ -98,7 +98,7 @@ async def test_an_error_in_a_section_is_shown_at_the_section(hass, home):
 
 
 async def test_area_preselects_players(hass, home):
-    area = ar.async_get(hass).async_create("Wohnzimmer")
+    area = ar.async_get(hass).async_create("Living Room")
     reg = er.async_get(hass)
     kodi = reg.async_get_or_create("media_player", "kodi", "kodi1", suggested_object_id="kodi")
     music = reg.async_get_or_create("media_player", "music_assistant", "ma1", suggested_object_id="office_player")
@@ -128,7 +128,7 @@ async def test_options_flow(hass, home):
     await hass.async_block_till_done()
     assert entry.options["occupancy"] == [LIVING_OCC]
     assert "bass" not in entry.options  # cleared
-    assert hass.states.get("number.wohnzimmer_follow_me_leave_after") is not None
+    assert hass.states.get("number.living_room_follow_me_leave_after") is not None
 
 
 async def test_options_show_the_sections_values(hass, home):
