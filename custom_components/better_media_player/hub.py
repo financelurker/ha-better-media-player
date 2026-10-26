@@ -82,13 +82,13 @@ from .const import (
     TICK_SECONDS,
     WAKE_ARRIVAL_WINDOW,
 )
-from .output import MemberOutput
+from .room.output import MemberOutput
 from .players.music_assistant import MusicAssistant
 from .players.position import Position
-from .ramp import VolumeRamp
+from .room.ramp import VolumeRamp
 
 if TYPE_CHECKING:
-    from .controller import RoomController
+    from .room.controller import RoomController
 
 _LOGGER = logging.getLogger(__name__)
 

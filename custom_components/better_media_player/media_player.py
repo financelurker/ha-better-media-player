@@ -33,8 +33,8 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from . import BetterMediaPlayerConfigEntry
-from .browser import RoomBrowser, is_own_id
-from .announce import ANNOUNCE_VOLUME
+from .room.browser import RoomBrowser, is_own_id
+from .room.announce import ANNOUNCE_VOLUME
 from .const import (
     ATTR_IGNORE_QUIET,
     ATTR_PRESET,
@@ -58,7 +58,7 @@ from .const import (
 )
 from .entity import BetterMediaPlayerEntity
 from .hub import get_hub, room_of
-from .sleep import MAX_MINUTES
+from .room.sleep import MAX_MINUTES
 
 BASE_FEATURES = MediaPlayerEntityFeature.TURN_ON | MediaPlayerEntityFeature.TURN_OFF
 

@@ -32,7 +32,7 @@ from homeassistant.components.media_player import MediaPlayerState
 from homeassistant.core import CALLBACK_TYPE, callback
 from homeassistant.helpers.event import async_call_later
 
-from .const import EVENT_SOURCE_CHANGED, SOURCE_AUDIO, SOURCE_VIDEO
+from ..const import EVENT_SOURCE_CHANGED, SOURCE_AUDIO, SOURCE_VIDEO
 
 if TYPE_CHECKING:
     from .controller import RoomController

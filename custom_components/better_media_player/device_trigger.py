@@ -1,5 +1,5 @@
-"""Device triggers of a room: its source changes (see source_event.py) and its
-night mode (see night.py)."""
+"""Device triggers of a room: its source changes (see room/source_event.py) and its
+night mode (see room/night.py)."""
 
 from __future__ import annotations
 

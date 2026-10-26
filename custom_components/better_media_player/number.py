@@ -22,7 +22,7 @@ from .const import (
     SOURCE_VIDEO,
 )
 from .entity import BetterMediaPlayerEntity, ControlEntity, HubEntity, prune_entities
-from .sleep import MAX_MINUTES
+from .room.sleep import MAX_MINUTES
 
 
 async def async_setup_entry(

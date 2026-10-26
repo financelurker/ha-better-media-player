@@ -17,7 +17,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 
-from custom_components.better_media_player.browser import ROOT_ID, is_own_id, make_id, parse_id
+from custom_components.better_media_player.room.browser import ROOT_ID, is_own_id, make_id, parse_id
 
 from .conftest import BASS, GROUP, KODI, MA_FEATURES, MUSIC, SPEAKERS, TV, setup_room
 from .helpers import ROOM, STATUS
@@ -150,7 +150,7 @@ async def test_kodi_off_shows_media_sources_and_hint(hass, home, hass_ws_client)
                               media_content_type="", title="Jellyfin", can_play=False, can_expand=True)],
     )
     with patch(
-        "custom_components.better_media_player.browser.media_source.async_browse_media", return_value=ms_root
+        "custom_components.better_media_player.room.browser.media_source.async_browse_media", return_value=ms_root
     ):
         ws = await hass_ws_client(hass)
         root = await _browse(hass, ws)
@@ -181,7 +181,7 @@ async def test_music_items_offer_choices(hass, home, hass_ws_client):
 
 async def test_movie_from_browser_powers_up_then_plays(hass, home):
     """Kodi asleep: TV on, wake Kodi, wait, speakers, then play on Kodi."""
-    from custom_components.better_media_player.browser import make_id
+    from custom_components.better_media_player.room.browser import make_id
 
     home.kodi_boots = True
     await setup_room(hass)
@@ -194,7 +194,7 @@ async def test_movie_from_browser_powers_up_then_plays(hass, home):
 
 
 async def test_media_source_item_played_on_kodi(hass, home):
-    from custom_components.better_media_player.browser import make_id
+    from custom_components.better_media_player.room.browser import make_id
 
     home.kodi_boots = True
     await setup_room(hass)
@@ -205,7 +205,7 @@ async def test_media_source_item_played_on_kodi(hass, home):
 
 
 async def test_start_failure_raises_and_does_not_play(hass, home, freezer):
-    from custom_components.better_media_player.browser import make_id
+    from custom_components.better_media_player.room.browser import make_id
 
     await setup_room(hass)  # Kodi never boots
     item = {"media_content_type": "movie", "media_content_id": make_id("item", "video", "movie", "123")}
@@ -232,7 +232,7 @@ async def test_start_failure_raises_and_does_not_play(hass, home, freezer):
 
 
 async def test_play_now_music_stops_kodi(hass, home):
-    from custom_components.better_media_player.browser import make_id
+    from custom_components.better_media_player.room.browser import make_id
 
     await setup_room(hass)
     home.kodi("playing")
@@ -246,7 +246,7 @@ async def test_play_now_music_stops_kodi(hass, home):
 
 
 async def test_enqueue_next_changes_nothing_else(hass, home):
-    from custom_components.better_media_player.browser import make_id
+    from custom_components.better_media_player.room.browser import make_id
 
     await setup_room(hass)
     home.kodi("playing")
@@ -268,7 +268,7 @@ async def test_plain_ids_still_go_to_the_active_player(hass, home):
 
 async def test_play_now_on_grouped_music_player_leaves_group_first(hass, home):
     """Plays in this room only, never replaces the music of the whole group."""
-    from custom_components.better_media_player.browser import make_id
+    from custom_components.better_media_player.room.browser import make_id
 
     await setup_room(hass)
     home.group("playing", [MUSIC], GROUP)
@@ -281,7 +281,7 @@ async def test_play_now_on_grouped_music_player_leaves_group_first(hass, home):
 
 async def test_better_kodi_next_choice_does_not_switch_the_room(hass, better_kodi_registered, home):
     """Better Kodi's own 'play next' entry: passed through, room stays as it is."""
-    from custom_components.better_media_player.browser import make_id
+    from custom_components.better_media_player.room.browser import make_id
 
     await setup_room(hass)
     home.music("playing")

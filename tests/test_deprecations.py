@@ -2,9 +2,9 @@
 
 from pathlib import Path
 
-from custom_components.better_media_player import controller
+from custom_components.better_media_player.room import controller
 
-SOURCE = Path(controller.__file__).parent
+SOURCE = Path(controller.__file__).parent.parent  # the integration, with its packages
 
 
 def test_no_deprecated_standby_state():

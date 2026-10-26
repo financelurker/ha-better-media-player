@@ -50,7 +50,7 @@ from homeassistant.helpers.service import async_extract_entity_ids
 
 import voluptuous as vol
 
-from .const import (
+from ..const import (
     ANNOUNCE_LOWER,
     ANNOUNCE_PAUSE,
     ATTR_IGNORE_QUIET,
@@ -63,7 +63,7 @@ from .const import (
     SOURCE_AUDIO,
     SOURCE_VIDEO,
 )
-from .players.position import Position
+from ..players.position import Position
 
 if TYPE_CHECKING:
     from .controller import RoomController, Source
@@ -641,7 +641,7 @@ ANNOUNCE_SCHEMA = cv.make_entity_service_schema(
 @callback
 def async_setup_services(hass: HomeAssistant) -> None:
     """better_media_player.announce: one or more rooms, coordinated."""
-    from .hub import room_of  # noqa: PLC0415 (hub imports the controller, which imports this)
+    from ..hub import room_of  # noqa: PLC0415 (hub imports the controller, which imports this)
 
     async def _announce(call: ServiceCall) -> None:
         data = call.data

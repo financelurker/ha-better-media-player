@@ -12,7 +12,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from . import BetterMediaPlayerConfigEntry, is_hub
 from .const import FOLLOW_STATES, STATUSES
 from .entity import BetterMediaPlayerEntity, ControlEntity, HubEntity, Visibility
-from .wake import PHASES
+from .room.wake import PHASES
 
 
 async def async_setup_entry(

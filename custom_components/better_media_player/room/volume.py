@@ -48,7 +48,7 @@ from homeassistant.core import CALLBACK_TYPE, State, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.event import async_call_later
 
-from .const import (
+from ..const import (
     CONF_POWER_ON_PRESET,
     CONF_PRESET,
     CONF_PRESET_FADE,

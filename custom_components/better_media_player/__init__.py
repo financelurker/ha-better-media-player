@@ -28,8 +28,8 @@ from .const import (
     PLATFORMS,
     STORAGE_VERSION,
 )
-from .announce import async_setup_services
-from .controller import RoomController
+from .room.announce import async_setup_services
+from .room.controller import RoomController
 from .hub import FollowManager, get_rooms
 from .issues import async_setup_issues, get_checker
 

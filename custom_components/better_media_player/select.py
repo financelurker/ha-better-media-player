@@ -18,7 +18,7 @@ from .const import (
     SOURCE_AUDIO,
     SOURCE_VIDEO,
 )
-from .controller import RoomController
+from .room.controller import RoomController
 from .entity import BetterMediaPlayerEntity, ControlEntity, prune_entities
 from .hub import get_rooms
 

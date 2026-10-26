@@ -6,7 +6,7 @@ from homeassistant.core import CoreState, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_state_change_event
 
 from custom_components.better_media_player.const import CONF_VOLUME_CONTROL, CONF_VOLUME_ENTITY, VOLUME_DEVICE
-from custom_components.better_media_player.ramp import ease_in_out
+from custom_components.better_media_player.room.ramp import ease_in_out
 
 from .conftest import AVR, GROUP, KODI, MUSIC, setup_room
 from .helpers import NIGHT, PRESET, ROOM, music_at, room_volume, select_preset, start_wake, tick, vol

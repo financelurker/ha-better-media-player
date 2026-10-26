@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING
 
 from homeassistant.core import State, callback
 
-from .const import (
+from ..const import (
     CONF_NIGHT_FADE_IN,
     EVENT_NIGHT_MODE,
     ROLE_BASS,

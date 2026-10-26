@@ -30,7 +30,7 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.util import dt as dt_util
 
-from .const import (
+from ..const import (
     CONF_NIGHT_FADE_IN,
     CONF_SLEEP_FADE,
     CONF_START_TIMEOUT,

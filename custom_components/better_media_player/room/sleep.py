@@ -36,7 +36,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_SLEEP_FADE, DOMAIN, EVENT_SLEEP_TIMER_FINISHED
+from ..const import CONF_SLEEP_FADE, DOMAIN, EVENT_SLEEP_TIMER_FINISHED
 
 if TYPE_CHECKING:
     from .controller import RoomController

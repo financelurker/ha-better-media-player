@@ -341,7 +341,7 @@ async def test_play_through_the_room_player_is_selected(hass, home, freezer):
     await hass.async_block_till_done()
     await tick(hass, freezer, 5)
     events = async_capture_events(hass, EVENT_SOURCE_CHANGED)
-    from custom_components.better_media_player.browser import make_id
+    from custom_components.better_media_player.room.browser import make_id
 
     await _call(hass, "play_media", media_content_id=make_id("item", "video", "movie", "123"), media_content_type="movie")
     home.kodi("playing")
