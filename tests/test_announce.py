@@ -558,3 +558,91 @@ async def test_the_nights_fade_back_goes_on_in_the_time_it_had_left(hass, home, 
     await _announce(hass)
     await _tick(hass, freezer, 70, 5)
     assert hass.states.get(MUSIC).attributes["volume_level"] == 0.6, "done within the 2 min"
+
+
+# ------------------------------------------------------------ second review
+
+
+async def test_a_failed_start_keeps_another_announcements_protection(hass, home, freezer):
+    entry = await _room(hass, home, freezer)
+    announcer = entry.runtime_data.announce
+    home.announce_hold = asyncio.Event()
+    first = _speak_later(hass)
+    await _settle(hass)
+
+    async def _fails(*_args, **_kwargs):
+        raise RuntimeError("devices")
+
+    with patch.object(type(announcer), "_power_up", _fails), pytest.raises(RuntimeError):
+        await announcer.async_announce("media-source://tts/y", "music")
+    await _tick_held(hass, freezer, 4)
+    assert announcer.protects(MUSIC), "the first one still plays"
+    home.announce_hold.set()
+    await first
+
+
+async def test_turned_off_during_it_goes_off_after_it(hass, home, freezer):
+    await _room(hass, home, freezer)
+    home.music("paused")
+    await hass.async_block_till_done()
+    await _tick(hass, freezer, 10)
+    home.announce_hold = asyncio.Event()
+    task = _speak_later(hass)
+    await _settle(hass)
+    off = asyncio.ensure_future(
+        hass.services.async_call("media_player", "turn_off", {"entity_id": ROOM}, blocking=True)
+    )
+    await _tick_held(hass, freezer, 3)
+    home.announce_hold.set()
+    await task
+    await off
+    await _tick(hass, freezer, 20)
+    assert not home.on(SPEAKERS), "you said off"
+
+
+async def test_a_room_that_is_off_and_announces_on_the_video_player_goes_off(hass, home, freezer):
+    home.music("off")
+    home.kodi_boots = True
+    await setup_room(hass)
+    hass.states.async_set(KODI, "off", {"supported_features": KODI_FEATURES | F.MEDIA_ANNOUNCE})
+    await hass.async_block_till_done()
+    await _speak(hass)
+    await _tick(hass, freezer, 20)
+    assert not home.on(TV)
+    assert hass.states.get(KODI).state == "off"
+
+
+async def test_a_room_that_is_off_with_music_assistant_power_goes_off(hass, home, freezer):
+    home.ma_announce = True
+    home.ma_power = True
+    home.music("off")
+    await setup_room(hass)
+    await hass.async_block_till_done()
+    await _speak(hass)
+    await _tick(hass, freezer, 20)
+    assert not home.on(SPEAKERS)
+    assert hass.states.get(MUSIC).state == "off"
+
+
+async def test_a_caller_that_gives_up_leaves_the_room_still_until_it_is_over(hass, home, freezer):
+    entry = await _room(hass, home, freezer)
+    home.announce_hold = asyncio.Event()
+    task = _speak_later(hass)
+    await _settle(hass)
+    task.cancel()
+    await _settle(hass)
+    await _tick_held(hass, freezer, 5)
+    assert entry.runtime_data.announce.protects(MUSIC), "the player still announces"
+    home.announce_hold.set()
+    await _settle(hass)
+    await _tick(hass, freezer, 5)
+    assert not entry.runtime_data.announce.active
+
+
+async def test_the_room_players_announce_extra_is_checked(hass, home, freezer):
+    await _room(hass, home, freezer)
+    with pytest.raises(ServiceValidationError):
+        await _speak(hass, extra={"announce_volume": "loud"})
+    await hass.services.async_call("switch", "turn_on", {"entity_id": QUIET}, blocking=True)
+    await _speak(hass, extra={"ignore_quiet": "false"})
+    assert home.announcements == []

@@ -66,6 +66,7 @@ _LOGGER = logging.getLogger(__name__)
 
 ANNOUNCE_VOLUME = "announce_volume"  # in extra: 0..100 (Music Assistant's)
 SETTLE_SECONDS = 2  # the room holds still this long after the announcement
+PLAY_TIMEOUT = 300  # s: an announcement that is not over by then is taken as over
 _NOT_READY = {STATE_OFF, "standby", "unavailable", "unknown"}
 
 
@@ -87,7 +88,8 @@ class RoomAnnouncer:
         self._protected: dict[str, int] = {}  # players an announcement acts on
         self._held: dict[str, int] = {}  # roles kept on for an announcement
         self._running = 0  # announcements in the room (until their settle time is over)
-        self._was_on = True  # the room was on before the first of them
+        self._brought_up: set[str] = set()  # roles that were off: they go off again after
+        self._woken: set[str] = set()  # players that were off: they go off again after
         self._fades = 0.0  # a preset fade held still (s it had left)
         self._night = 0.0  # the night's fade back held still (s it had left)
 
@@ -176,18 +178,30 @@ class RoomAnnouncer:
             data[ANNOUNCE_VOLUME] = level
         film = self.film(src)
         roles = self._roles_for(src)
+        protected: list[str] = []
+        undo_film: Callable[[], Awaitable[None]] | None = None
+        play: asyncio.Task | None = None
+
+        async def _finish() -> None:
+            if undo_film is not None:
+                await undo_film()
+            self.end_later(roles, protected)
+
         self.begin(roles)
         try:
             await self._power_up(src, roles)
-            self.protect([src.player, *([film.player] if film else [])])
+            protected = [src.player, *([film.player] if film else [])]
+            self.protect(protected)
             undo_film = await self._film_before(film) if film else None
-            try:
-                await self._play(src.player, media_id, media_type, data)
-            finally:
-                if undo_film is not None:
-                    await undo_film()
+            # its own task: the room holds still until the player's system is
+            # through, also if our caller gives up (e.g. an automation restarts)
+            play = self.hass.async_create_task(self._play(src.player, media_id, media_type, data))
+            await asyncio.shield(play)
         finally:
-            self.end_later(roles, [src.player, *([film.player] if film else [])])
+            if play is not None and not play.done():
+                play.add_done_callback(lambda _task: self.ctrl._spawn(_finish()))
+            else:
+                await _finish()
 
     async def _play(self, player: str, media_id: str, media_type: str, extra: dict[str, Any]) -> None:
         data: dict[str, Any] = {
@@ -199,8 +213,13 @@ class RoomAnnouncer:
         if extra:
             data[ATTR_MEDIA_EXTRA] = extra
         _LOGGER.info("%s: announcement on %s", self.ctrl.entry.title, player)
-        # returns once the player's system is through (announcement and restore)
-        await self.hass.services.async_call(MP_DOMAIN, "play_media", data, blocking=True)
+        # returns once the player's system is through (announcement and restore);
+        # a player that hangs does not keep the room still for ever
+        try:
+            async with asyncio.timeout(PLAY_TIMEOUT):
+                await self.hass.services.async_call(MP_DOMAIN, "play_media", data, blocking=True)
+        except TimeoutError:
+            _LOGGER.warning("%s: announcement on %s not over after %s s", self.ctrl.entry.title, player, PLAY_TIMEOUT)
 
     def _roles_for(self, src: Source) -> list[str]:
         """The roles kept on for the announcement (automatic power only)."""
@@ -219,6 +238,7 @@ class RoomAnnouncer:
             if not await ctrl._wait_until(lambda: all(ctrl.role_fully_on(r) for r in wanted), timeout):
                 _LOGGER.warning("%s: devices not up for the announcement, announcing anyway", ctrl.entry.title)
         if ctrl.player_state(src) in _NOT_READY and ctrl.player_supports(src, MediaPlayerEntityFeature.TURN_ON):
+            self._woken.add(src.key)
             await ctrl._source_on(src)
             await ctrl._wait_until(lambda: ctrl.player_state(src) not in _NOT_READY, timeout)
 
@@ -261,8 +281,10 @@ class RoomAnnouncer:
         """An announcement starts: its roles are kept on; the first holds the
         room's fades still."""
         ctrl = self.ctrl
+        for key in roles:
+            if (role := ctrl.roles.get(key)) is not None and not ctrl.role_on(role):
+                self._brought_up.add(key)
         if self._running == 0:
-            self._was_on = ctrl.room_on
             self._fades = ctrl.volume.async_pause_fades()
             self._night = ctrl.night.async_pause_ramps()
             ctrl.wake.async_announce_begin()
@@ -303,22 +325,39 @@ class RoomAnnouncer:
             return
         self._protected.clear()
         self._held.clear()
-        ctrl = self.ctrl
-        if not self._was_on:
-            for role in ctrl.roles.values():
-                if role.key in roles and not ctrl.role_demand(role):
-                    role.force_off = True  # no run-down: it only came on for the announcement
-        ctrl._spawn(self._catch_up())
+        self.ctrl._spawn(self._catch_up())
+
+    @callback
+    def async_room_off(self) -> None:
+        """The room is turned off during an announcement: what it keeps on
+        goes off once it is over."""
+        if self.active:
+            self._brought_up |= set(self._held)
+            self._woken |= set(self.ctrl.sources)
 
     async def _catch_up(self) -> None:
-        """All announcements are over: the room goes on where it held still."""
+        """All announcements are over: what came up only for them goes off
+        again (no run-down), and the room goes on where it held still."""
         ctrl = self.ctrl
+        fades, night, self._fades, self._night = self._fades, self._night, 0.0, 0.0
+        brought_up, self._brought_up = self._brought_up, set()
+        woken, self._woken = self._woken, set()
+        for key in woken:
+            src = ctrl.sources.get(key)
+            if src is not None and not ctrl.source_playing(src) and ctrl.player_state(src) not in _NOT_READY:
+                src.suppressed = True
+                await ctrl._source_off(src)
+        for key in brought_up:
+            role = ctrl.roles.get(key)
+            if role is not None and not ctrl.role_demand(role):
+                role.force_off = True
+        if self.active:
+            return  # a new one began meanwhile: it holds the room still now
         ctrl.sleep.async_announce_done()
         ctrl.wake.async_announce_done()
-        await ctrl.volume.async_resume_fades(self._fades)
-        if self._night:
-            await ctrl.night.async_resume_ramps(self._night)
-        self._fades = self._night = 0.0
+        await ctrl.volume.async_resume_fades(fades)
+        if night:
+            await ctrl.night.async_resume_ramps(night)
         await ctrl.async_update("announced")
         if (hub := ctrl.hub) is not None:
             hub.async_schedule("announced")
@@ -345,6 +384,13 @@ async def async_announce_rooms(
     rooms = [r for r in dict.fromkeys(rooms) if not r.announce.skipped(ignore_quiet)]
     by_group: dict[str, list[RoomController]] = {}
     alone: list[RoomController] = []
+    errors: list[Exception] = []
+    for room in list(rooms):
+        try:
+            room.announce.volume(volume)  # a preset the room does not offer: its own error
+        except ServiceValidationError as err:
+            errors.append(err)
+            rooms.remove(room)
     for room in rooms:
         group = _playing_group(hass, room)
         if group is not None:
@@ -363,7 +409,7 @@ async def async_announce_rooms(
         r.announce.async_announce(media_id, media_type, volume, extra, ignore_quiet=True) for r in alone
     ]
     results = await asyncio.gather(*tasks, return_exceptions=True)
-    errors = [e for e in results if isinstance(e, BaseException)]
+    errors += [e for e in results if isinstance(e, Exception)]
     for err in errors[1:]:
         _LOGGER.warning("Announcement: %s", err)
     if errors:

@@ -411,14 +411,16 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
         if kwargs.get(ATTR_MEDIA_ANNOUNCE):
             # an announcement (e.g. tts.speak): the room picks the player and holds still
             extra = dict(extra) if isinstance(extra, dict) else {}
-            level = extra.pop(ANNOUNCE_VOLUME, None)
-            ignore_quiet = bool(extra.pop(ATTR_IGNORE_QUIET, False))
+            try:
+                level = extra.pop(ANNOUNCE_VOLUME, None)
+                volume = None
+                if level is not None:
+                    volume = vol.All(vol.Coerce(float), vol.Range(min=0, max=100))(level) / 100
+                ignore_quiet = cv.boolean(extra.pop(ATTR_IGNORE_QUIET, False))
+            except vol.Invalid as err:
+                raise ServiceValidationError(str(err)) from err
             await self.ctrl.announce.async_announce(
-                media_id,
-                media_type,
-                volume=float(level) / 100 if level is not None else None,
-                extra=extra,
-                ignore_quiet=ignore_quiet,
+                media_id, media_type, volume=volume, extra=extra, ignore_quiet=ignore_quiet
             )
             return
         if isinstance(extra, dict) and ATTR_NIGHT_MODE in extra:

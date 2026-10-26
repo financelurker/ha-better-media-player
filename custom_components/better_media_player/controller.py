@@ -1596,6 +1596,7 @@ class RoomController:
         self._cancel_sequence()
         self._reset_overrides()
         self.volume.async_off()
+        self.announce.async_room_off()
         if (hub := _hub(self.hass)) is not None:
             hub.room_turned_off(self)
         self.prewarm = False
