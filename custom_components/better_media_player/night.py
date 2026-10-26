@@ -266,6 +266,19 @@ class NightMode:
         return any(hub.ma.is_group(g) for g in src.backend.groups_of(src.player, idle=True))
 
     @callback
+    def async_pause_ramps(self) -> bool:
+        """An announcement plays: the fade back holds still; True if one ran."""
+        running = any(r.running for r in self._ramps.values())
+        for ramp in self._ramps.values():
+            ramp.stop()
+        return running
+
+    async def async_resume_ramps(self) -> None:
+        """The announcement is over: the fade back goes on from where the volume is."""
+        if self.cap is None and self.ctrl.data.get("night_fade_back"):
+            await self._fade_back()
+
+    @callback
     def async_cancel_ramp(self, player: str) -> None:
         if (ramp := self._ramps.get(player)) is not None:
             ramp.cancel()

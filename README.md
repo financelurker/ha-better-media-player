@@ -16,7 +16,7 @@ It is a custom integration in the spirit of Better Thermostat: you tell it what 
 - [Installation](#installation)
 - [Setup](#setup)
 - [How the room behaves](#how-the-room-behaves)
-- [Features](#features): [room volume](#room-volume), [night mode](#night-mode), [sleep timer](#sleep-timer), [wake up](#wake-up), [follow me](#follow-me), [handover](#handover), [media browser](#media-browser-and-search)
+- [Features](#features): [room volume](#room-volume), [night mode](#night-mode), [sleep timer](#sleep-timer), [wake up](#wake-up), [follow me](#follow-me), [handover](#handover), [announcements](#announcements), [media browser](#media-browser-and-search)
 - [Automations](#automations): actions, events, device triggers
 - [Dashboards](#dashboards)
 - [Reference](#reference): entities and states
@@ -34,6 +34,7 @@ It is a custom integration in the spirit of Better Thermostat: you tell it what 
 - **Night mode, sleep timer and wake up** with fades.
 - **Follow me:** start it in a room and the music moves with you from room to room, using the rooms' occupancy sensors and one Music Assistant group player.
 - **Handover:** continue the music or the film in another room, where it was.
+- **Announcements** in one or more rooms, over what plays there: a room that is off powers up for it and goes off again; a film pauses; at night at most the night mode's limit; quiet rooms are left out.
 - **Media browser and search** across all of the room's players, with their queues on top; picking a movie powers up TV and Kodi first.
 - **Manual override:** switch a plug (or turn a device on) by hand and the room steps back until everything is off again.
 - **Tidy dashboards:** controls that make no sense right now are hidden.
@@ -143,6 +144,7 @@ How the room behaves – times, waits, standby, night mode, volume presets and f
 | Night: maximum volume, Night: video idle timeout, Night: display run-down, Night: fade back up | | see [night mode](#night-mode) |
 | Preset: Quiet / Normal / Loud / Party, Power-on preset, Preset fade | 15 / 30 / 50 / 70 %, none, 3 s | see [presets](#presets) |
 | Sleep timer fade-out, Snooze time | 5 / 9 min | always |
+| Announcement during video, Announcement: lower film by | pause, 50 % | with a video and a music player, see [announcements](#announcements) |
 | Follow me: leave after, Follow me: volume offset, Follow me: prewarm speakers, Wake: detect leaving the room | | in follow rooms, see [follow me](#follow-me) |
 
 <details>
@@ -432,6 +434,49 @@ data:
 - **Music in a group** (other than follow me) is not handed over: the group plays it, not the room's player.
 - Both rooms need a player for the source with handover: the same system (two Music Assistant players, two Better Kodi players). Otherwise the action gives an error that says why (nothing plays, no such player in the destination, the system cannot hand over, …); errors of the player's own handover (e.g. Better Kodi's) are passed on.
 
+### Announcements
+
+A message or a sound in one or more rooms, over what plays there. With the action, or with anything that announces on a media player (e.g. `tts.speak` with the room player as its media player, or `media_player.play_media` with `announce: true`):
+
+```yaml
+action: better_media_player.announce
+target:
+  entity_id:
+    - media_player.living_room
+    - media_player.kitchen
+data:
+  message: Dinner is ready      # spoken by Home Assistant's text-to-speech; or media_content_id: a sound
+  tts_entity: tts.piper         # optional (default: Home Assistant's); also optional: language
+  volume: normal                # optional: 0..1 or a preset of the room
+  pre_announce: true            # optional: a chime before it (default: the player's setting)
+  ignore_quiet: false           # optional: true for emergencies (also quiet rooms)
+```
+
+**Which player announces.** A room announces through a player that supports Home Assistant's announcements (Music Assistant's players do; so does any other that offers it, e.g. a Better Kodi that brings it). The room takes the first that fits:
+
+| Situation | Player | Why |
+|---|---|---|
+| Something plays and its player can announce | that player | the announcement takes the same way as what plays: the same speakers, the same input of an amplifier; the player holds what plays and resumes it itself |
+| Something plays and its player cannot | the room's other player | it can; a film that plays meanwhile is paused, overlaid or turned down (*Announcement during video*) |
+| The room is off | the music player, else the video player | the room's devices come up for it (speakers, volume device) and go off right after, without run-down |
+| No player of the room can announce | – | the action gives an error that says so |
+
+- **What the player's system does:** Music Assistant plays its chime, sets its announcement volume, holds the music and resumes it afterwards (players announcing through ESPHome duck the music instead). The action returns once all of that is over.
+- **Meanwhile the room holds still:** nothing the players do now counts as a wish: no volume learned (the preset stays), no fade or night fade back stopped, a pause is no snooze of a wake, the sleep timer waits, no source change event.
+- **A film meanwhile** (the announcement on the music player): *Announcement during video* on the device – **pause** (default; it goes on afterwards), **overlay** (it plays on), **lower** (turned down by *Announcement: lower film by*, default 50 %, and back afterwards).
+- **Volume:** the player system's (Music Assistant: its announcement volume per player), or `volume` of the action. **At night** at most the night mode's limit, also without `volume` (then the limit). With a volume device the device stays at the room volume and the announcement's volume is the player's.
+- **Quiet rooms are left out** (see below), unless `ignore_quiet: true`.
+- **Several rooms** at once: rooms that together are all the members of a group that plays (e.g. follow me) get it once, through the group, in step; the group goes on afterwards. Only some rooms of a group: each on its own player, the group plays on in the others.
+
+**Quiet and night mode:** the **night mode** is about *how loud* the room is (its limit, no subwoofer, shorter times) – for everything that plays there, also what you start. **Quiet** is about whether anything *from outside* comes in ("do not disturb", e.g. a baby asleep in the room): follow me leaves the room out and announcements skip it; what you start in the room itself (room player, wake, playing something) works as usual.
+
+Good to know:
+
+- At night (with the limit given as the announcement's volume), Music Assistant leaves the ESPHome route for a player that announces through ESPHome: the player is taken out of its group for the announcement and the music pauses instead of ducking, then it rejoins.
+- Music Assistant's own minimum and maximum announcement volume (per player) still apply and may override the night mode's limit.
+- Only announcements through the room player (or the action) are handled by the room: one sent to the Music Assistant player directly bypasses it, as for all of the room's features.
+- An AV receiver on another input (e.g. the TV's) does not play an announcement of the music player; switching its input for announcements is not part of this (yet).
+
 ### Media browser and search
 
 The room player's media browser bundles the browsers of its players. Only what a player supports is offered.
@@ -463,6 +508,7 @@ All of them target a room player (`media_player.<room>`).
 | `better_media_player.snooze` / `stop_wake` | snooze (optional `minutes`) / stop a wake |
 | `better_media_player.start_follow` / `stop_follow` | [follow me](#follow-me) |
 | `better_media_player.handover` | [handover](#handover) (`destination`; optional `source`, `keep_source_playing`) |
+| `better_media_player.announce` | [announcement](#announcements) in one or more rooms (`message` or `media_content_id`; optional `tts_entity`, `language`, `volume`, `pre_announce`, `ignore_quiet`) |
 | `media_player.play_media` with `extra: {night_mode: true}` | play and switch the [night mode](#night-mode) along |
 
 ### Events and device triggers
@@ -542,7 +588,7 @@ action:
 | `number.<room>_sleep_timer` | sleep timer: minutes left, 0 = off |
 | `button.<room>_sleep_timer_15_min` | sleep timer +15 min (starts one if none runs) |
 | `sensor.<room>_sleep_timer_end` | when the sleep timer turns the room off |
-| `switch.<room>_quiet` | quiet mode: the room takes no part in follow me |
+| `switch.<room>_quiet` | quiet mode: nothing from outside – no follow me, no announcements |
 | `switch.<room>_night_mode` | [night mode](#night-mode) |
 | `sensor.<room>_wake` | wake state; snooze end, end time and volumes in the attributes |
 | `button.<room>_snooze`, `button.<room>_stop_wake` | wake controls |
@@ -566,6 +612,7 @@ Settings ([what they do](#settings-on-the-device)); only those the room can use:
 | `number.<room>_preset_quiet`, `_preset_normal`, `_preset_loud`, `_preset_party` | %, 0 = not offered |
 | `select.<room>_power_on_preset` | none or a preset |
 | `number.<room>_preset_fade` | s, 0 = at once |
+| `select.<room>_announcement_during_video`, `number.<room>_announcement_lower_film_by` | pause / overlay / lower; % |
 | `number.<room>_sleep_timer_fade_out`, `_snooze_time` | min |
 | `number.<room>_follow_me_leave_after` | min |
 | `number.<room>_follow_me_volume_offset` | percentage points |

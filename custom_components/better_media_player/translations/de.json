@@ -432,6 +432,9 @@
       },
       "hide_delay": {
         "name": "Ausblende-Verzögerung"
+      },
+      "announce_video_lower": {
+        "name": "Durchsage: Film leiser um"
       }
     },
     "button": {
@@ -477,6 +480,14 @@
       },
       "handover": {
         "name": "Übergeben an"
+      },
+      "announce_video": {
+        "name": "Durchsage bei Video",
+        "state": {
+          "pause": "Film pausieren",
+          "overlay": "Überlagern",
+          "lower": "Film leiser"
+        }
       }
     }
   },
@@ -594,6 +605,44 @@
           "description": "Dieser Raum spielt weiter (nur wo das System des Players das kann: Better Kodi)."
         }
       }
+    },
+    "announce": {
+      "name": "Durchsage",
+      "description": "Eine Durchsage in einem oder mehreren Räumen, über das, was dort spielt: Der Raum wählt den Player, fährt seine Geräte hoch, wenn er aus ist, und hält währenddessen still. Räume, die zusammen eine spielende Gruppe sind, bekommen sie einmal über die Gruppe.",
+      "fields": {
+        "message": {
+          "name": "Nachricht",
+          "description": "Text zum Sprechen (Text-to-Speech von Home Assistant)."
+        },
+        "media_content_id": {
+          "name": "Medium",
+          "description": "Ein Ton oder eine Aufnahme statt einer Nachricht."
+        },
+        "media_content_type": {
+          "name": "Medientyp",
+          "description": "Standard: music."
+        },
+        "tts_entity": {
+          "name": "Text-to-Speech",
+          "description": "Standard: das von Home Assistant."
+        },
+        "language": {
+          "name": "Sprache",
+          "description": "Sprache der Nachricht."
+        },
+        "volume": {
+          "name": "Lautstärke",
+          "description": "0..1 oder ein Preset des Raums. Standard: die des Player-Systems (Music Assistant: seine Durchsage-Lautstärke); nachts höchstens das Limit des Nachtmodus."
+        },
+        "ignore_quiet": {
+          "name": "Auch in ruhigen Räumen",
+          "description": "Für Notfälle: auch ruhige Räume bekommen sie."
+        },
+        "pre_announce": {
+          "name": "Hinweiston",
+          "description": "Ein Ton vor der Durchsage (Standard: Einstellung des Players)."
+        }
+      }
     }
   },
   "selector": {
@@ -637,6 +686,13 @@
         "normal": "Normal",
         "loud": "Laut",
         "party": "Party"
+      }
+    },
+    "announce_video": {
+      "options": {
+        "pause": "Film pausieren",
+        "overlay": "Überlagern",
+        "lower": "Film leiser"
       }
     }
   },
@@ -703,6 +759,15 @@
     },
     "handover_in_group": {
       "message": "{player} spielt in einer Gruppe ({group}): die Gruppe in Music Assistant übergeben oder die Musik direkt auf {player} starten."
+    },
+    "announce_not_supported": {
+      "message": "Kein Player in {room} kann Durchsagen."
+    },
+    "announce_nothing": {
+      "message": "Gib eine Nachricht oder eine media_content_id an."
+    },
+    "announce_no_room": {
+      "message": "Kein Raum-Player von Better Media Player unter den Zielen."
     }
   },
   "device_automation": {

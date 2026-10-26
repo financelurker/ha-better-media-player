@@ -456,6 +456,22 @@ class WakeAlarm:
     # ---------------------------------------------------------------- events
 
     @callback
+    @callback
+    def async_announce_begin(self) -> None:
+        """An announcement plays: the wake's fade holds still."""
+        if self._ramp is not None:
+            self._ramp.stop()
+
+    @callback
+    def async_announce_done(self) -> None:
+        """The announcement is over: a fade goes on from where it would be now."""
+        w, src = self._w, self._src()
+        if w is None or src is None or w["phase"] != PHASE_FADING or not w.get("fade_t0"):
+            return
+        if self._ramp is not None and self._ramp.running:
+            return
+        self.ctrl._spawn(self._fade_from_now(w, src))
+
     def async_on_state(self, src: Source, old: State | None, new: State | None) -> None:
         w = self._w
         if w is None or new is None or old is None or src.key != w["source"]:

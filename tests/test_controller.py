@@ -404,6 +404,8 @@ async def test_entity_ids_match_readme(hass, home):
         "number.wohnzimmer_preset_loud",
         "number.wohnzimmer_preset_party",
         "number.wohnzimmer_preset_fade",
+        "number.wohnzimmer_announcement_lower_film_by",
+        "select.wohnzimmer_announcement_during_video",
         "number.wohnzimmer_start_timeout",
         "number.wohnzimmer_wait_after_display_on",
         "number.wohnzimmer_wait_after_speakers_on",

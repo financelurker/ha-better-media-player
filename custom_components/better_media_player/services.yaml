@@ -167,3 +167,38 @@ handover:
       default: false
       selector:
         boolean:
+
+announce:
+  target:
+    entity:
+      integration: better_media_player
+      domain: media_player
+  fields:
+    message:
+      example: "Dinner is ready"
+      selector:
+        text:
+    media_content_id:
+      selector:
+        text:
+    media_content_type:
+      selector:
+        text:
+    tts_entity:
+      selector:
+        entity:
+          domain: tts
+    language:
+      selector:
+        text:
+    volume:
+      example: 0.4
+      selector:
+        text:
+    ignore_quiet:
+      default: false
+      selector:
+        boolean:
+    pre_announce:
+      selector:
+        boolean:
