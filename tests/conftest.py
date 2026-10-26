@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any
@@ -139,6 +140,10 @@ class FakeHome:
     lg_obeys: bool = True  # the LG TV follows turn_on / turn_off
     volume_lag: float = 0.0  # s a player reports a volume it was set to (in order)
     ma_power: bool = False  # the music players have Music Assistant's (fake) power control
+    ma_announce: bool = False  # the music players announce (Music Assistant)
+    announce_hold: Any = None  # an asyncio.Event: an announcement lasts until it is set
+    announcements: list[tuple[str, dict]] = field(default_factory=list)
+    _announce_locks: dict = field(default_factory=dict)
 
     def now(self):
         """The time on Music Assistant's server."""
@@ -160,7 +165,31 @@ class FakeHome:
         self.set(KODI, state, supported_features=KODI_FEATURES, friendly_name="Kodi", **attrs)
 
     def _ma_features(self) -> int:
-        return MA_FEATURES | (int(F.TURN_ON | F.TURN_OFF) if self.ma_power else 0)
+        features = MA_FEATURES | (int(F.TURN_ON | F.TURN_OFF) if self.ma_power else 0)
+        return features | (int(F.MEDIA_ANNOUNCE) if self.ma_announce else 0)
+
+    async def announce(self, entity_id: str, data: dict) -> None:
+        """Music Assistant's announcement: the player plays it (at the given
+        volume), then everything is as before; the call returns after that."""
+        lock = self._announce_locks.setdefault(entity_id, asyncio.Lock())
+        async with lock:  # Music Assistant: one announcement after the other per player
+            await self._announce(entity_id, data)
+
+    async def _announce(self, entity_id: str, data: dict) -> None:
+        self.calls.append(("media_player", "announce", entity_id))
+        self.announcements.append((entity_id, dict(data)))
+        st = self.hass.states.get(entity_id)
+        before = (st.state, dict(st.attributes))
+        level = (data.get("extra") or {}).get("announce_volume")
+        attrs = dict(st.attributes)
+        if level is not None:
+            attrs["volume_level"] = level / 100
+        if st.state == "playing":
+            self.hass.states.async_set(entity_id, "paused", st.attributes)  # the music holds
+        self.hass.states.async_set(entity_id, "playing", attrs)
+        if self.announce_hold is not None:
+            await self.announce_hold.wait()
+        self.hass.states.async_set(entity_id, *before)
 
     def music(self, state: str, **attrs: Any) -> None:
         self.set(MUSIC, state, supported_features=self._ma_features(), friendly_name="Office Player",
@@ -169,7 +198,7 @@ class FakeHome:
     def group(self, state: str, members: list[str], entity_id: str = GROUP, **attrs: Any) -> None:
         name = "All Players" if entity_id == GROUP else "All Players (follow)"
         self.set(entity_id, state, group_members=members, mass_player_type="group", friendly_name=name,
-                 supported_features=MA_FEATURES, **attrs)
+                 supported_features=MA_FEATURES | (int(F.MEDIA_ANNOUNCE) if self.ma_announce else 0), **attrs)
         if state in ("playing", "paused"):
             for m in members:
                 self.set(m, state)
@@ -352,6 +381,8 @@ def home(hass: HomeAssistant):
         }:
             if service in ("browse_media", "search_media", "get_queue"):
                 return fake.respond(service, ids, service_data or {})
+            if service == "play_media" and (service_data or {}).get("announce"):
+                return await fake.announce(ids, service_data)
             if fake.handle(domain, service, ids, service_data, context):
                 return None
         return await original(self, domain, service, service_data, blocking, context, *a, **kw)

@@ -18,6 +18,7 @@ from .const import (
     ROLE_BASS,
     ROLE_DISPLAY,
     ROLE_VIDEO_HOST,
+    SOURCE_AUDIO,
     SOURCE_VIDEO,
 )
 from .entity import BetterMediaPlayerEntity, ControlEntity, HubEntity, prune_entities
@@ -54,6 +55,8 @@ async def async_setup_entry(
     entities.append(PercentNumber(entry, ctrl, "night_max_volume"))
     entities += [PresetNumber(entry, ctrl, name) for name in PRESETS]
     entities.append(SettingNumber(entry, ctrl, "preset_fade", 0, 30, 0.5, UnitOfTime.SECONDS))
+    if SOURCE_VIDEO in ctrl.sources and SOURCE_AUDIO in ctrl.sources:
+        entities.append(SettingNumber(entry, ctrl, "announce_video_lower", 0, 100, 5, PERCENTAGE))
     # how the room behaves (set on the device, not in the options)
     s, mins = UnitOfTime.SECONDS, UnitOfTime.MINUTES
     entities.append(SettingNumber(entry, ctrl, "start_timeout", 10, 600, 5, s))

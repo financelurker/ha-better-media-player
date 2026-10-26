@@ -585,6 +585,8 @@ class FollowManager:
         return state == MediaPlayerState.PAUSED and bool(self.ma.members(group))
 
     async def _evaluate(self) -> None:
+        if any(r.announce.active for r in get_rooms(self.hass).values()):
+            return  # an announcement takes players out of groups for a moment (again after it)
         now = _now()
         self._track_arrivals(now)
         s = self.session

@@ -165,6 +165,9 @@ class SourceWatch:
         ctrl = self.ctrl
         if not ctrl._started or ctrl._stopped:
             return
+        if ctrl.announce.active:
+            self._pending = None  # an announcement plays: no source change (checked again after it)
+            return
         if self._announced is _UNSET:
             # Home Assistant started: the room is as it is, once its players have
             # reported (and no sequence is running)

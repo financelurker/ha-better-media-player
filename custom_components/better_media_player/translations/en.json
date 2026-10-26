@@ -432,6 +432,9 @@
       },
       "hide_delay": {
         "name": "Hide delay"
+      },
+      "announce_video_lower": {
+        "name": "Announcement: lower film by"
       }
     },
     "button": {
@@ -477,6 +480,14 @@
       },
       "handover": {
         "name": "Hand over to"
+      },
+      "announce_video": {
+        "name": "Announcement during video",
+        "state": {
+          "pause": "Pause the film",
+          "overlay": "Overlay",
+          "lower": "Turn the film down"
+        }
       }
     }
   },
@@ -594,6 +605,44 @@
           "description": "This room plays on (only where the player's system can: Better Kodi)."
         }
       }
+    },
+    "announce": {
+      "name": "Announce",
+      "description": "An announcement in one or more rooms, over what plays there: the room picks the player, wakes its devices if it is off and holds still meanwhile. Rooms that together are a playing group get it once, through the group.",
+      "fields": {
+        "message": {
+          "name": "Message",
+          "description": "Text to speak (Home Assistant text-to-speech)."
+        },
+        "media_content_id": {
+          "name": "Media",
+          "description": "A sound or recording to play instead of a message."
+        },
+        "media_content_type": {
+          "name": "Media type",
+          "description": "Default: music."
+        },
+        "tts_entity": {
+          "name": "Text-to-speech",
+          "description": "Default: Home Assistant's default."
+        },
+        "language": {
+          "name": "Language",
+          "description": "Language of the message."
+        },
+        "volume": {
+          "name": "Volume",
+          "description": "0..1 or a preset of the room. Default: the player system's (Music Assistant: its announcement volume); at night at most the night mode's limit."
+        },
+        "ignore_quiet": {
+          "name": "Also in quiet rooms",
+          "description": "For emergencies: quiet rooms get it too."
+        },
+        "pre_announce": {
+          "name": "Chime",
+          "description": "A chime before the announcement (default: the player's setting)."
+        }
+      }
     }
   },
   "selector": {
@@ -703,6 +752,15 @@
     },
     "handover_in_group": {
       "message": "{player} plays in a group ({group}): hand over the group in Music Assistant, or start the music on {player} itself."
+    },
+    "announce_not_supported": {
+      "message": "No player in {room} can make announcements."
+    },
+    "announce_nothing": {
+      "message": "Give a message or a media_content_id."
+    },
+    "announce_no_room": {
+      "message": "No room player of Better Media Player among the targets."
     }
   },
   "device_automation": {

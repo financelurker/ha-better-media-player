@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 
 import voluptuous as vol
 from homeassistant.components.media_player import (
+    ATTR_MEDIA_ANNOUNCE,
     ATTR_MEDIA_ENQUEUE,
     ATTR_MEDIA_EXTRA,
     BrowseMedia,
@@ -33,7 +34,9 @@ from homeassistant.util import dt as dt_util
 
 from . import BetterMediaPlayerConfigEntry
 from .browser import RoomBrowser, is_own_id
+from .announce import ANNOUNCE_VOLUME
 from .const import (
+    ATTR_IGNORE_QUIET,
     ATTR_PRESET,
     PRESETS,
     SERVICE_HANDOVER,
@@ -221,6 +224,8 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
                 features |= MediaPlayerEntityFeature(
                     int(state.attributes.get(ATTR_SUPPORTED_FEATURES, 0) or 0)
                 ) & ANY_SOURCE
+        if self.ctrl.announce.available:
+            features |= MediaPlayerEntityFeature.MEDIA_ANNOUNCE
         if (device := self.ctrl.volume_device) is not None:
             # the room's volume is the device's, also while nothing plays
             features &= ~DEVICE_VOLUME
@@ -403,6 +408,21 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
     async def async_play_media(self, media_type: MediaType | str, media_id: str, **kwargs: Any) -> None:
         enqueue = kwargs.get(ATTR_MEDIA_ENQUEUE)
         extra = kwargs.get(ATTR_MEDIA_EXTRA)
+        if kwargs.get(ATTR_MEDIA_ANNOUNCE):
+            # an announcement (e.g. tts.speak): the room picks the player and holds still
+            extra = dict(extra) if isinstance(extra, dict) else {}
+            try:
+                level = extra.pop(ANNOUNCE_VOLUME, None)
+                volume = None
+                if level is not None:
+                    volume = vol.All(vol.Coerce(float), vol.Range(min=0, max=100))(level) / 100
+                ignore_quiet = cv.boolean(extra.pop(ATTR_IGNORE_QUIET, False))
+            except vol.Invalid as err:
+                raise ServiceValidationError(str(err)) from err
+            await self.ctrl.announce.async_announce(
+                media_id, media_type, volume=volume, extra=extra, ignore_quiet=ignore_quiet
+            )
+            return
         if isinstance(extra, dict) and ATTR_NIGHT_MODE in extra:
             # ours: switches the room's night mode, not passed on to the player
             extra = dict(extra)

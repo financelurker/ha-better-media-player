@@ -28,6 +28,7 @@ from .const import (
     PLATFORMS,
     STORAGE_VERSION,
 )
+from .announce import async_setup_services
 from .controller import RoomController
 from .hub import FollowManager, get_rooms
 
@@ -42,6 +43,7 @@ def is_hub(entry: ConfigEntry) -> bool:
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.data.setdefault(DOMAIN, {}).setdefault("rooms", {})
+    async_setup_services(hass)
     return True
 
 

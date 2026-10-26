@@ -1,4 +1,4 @@
-"""Volume preset, power-on preset and handover of a room."""
+"""Volume preset, power-on preset, handover and announcements of a room."""
 
 from __future__ import annotations
 
@@ -8,9 +8,18 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import BetterMediaPlayerConfigEntry
-from .const import CONF_POWER_ON_PRESET, PRESET_MANUAL, PRESET_NONE, PRESETS
+from .const import (
+    ANNOUNCE_VIDEO_MODES,
+    CONF_ANNOUNCE_VIDEO,
+    CONF_POWER_ON_PRESET,
+    PRESET_MANUAL,
+    PRESET_NONE,
+    PRESETS,
+    SOURCE_AUDIO,
+    SOURCE_VIDEO,
+)
 from .controller import RoomController
-from .entity import BetterMediaPlayerEntity, ControlEntity
+from .entity import BetterMediaPlayerEntity, ControlEntity, prune_entities
 from .hub import get_rooms
 
 
@@ -21,13 +30,30 @@ async def async_setup_entry(
 ) -> None:
     ctrl = entry.runtime_data
     # always there: the presets can be offered later (number entities)
-    async_add_entities(
-        [
-            VolumePresetSelect(entry, ctrl, "volume_preset"),
-            PowerOnPresetSelect(entry, ctrl, CONF_POWER_ON_PRESET),
-            HandoverSelect(entry, ctrl, "handover"),
-        ]
-    )
+    entities: list[SelectEntity] = [
+        VolumePresetSelect(entry, ctrl, "volume_preset"),
+        PowerOnPresetSelect(entry, ctrl, CONF_POWER_ON_PRESET),
+        HandoverSelect(entry, ctrl, "handover"),
+    ]
+    if SOURCE_VIDEO in ctrl.sources and SOURCE_AUDIO in ctrl.sources:
+        entities.append(AnnounceVideoSelect(entry, ctrl, CONF_ANNOUNCE_VIDEO))
+    prune_entities(hass, entry, "select", entities)
+    async_add_entities(entities)
+
+
+class AnnounceVideoSelect(BetterMediaPlayerEntity, SelectEntity):
+    """A film while the music player announces: paused, overlaid or turned down."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_icon = "mdi:bullhorn"
+    _attr_options = ANNOUNCE_VIDEO_MODES
+
+    @property
+    def current_option(self) -> str:
+        return self.ctrl.setting(CONF_ANNOUNCE_VIDEO)
+
+    async def async_select_option(self, option: str) -> None:
+        await self.ctrl.async_set_setting(CONF_ANNOUNCE_VIDEO, option)
 
 
 class PowerOnPresetSelect(BetterMediaPlayerEntity, SelectEntity):

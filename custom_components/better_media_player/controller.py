@@ -106,6 +106,7 @@ from .const import (
 )
 from .hub import get_hub, get_rooms
 from .sleep import REASON_ROOM_OFF, SleepTimer
+from .announce import RoomAnnouncer
 from .backend import PlayerBackend, backend_for
 from .night import NightMode
 from .source_event import SourceWatch
@@ -289,6 +290,7 @@ class RoomController:
         self.volume = RoomVolume(self)
         self.night = NightMode(self)
         self.wake = WakeAlarm(self)
+        self.announce = RoomAnnouncer(self)
         self.source_watch = SourceWatch(self)
         self._sleep_off_pending = False
         self.turning_off = False
@@ -443,13 +445,19 @@ class RoomController:
         old = event.data["old_state"]
         self._changed.set()
 
-        if self.volume_device is not None and entity_id == self.volume_device.id:
+        if (
+            self.volume_device is not None
+            and entity_id == self.volume_device.id
+            and not self.announce.protects(entity_id)
+        ):
             self.volume.async_on_device(old, new)
             self.night.async_on_device(new)
 
         for src in self.sources.values():
             if entity_id != src.player:
                 continue
+            if self.announce.protects(src.player):
+                continue  # an announcement: what the player does now is no wish
             self.volume.async_on_state(src, old, new)
             self.night.async_on_state(src, new)
             self.wake.async_on_state(src, old, new)
@@ -735,6 +743,8 @@ class RoomController:
             return False  # night mode: no subwoofer
         if self.wake.holds(role):
             return True  # snoozed: the room stays ready
+        if self.announce.holds(role):
+            return True  # an announcement plays
         if self.prewarm and role.key in (ROLE_AUDIO, ROLE_BASS, ROLE_AUDIO_HOST) and not self.quiet:
             return True
         return any(
@@ -1586,6 +1596,7 @@ class RoomController:
         self._cancel_sequence()
         self._reset_overrides()
         self.volume.async_off()
+        self.announce.async_room_off()
         if (hub := _hub(self.hass)) is not None:
             hub.room_turned_off(self)
         self.prewarm = False

@@ -4,7 +4,8 @@
   "after_dependencies": [
     "kodi",
     "media_source",
-    "music_assistant"
+    "music_assistant",
+    "tts"
   ],
   "codeowners": [
     "@financelurker"

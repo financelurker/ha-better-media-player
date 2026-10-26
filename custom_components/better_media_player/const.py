@@ -61,6 +61,15 @@ ATTR_FADE_SECONDS = "fade_seconds"
 PRESET_DEFAULTS = {"quiet": 15, "normal": 30, "loud": 50, "party": 70}
 SERVICE_SET_VOLUME_PRESET = "set_volume_preset"
 SERVICE_HANDOVER = "handover"
+# announcements
+SERVICE_ANNOUNCE = "announce"
+ATTR_IGNORE_QUIET = "ignore_quiet"
+CONF_ANNOUNCE_VIDEO = "announce_video"  # a film meanwhile: pause / overlay / lower
+CONF_ANNOUNCE_VIDEO_LOWER = "announce_video_lower"  # %, how much lower
+ANNOUNCE_PAUSE = "pause"
+ANNOUNCE_OVERLAY = "overlay"
+ANNOUNCE_LOWER = "lower"
+ANNOUNCE_VIDEO_MODES = [ANNOUNCE_PAUSE, ANNOUNCE_OVERLAY, ANNOUNCE_LOWER]
 ATTR_PRESET = "preset"
 CONF_PREWARM = "prewarm"
 CONF_WAKE_DETECT_LEFT = "wake_detect_left"  # follow wake: leaving the wake room ends the wake
@@ -200,6 +209,8 @@ ENTITY_DEFAULTS: dict = {
     CONF_VOLUME_OFFSET: 0,
     CONF_POWER_ON_PRESET: PRESET_NONE,
     CONF_PRESET_FADE: 3,
+    CONF_ANNOUNCE_VIDEO: ANNOUNCE_PAUSE,
+    CONF_ANNOUNCE_VIDEO_LOWER: 50,
     CONF_PREWARM: True,
     CONF_WAKE_DETECT_LEFT: True,
     CONF_SLEEP_FADE: 5,

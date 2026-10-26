@@ -225,7 +225,7 @@ class NightMode:
 
     # --------------------------------------------------------------- fade back
 
-    async def _fade_back(self) -> None:
+    async def _fade_back(self, seconds: float | None = None) -> None:
         """Night mode over: back up to the room volume."""
         ctrl = self.ctrl
         target = ctrl.volume.value
@@ -233,7 +233,8 @@ class NightMode:
             return
         ctrl.data["night_fade_back"] = True  # a restart in between goes on afterwards
         ctrl._save_now()
-        seconds = float(ctrl.setting(CONF_NIGHT_FADE_IN)) * 60
+        if seconds is None:
+            seconds = float(ctrl.setting(CONF_NIGHT_FADE_IN)) * 60
         for out, src in self._outputs():
             if (
                 (src is not None and ctrl.player_state(src) not in _POWERED)
@@ -264,6 +265,20 @@ class NightMode:
         if hub is None:
             return False
         return any(hub.ma.is_group(g) for g in src.backend.groups_of(src.player, idle=True))
+
+    @callback
+    def async_pause_ramps(self) -> float:
+        """An announcement plays: the fade back holds still; returns the time it had left."""
+        left = max((r.remaining for r in self._ramps.values()), default=0.0)
+        for ramp in self._ramps.values():
+            ramp.stop()
+        return left
+
+    async def async_resume_ramps(self, seconds: float) -> None:
+        """The announcement is over: the fade back goes on from where the volume
+        is, in the time it had left."""
+        if self.cap is None and self.ctrl.data.get("night_fade_back"):
+            await self._fade_back(seconds)
 
     @callback
     def async_cancel_ramp(self, player: str) -> None:
