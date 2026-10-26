@@ -19,8 +19,6 @@ from custom_components.better_media_player.music_assistant import MusicAssistant
 
 from .conftest import FOLLOW, GROUP, KODI, MUSIC, setup_room
 
-ROOM = "media_player.wohnzimmer"
-
 
 def _register(hass, platform, object_id):
     return er.async_get(hass).async_get_or_create("media_player", platform, object_id, suggested_object_id=object_id)
@@ -91,7 +89,6 @@ async def test_a_room_takes_its_players_backends(hass, ma_office, home):
     assert type(ctrl.sources[SOURCE_AUDIO].backend) is MusicAssistant
     assert type(ctrl.sources[SOURCE_VIDEO].backend) is VideoBackend  # (media_player.kodi of no known system here)
     assert KODI == ctrl.sources[SOURCE_VIDEO].player
-
 
 
 async def test_better_kodi_lifts_only_its_queue_entry(hass, home):
