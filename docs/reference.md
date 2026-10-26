@@ -47,7 +47,7 @@ How the room behaves, set under *Configuration* on its device ([Settings on the 
 | Night: fade back up | `number.<room>_night_fade_back_up` | 2 min | always |
 | Preset: Quiet / Normal / Loud / Party | `number.<room>_preset_quiet`, `_preset_normal`, `_preset_loud`, `_preset_party` | 15 / 30 / 50 / 70 %, 0 = not offered | always |
 | Power-on preset | `select.<room>_power_on_preset` | none (or a preset) | always |
-| Preset fade | `number.<room>_preset_fade` | 3 s, 0 = at once | always |
+| Preset fade | `number.<room>_preset_fade` | 0 s = at once | always |
 | Announcement during video | `select.<room>_announcement_during_video` | pause (or overlay, lower) | with a video and a music player |
 | Announcement: lower film by | `number.<room>_announcement_lower_film_by` | 50 % | with a video and a music player |
 | Sleep timer fade-out, Snooze time | `number.<room>_sleep_timer_fade_out`, `_snooze_time` | 5 / 9 min | always |

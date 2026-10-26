@@ -8,11 +8,9 @@ from homeassistant.exceptions import ServiceValidationError
 
 from custom_components.better_media_player.players.base import groups_of
 from custom_components.better_media_player.const import (
-    CONF_PRESET_FADE,
     CONF_VOLUME_CONTROL,
     CONF_VOLUME_ENTITY,
     DOMAIN,
-    ENTITY_DEFAULTS,
     VOLUME_DEVICE,
 )
 
@@ -28,14 +26,8 @@ from .helpers import (
     start_wake,
     tick,
     vol,
+    volume_sets,
 )
-
-
-@pytest.fixture(autouse=True)
-def _jump(monkeypatch):
-    """These tests cover what a preset sets: it jumps there (the fade has
-    tests of their own, test_volume_preset_fade.py)."""
-    monkeypatch.setitem(ENTITY_DEFAULTS, CONF_PRESET_FADE, 0)
 
 
 async def test_select_offers_the_presets(hass, home, freezer):
@@ -52,6 +44,15 @@ async def test_preset_sets_the_room_volume(hass, home, freezer):
     assert room_volume(hass) == 0.5
     assert hass.states.get(PRESET).state == "loud"
     assert hass.states.get(ROOM).attributes["volume_preset"] == "loud"
+
+
+async def test_by_default_a_preset_jumps_there(hass, home, freezer):
+    """Preset fade is 0 by default: one volume step, as before the fade existed."""
+    await music_at(hass, home, freezer)
+    assert float(hass.states.get("number.living_room_preset_fade").state) == 0
+    home.played.clear()
+    await select_preset(hass, "loud")
+    assert volume_sets(home, MUSIC) == [0.5]
 
 
 async def test_other_volume_ends_the_preset(hass, home, freezer):
