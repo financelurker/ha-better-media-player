@@ -793,6 +793,14 @@
     "follow_player_not_group": {
       "title": "Follow me: kein Gruppen-Player",
       "description": "Der Follow-me-Player `{entity}` ist kein Gruppen-Player von Music Assistant. Follow me braucht einen Gruppen-Player mit dynamischen Mitgliedern: Wähle einen unter **Konfigurieren** der zentralen Einstellungen (Einstellungen → Geräte & Dienste → Better Media Player)."
+    },
+    "follow_player_missing": {
+      "title": "Follow me: Follow-me-Player fehlt",
+      "description": "Den Follow-me-Player `{entity}` gibt es in Home Assistant nicht (mehr). Wähle einen Gruppen-Player von Music Assistant mit dynamischen Mitgliedern unter **Konfigurieren** der zentralen Einstellungen (Einstellungen → Geräte & Dienste → Better Media Player). Eine umbenannte Entität wird von selbst übernommen."
+    },
+    "follow_player_disabled": {
+      "title": "Follow me: Follow-me-Player deaktiviert",
+      "description": "Der Follow-me-Player `{entity}` ist deaktiviert. Aktiviere ihn wieder, oder wähle einen anderen unter **Konfigurieren** der zentralen Einstellungen (Einstellungen → Geräte & Dienste → Better Media Player)."
     }
   }
 }
