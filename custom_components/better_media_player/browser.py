@@ -9,7 +9,7 @@ The room browser bundles the browsers of the room's players:
     └── <music player>          its browser, playable items offer play now/next/add/replace
 
 What a player's system can do (queue, browsing while off, its own play next /
-add entries) comes from its backend (backend.py).
+add entries) comes from its backend (players/).
 
 Every item that comes from a player is wrapped into an id of our own that names
 the source, so browsing further and playing go to the right player:
@@ -45,7 +45,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.translation import async_get_translations
 
-from .backend import ENQUEUE_MODES
+from .players.base import ENQUEUE_MODES
 from .const import DOMAIN
 
 if TYPE_CHECKING:

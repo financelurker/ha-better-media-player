@@ -27,7 +27,7 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers import selector as sel
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 
-from .backend import is_group
+from .players import is_group
 from .const import (
     CONF_AUDIO_HOST,
     CONF_AUDIO_PLAYER,

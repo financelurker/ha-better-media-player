@@ -63,7 +63,7 @@ from .const import (
     SOURCE_AUDIO,
     SOURCE_VIDEO,
 )
-from .position import Position
+from .players.position import Position
 
 if TYPE_CHECKING:
     from .controller import RoomController, Source

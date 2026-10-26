@@ -48,8 +48,8 @@ from .const import (
     VOLUME_ENTITY_DOMAINS,
     VOLUME_PLAYERS,
 )
-from .backend import is_group, suggested_role
-from .music_assistant import MusicAssistant
+from .players import is_group, suggested_role
+from .players.music_assistant import MusicAssistant
 
 
 def _entity(domain: str | list[str], device_class: str | None = None, multiple: bool = False):
