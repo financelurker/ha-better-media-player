@@ -39,6 +39,7 @@ from homeassistant.const import (
     SERVICE_TURN_ON,
     STATE_OFF,
     STATE_ON,
+    STATE_STANDBY,
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
 )
@@ -139,8 +140,9 @@ POWERED_STATES = {
 IDLE_STATES = {MediaPlayerState.ON, MediaPlayerState.IDLE}
 GROUP_ACTIVE_STATES = {MediaPlayerState.PLAYING, MediaPlayerState.PAUSED, MediaPlayerState.BUFFERING}
 # a suppressed source is released only when it has really stopped
-VIDEO_STOPPED = {STATE_OFF, MediaPlayerState.STANDBY}
-AUDIO_STOPPED = {STATE_OFF, MediaPlayerState.STANDBY, MediaPlayerState.IDLE, MediaPlayerState.ON, MediaPlayerState.PAUSED}
+# ("standby": for players that still report it; its MediaPlayerState member is deprecated)
+VIDEO_STOPPED = {STATE_OFF, STATE_STANDBY}
+AUDIO_STOPPED = {STATE_OFF, STATE_STANDBY, MediaPlayerState.IDLE, MediaPlayerState.ON, MediaPlayerState.PAUSED}
 NOT_AVAILABLE = {STATE_UNAVAILABLE, STATE_UNKNOWN}
 
 
