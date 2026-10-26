@@ -142,6 +142,8 @@ class FakeHome:
     ma_power: bool = False  # the music players have Music Assistant's (fake) power control
     ma_announce: bool = False  # the music players announce (Music Assistant)
     plays_media: bool = False  # play_media plays (a tts clip is over right away), media_play resumes
+    clip_seconds: float = 0.0  # with plays_media: a tts clip plays this long (and reports a resolved url)
+    report_lag: float = 0.0  # with plays_media: s until a player reports play/pause
     announce_hold: Any = None  # an asyncio.Event: an announcement lasts until it is set
     announcements: list[tuple[str, dict]] = field(default_factory=list)
     _announce_locks: dict = field(default_factory=dict)
@@ -164,6 +166,19 @@ class FakeHome:
 
     def kodi(self, state: str, **attrs: Any) -> None:
         self.set(KODI, state, supported_features=KODI_FEATURES, friendly_name="Kodi", **attrs)
+
+    def _later(self, entity_id: str, state: str, delay: float = 0.0, **attrs: Any) -> None:
+        """Report a state now, or report_lag (+ delay) s later (in order)."""
+        wait = self.report_lag + delay
+        if wait <= 0:
+            self.set(entity_id, state, **attrs)
+            return
+
+        @callback
+        def _report(_now) -> None:
+            self.set(entity_id, state, **attrs)
+
+        async_call_later(self.hass, wait, _report)
 
     def _ma_features(self) -> int:
         features = MA_FEATURES | (int(F.TURN_ON | F.TURN_OFF) if self.ma_power else 0)
@@ -345,11 +360,18 @@ class FakeHome:
                     self.group("playing", self.members(entity_id), entity_id)
             elif service == "play_media" and self.plays_media:
                 content = data.get("media_content_id")
-                self.set(entity_id, "playing", media_content_id=content,
-                         media_content_type=data.get("media_content_type"), media_position=0.0,
-                         media_position_updated_at=self.now(), media_duration=3.0)
-                if str(content).startswith("media-source://tts"):
-                    self.set(entity_id, "idle")  # a short clip: over right away
+                clip = str(content).startswith("media-source://tts")
+                if clip and self.clip_seconds:
+                    # a real player: it reports the resolved url, plays the clip, then idles
+                    self._later(entity_id, "playing", media_content_id="http://hass/tts/clip.mp3",
+                                media_content_type="music", media_duration=self.clip_seconds)
+                    self._later(entity_id, "idle", delay=self.clip_seconds + self.report_lag)
+                else:
+                    self._later(entity_id, "playing", media_content_id=content,
+                                media_content_type=data.get("media_content_type"), media_position=0.0,
+                                media_position_updated_at=self.now(), media_duration=3.0)
+                    if clip:
+                        self._later(entity_id, "idle")  # a short clip: over right away
             elif service == "media_play" and self.plays_media:
                 self.set(entity_id, "playing")
             elif service == "media_seek":
@@ -358,7 +380,7 @@ class FakeHome:
             elif service == "media_stop":
                 self.set(entity_id, "idle")
             elif service == "media_pause":
-                self.set(entity_id, "paused")
+                self._later(entity_id, "paused")
             return True
         return True
 
