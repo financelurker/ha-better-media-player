@@ -73,7 +73,7 @@ async def async_setup_entry(
     entities.append(SettingNumber(entry, ctrl, "sleep_fade", 0, 60, 1, mins))
     entities.append(SettingNumber(entry, ctrl, "snooze_minutes", 1, 120, 1, mins))
     entities.append(SettingNumber(entry, ctrl, "night_fade_in", 0, 30, 1, mins))
-    if ctrl.follow_capable:
+    if ctrl.follow.capable:
         entities.append(SettingNumber(entry, ctrl, "presence_run_down", 0, 60, 0.5, mins))
         entities.append(SettingNumber(entry, ctrl, "volume_offset", -50, 50, 1, PERCENTAGE))
     entities.append(SleepTimerNumber(entry, ctrl, "sleep_timer"))

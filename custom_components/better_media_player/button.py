@@ -25,7 +25,7 @@ async def async_setup_entry(
         WakeSnoozeButton(entry, ctrl, "wake_snooze"),
         WakeStopButton(entry, ctrl, "wake_stop"),
     ]
-    if ctrl.follow_capable:
+    if ctrl.follow.capable:
         entities.append(FollowStartButton(entry, ctrl, "follow_start"))
     if ctrl.audio_player is not None:
         entities.append(FollowStopButton(entry, ctrl, "follow_stop"))

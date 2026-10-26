@@ -138,7 +138,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: BetterMediaPlayerConfig
         if is_hub(entry):
             hass.data[DOMAIN].pop("hub", None)
             for room in get_rooms(hass).values():
-                room.set_prewarm(False)
+                room.follow.set_prewarm(False)
                 room.notify()  # no follow me without the central entry
     return ok
 

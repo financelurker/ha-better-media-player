@@ -207,7 +207,7 @@ class WakeAlarm:
             raise HomeAssistantError(f"Unknown source: {key}")
         if follow:
             hub = ctrl.hub
-            if hub is None or key != "audio" or not ctrl.follow_capable:
+            if hub is None or key != "audio" or not ctrl.follow.capable:
                 raise ServiceValidationError(
                     translation_domain=DOMAIN,
                     translation_key="follow_wake",

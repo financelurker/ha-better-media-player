@@ -243,7 +243,7 @@ class RoomPower:
             return True  # snoozed: the room stays ready
         if ctrl.announce.holds(role):
             return True  # an announcement plays
-        if ctrl.prewarm and role.key in (ROLE_AUDIO, ROLE_BASS, ROLE_AUDIO_HOST) and not ctrl.quiet:
+        if ctrl.follow.prewarm and role.key in (ROLE_AUDIO, ROLE_BASS, ROLE_AUDIO_HOST) and not ctrl.quiet:
             return True
         return any(
             ctrl.source_active(ctrl.sources[s]) or ctrl._just_turned_on(ctrl.sources[s])
