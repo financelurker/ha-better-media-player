@@ -79,7 +79,8 @@ from ..const import (
     TICK_SECONDS,
     VOLUME_DEVICE,
 )
-from ..hub import get_hub, get_rooms
+from ..follow import get_hub
+from . import get_rooms
 from .sleep import REASON_ROOM_OFF, SleepTimer
 from .announce import RoomAnnouncer
 from ..players import backend_for

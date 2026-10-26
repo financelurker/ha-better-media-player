@@ -30,7 +30,8 @@ from .const import (
 )
 from .room.announce import async_setup_services
 from .room.controller import RoomController
-from .hub import FollowManager, get_rooms
+from .follow.manager import FollowManager
+from .room import get_rooms
 from .issues import async_setup_issues, get_checker
 
 type BetterMediaPlayerConfigEntry = ConfigEntry[RoomController | FollowManager]

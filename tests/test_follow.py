@@ -19,7 +19,7 @@ from custom_components.better_media_player.const import (
     DOMAIN,
     ENTRY_TYPE_HUB,
 )
-from custom_components.better_media_player.hub import get_hub
+from custom_components.better_media_player.follow import get_hub
 
 from .conftest import (
     BASS,
@@ -746,7 +746,7 @@ async def test_base_volume_with_unmanaged_member(hass, house, freezer):
     hass.states.async_set(other, "playing", {"volume_level": 0.25})
     # MA group: living 15 % + unmanaged player 25 % -> average 20 %
     house.set(FOLLOW, "playing", group_members=[MUSIC, other], volume_level=0.20)
-    assert abs(get_hub(hass).base_volume(FOLLOW) - 25) < 0.01
+    assert abs(get_hub(hass).volume.base_volume(FOLLOW) - 25) < 0.01
 
 
 async def test_hub_removal_clears_the_session(hass, house, freezer):
@@ -867,7 +867,7 @@ async def test_start_with_a_member_left_in_the_idle_follow_player(hass, house, f
 async def test_two_stops_at_once_run_once(hass, house, caplog):
     import asyncio
 
-    from custom_components.better_media_player.hub import get_rooms
+    from custom_components.better_media_player.room import get_rooms
 
     hass.states.async_set(LIVING_OCC, "on")
     hass.states.async_set(KITCHEN_OCC, "on")

@@ -13,7 +13,7 @@ from homeassistant.const import STATE_ON
 from homeassistant.core import callback
 
 from ..const import CONF_OCCUPANCY, CONF_PRESENCE_RUN_DOWN, CONF_PREWARM, CONF_VOLUME_OFFSET, FOLLOW_INACTIVE
-from ..hub import get_hub
+from ..follow import get_hub
 from .power import NOT_AVAILABLE
 
 if TYPE_CHECKING:

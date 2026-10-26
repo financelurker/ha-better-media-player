@@ -57,7 +57,8 @@ from .const import (
     SOURCE_VIDEO,
 )
 from .entity import BetterMediaPlayerEntity
-from .hub import get_hub, room_of
+from .follow import get_hub
+from .room import room_of
 from .room.sleep import MAX_MINUTES
 
 BASE_FEATURES = MediaPlayerEntityFeature.TURN_ON | MediaPlayerEntityFeature.TURN_OFF

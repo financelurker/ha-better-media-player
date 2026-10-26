@@ -447,7 +447,7 @@ async def test_a_preset_not_offered_fails_before_anything(hass, home, freezer):
 
 
 async def test_a_room_that_fails_fails_the_action_after_the_others(hass, house, freezer):
-    from custom_components.better_media_player.hub import room_of
+    from custom_components.better_media_player.room import room_of
 
     house.ma_announce = True
     house.music("playing")

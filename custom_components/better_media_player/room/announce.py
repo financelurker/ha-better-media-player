@@ -640,7 +640,7 @@ ANNOUNCE_SCHEMA = cv.make_entity_service_schema(
 @callback
 def async_setup_services(hass: HomeAssistant) -> None:
     """better_media_player.announce: one or more rooms, coordinated."""
-    from ..hub import room_of  # noqa: PLC0415 (hub imports the controller, which imports this)
+    from . import room_of
 
     async def _announce(call: ServiceCall) -> None:
         data = call.data

@@ -458,7 +458,7 @@ async def test_failed_central_settings_use_the_defaults(hass, home, freezer):
         domain=DOMAIN, title="Better Media Player", data={CONF_ENTRY_TYPE: ENTRY_TYPE_HUB}, options={}, version=3
     )
     hub.add_to_hass(hass)
-    with patch("custom_components.better_media_player.hub.FollowManager.async_start", side_effect=RuntimeError):
+    with patch("custom_components.better_media_player.follow.manager.FollowManager.async_start", side_effect=RuntimeError):
         await hass.config_entries.async_setup(hub.entry_id)
         await hass.async_block_till_done()
     assert hub.state is ConfigEntryState.SETUP_ERROR
