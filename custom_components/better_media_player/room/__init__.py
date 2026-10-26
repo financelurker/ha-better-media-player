@@ -1,1 +1,1 @@
-"""A room: its controller and what it does (power, volume, night, sleep, wake, announcements, browser)."""
+"""A room: its controller and what it does (power, power-on sequence, volume, night, sleep, wake, announcements, handover, browser)."""

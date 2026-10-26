@@ -40,7 +40,6 @@ def ease_in_out(progress: float) -> float:
     return 0.5 - 0.5 * math.cos(math.pi * progress)
 
 
-
 class VolumeRamp:
     def __init__(
         self,

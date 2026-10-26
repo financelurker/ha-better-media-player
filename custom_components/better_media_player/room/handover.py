@@ -5,18 +5,15 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from homeassistant.components.media_player import MediaPlayerState
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
 from ..const import DOMAIN, SOURCE_AUDIO, SOURCE_VIDEO
+from .power import GROUP_ACTIVE_STATES
 
 if TYPE_CHECKING:
     from .controller import RoomController, Source
 
 _LOGGER = logging.getLogger(__name__)
-
-# what can be handed over: it plays, or is paused (as in controller.py)
-GROUP_ACTIVE_STATES = {MediaPlayerState.PLAYING, MediaPlayerState.PAUSED, MediaPlayerState.BUFFERING}
 
 
 class RoomHandover:

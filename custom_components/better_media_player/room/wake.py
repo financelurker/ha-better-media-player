@@ -74,7 +74,6 @@ _PLAYING = {"playing", "buffering"}
 _POWERED = {"on", "idle", "playing", "paused", "buffering"}
 
 
-
 class WakeAlarm:
     def __init__(self, ctrl: RoomController) -> None:
         self.ctrl = ctrl

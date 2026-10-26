@@ -106,7 +106,6 @@ START_GRACE_SECONDS = 30  # after a start, MA may report "playing" late
 VIDEO_RESUME_MAX_SECONDS = 3 * 3600  # resume after video only within this time
 
 
-
 def get_hub(hass: HomeAssistant) -> FollowManager | None:
     return hass.data.get(DOMAIN, {}).get("hub")
 

@@ -57,7 +57,6 @@ _PLAYING = {"playing", "buffering"}
 _POWERED = {"on", "idle", "playing", "paused", "buffering"}
 
 
-
 class SleepTimer:
     """One per room; driven by a single scheduled callback."""
 

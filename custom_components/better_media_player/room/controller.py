@@ -2,8 +2,8 @@
 
 One controller per room (config entry). It watches the room's media players and
 power devices, evaluates what the room needs (its power devices: power.py, the
-power-on sequence: sequence.py), runs the room's actions and keeps a
-room-level status.
+power-on sequence: sequence.py), runs the room's actions (handing over:
+handover.py) and keeps a room-level status.
 
 source   A media player of the room. "video" (e.g. Kodi) needs display + audio,
          "audio" (e.g. a Music Assistant / sendspin player) needs audio only.
@@ -96,7 +96,7 @@ from .output import DeviceOutput, PlayerOutput
 from .volume import RoomVolume
 from .wake import PHASE_STARTING, REASON_ROOM_OFF as WAKE_ROOM_OFF, WakeAlarm
 from .handover import RoomHandover
-from .power import NOT_AVAILABLE, POWERED_STATES, RoomPower
+from .power import GROUP_ACTIVE_STATES, NOT_AVAILABLE, POWERED_STATES, RoomPower
 from .sequence import PowerSequence
 from .. import clock
 
@@ -108,12 +108,10 @@ OWN_CONTEXTS = 50
 
 PLAYING_STATES = {MediaPlayerState.PLAYING, MediaPlayerState.BUFFERING}
 IDLE_STATES = {MediaPlayerState.ON, MediaPlayerState.IDLE}
-GROUP_ACTIVE_STATES = {MediaPlayerState.PLAYING, MediaPlayerState.PAUSED, MediaPlayerState.BUFFERING}
 # a suppressed source is released only when it has really stopped
 # ("standby": for players that still report it; its MediaPlayerState member is deprecated)
 VIDEO_STOPPED = {STATE_OFF, STATE_STANDBY}
 AUDIO_STOPPED = {STATE_OFF, STATE_STANDBY, MediaPlayerState.IDLE, MediaPlayerState.ON, MediaPlayerState.PAUSED}
-
 
 
 @dataclass
@@ -766,7 +764,6 @@ class RoomController:
 
     # --------------------------------------------------------------- commands
 
-        # force_off / standby state are reset in _auto_off once the role is really off
 
     async def _call(self, domain: str, service: str, data: dict) -> bool:
         ctx = Context()
@@ -954,7 +951,7 @@ class RoomController:
             # Assistant's 'play media overrides group' setting)
             await self._unjoin(src)
 
-    # --------------------------------------------------------------- handover
+    # ---------------------------------------------------------------- sources
 
     def player_state_of(self, entity_id: str) -> str | None:
         state = self._state(entity_id)

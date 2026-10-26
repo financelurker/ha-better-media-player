@@ -24,7 +24,6 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 
-
 class _StartFailed(Exception):
     """Start sequence could not be completed."""
 

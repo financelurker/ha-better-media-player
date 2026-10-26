@@ -89,7 +89,6 @@ def announce_volume(volume: float | None, cap: float | None) -> int | None:
     return None if volume is None else round(max(0.0, min(1.0, volume)) * 100)
 
 
-
 class RoomAnnouncer:
     """Announcements in one room (they may overlap: all state is counted)."""
 

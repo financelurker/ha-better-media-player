@@ -28,7 +28,7 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
 )
-from homeassistant.core import State
+from homeassistant.core import State, callback
 
 from ..const import (
     CONF_AUDIO_POWER,
@@ -74,7 +74,8 @@ POWERED_STATES = {
     MediaPlayerState.BUFFERING,
 }
 NOT_AVAILABLE = {STATE_UNAVAILABLE, STATE_UNKNOWN}
-
+# playing or paused: in use (also what a group shares, and what can be handed over)
+GROUP_ACTIVE_STATES = {MediaPlayerState.PLAYING, MediaPlayerState.PAUSED, MediaPlayerState.BUFFERING}
 
 
 def _float(state: State | None) -> float | None:
@@ -299,6 +300,7 @@ class RoomPower:
                 return True
         return False
 
+    @callback
     def outside_change(self, entity_id: str, on: bool) -> None:
         """A power device was switched by someone else.
 
