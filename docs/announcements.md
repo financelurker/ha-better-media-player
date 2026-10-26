@@ -4,6 +4,13 @@
 
 A message or a sound in one or more rooms, over what plays there. With the action `better_media_player.announce`, or with anything that announces on a media player (e.g. `tts.speak` with the room player as its media player, or `media_player.play_media` with `announce: true`; [examples](automations.md#announcement)).
 
+<details>
+<summary>Screenshot: the action in the developer tools</summary>
+
+<img src="images/announce.png" alt="The action Announce in the developer tools" width="540">
+
+</details>
+
 **Which player announces.** A room prefers a player that supports Home Assistant's announcements (Music Assistant's players do; so does any other that offers it, e.g. a Better Kodi that brings it); without one it falls back to playing the announcement as usual media. The room takes the first that fits:
 
 | Situation | Player | Why |
