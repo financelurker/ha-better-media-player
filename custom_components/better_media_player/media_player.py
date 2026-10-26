@@ -57,7 +57,7 @@ from .const import (
     SOURCE_VIDEO,
 )
 from .entity import BetterMediaPlayerEntity
-from .follow import get_hub
+from .follow import async_start_follow, async_stop_follow
 from .room import room_of
 from .room.sleep import MAX_MINUTES
 
@@ -527,18 +527,12 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
 
     async def async_start_follow(self) -> None:
         """Follow me from this room (its music moves to the follow-me player)."""
-        hub = get_hub(self.hass)
-        if hub is None:
-            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="no_follow_player")
-        await hub.async_follow_start(self.ctrl)
+        await async_start_follow(self.hass, self.ctrl)
 
     async def async_stop_follow(self) -> None:
         """Follow me off: the music stays in this room if it plays along, else
         goes back where follow me was started."""
-        hub = get_hub(self.hass)
-        if hub is None:
-            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="follow_not_running")
-        await hub.async_follow_stop(self.ctrl)
+        await async_stop_follow(self.hass, self.ctrl)
 
     async def async_set_volume_preset(self, preset: str, fade_seconds: float | None = None) -> None:
         await self.ctrl.async_set_volume_preset(preset, fade_seconds)

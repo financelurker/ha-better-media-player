@@ -4,13 +4,11 @@ from __future__ import annotations
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import BetterMediaPlayerConfigEntry
-from .const import DOMAIN
 from .entity import ControlEntity
-from .follow import get_hub
+from .follow import async_start_follow, async_stop_follow, get_hub
 
 
 async def async_setup_entry(
@@ -92,10 +90,7 @@ class FollowStartButton(ControlEntity, ButtonEntity):
         return {"blocked_by": blocker[0] if blocker else None}
 
     async def async_press(self) -> None:
-        hub = get_hub(self.hass)
-        if hub is None:
-            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="no_follow_player")
-        await hub.async_follow_start(self.ctrl)  # refuses if it cannot start here
+        await async_start_follow(self.hass, self.ctrl)
 
 
 class FollowStopButton(ControlEntity, ButtonEntity):
@@ -108,7 +103,4 @@ class FollowStopButton(ControlEntity, ButtonEntity):
         return hub is not None and hub.active
 
     async def async_press(self) -> None:
-        hub = get_hub(self.hass)
-        if hub is None:
-            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="follow_not_running")
-        await hub.async_follow_stop(self.ctrl)
+        await async_stop_follow(self.hass, self.ctrl)
