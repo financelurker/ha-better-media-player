@@ -108,7 +108,8 @@ from .const import (
 from .hub import get_hub, get_rooms
 from .sleep import REASON_ROOM_OFF, SleepTimer
 from .announce import RoomAnnouncer
-from .backend import PlayerBackend, backend_for
+from .players import backend_for
+from .players.base import PlayerBackend
 from .night import NightMode
 from .source_event import SourceWatch
 from .output import DeviceOutput, PlayerOutput
@@ -191,7 +192,7 @@ class Source:
     on_action: str | None
     off_action: str | None
     host: str | None
-    backend: PlayerBackend  # what its system can do (backend.py)
+    backend: PlayerBackend  # what its system can do (players/)
     # runtime
     suppressed: bool = False
     idle_since: float | None = None

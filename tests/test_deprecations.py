@@ -9,7 +9,7 @@ SOURCE = Path(controller.__file__).parent
 
 def test_no_deprecated_standby_state():
     """MediaPlayerState.STANDBY logs a deprecation warning at every start of Home Assistant."""
-    users = [p.name for p in SOURCE.glob("*.py") if "MediaPlayerState.STANDBY" in p.read_text(encoding="utf-8")]
+    users = [p.name for p in SOURCE.rglob("*.py") if "MediaPlayerState.STANDBY" in p.read_text(encoding="utf-8")]
     assert users == []
 
 

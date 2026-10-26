@@ -53,7 +53,7 @@ def test_no_icons_in_code():
     """An icon set in code wins over icons.json (only the room player sets one: its source)."""
     users = [
         p.name
-        for p in COMPONENT.glob("*.py")
+        for p in COMPONENT.rglob("*.py")
         if "_attr_icon" in p.read_text(encoding="utf-8") or ("def icon(" in p.read_text(encoding="utf-8") and p.name != "media_player.py")
     ]
     assert users == []

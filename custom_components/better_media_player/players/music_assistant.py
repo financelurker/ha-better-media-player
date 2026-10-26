@@ -4,7 +4,7 @@ Everything Better Media Player does with Music Assistant goes through here:
 its group players (recognised by mass_player_type), moving a queue to another
 player (the current track goes on where it was, see position.py) and a
 player's queue for the media browser. Joining and leaving are Home
-Assistant's own (see backend.py).
+Assistant's own (see base.py).
 
 Follow me decides who joins a group when; this module only knows how. Group
 players with static members cannot be recognised (Home Assistant does not
@@ -20,7 +20,7 @@ from homeassistant.components.media_player import DOMAIN as MP_DOMAIN
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 
-from .backend import MusicBackend, Queue, QueueItem
+from .base import MusicBackend, Queue, QueueItem
 from .position import Position, keep_position, last_report
 
 _LOGGER = logging.getLogger(__name__)

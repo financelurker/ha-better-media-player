@@ -6,16 +6,11 @@ import pytest
 
 from homeassistant.helpers import entity_registry as er
 
-from custom_components.better_media_player.backend import (
-    MusicBackend,
-    VideoBackend,
-    backend_for,
-    groups_of,
-    suggested_role,
-)
 from custom_components.better_media_player.const import SOURCE_AUDIO, SOURCE_VIDEO
-from custom_components.better_media_player.kodi import BetterKodi, Kodi
-from custom_components.better_media_player.music_assistant import MusicAssistant
+from custom_components.better_media_player.players import backend_for, suggested_role
+from custom_components.better_media_player.players.base import MusicBackend, VideoBackend, groups_of
+from custom_components.better_media_player.players.kodi import BetterKodi, Kodi
+from custom_components.better_media_player.players.music_assistant import MusicAssistant
 
 from .conftest import FOLLOW, GROUP, KODI, MUSIC, setup_room
 
@@ -109,7 +104,7 @@ async def test_better_kodi_lifts_only_its_queue_entry(hass, home):
 
 
 async def test_no_position_watch_after_the_stop(hass, home):
-    from custom_components.better_media_player.position import Position
+    from custom_components.better_media_player.players.position import Position
 
     home.group("idle", [MUSIC], FOLLOW)
     home.music("playing", media_content_id="t", media_position=10.0)
@@ -120,7 +115,7 @@ async def test_no_position_watch_after_the_stop(hass, home):
 
 
 async def test_a_group_of_any_known_system_is_no_room_player(hass, home):
-    from custom_components.better_media_player.backend import is_group
+    from custom_components.better_media_player.players import is_group
 
     home.group("idle", [], GROUP)
     assert is_group(hass, GROUP) and not is_group(hass, MUSIC)

@@ -6,7 +6,7 @@ import pytest
 
 from homeassistant.exceptions import ServiceValidationError
 
-from custom_components.better_media_player.backend import groups_of
+from custom_components.better_media_player.players.base import groups_of
 from custom_components.better_media_player.const import (
     CONF_PRESET_FADE,
     CONF_VOLUME_CONTROL,

@@ -83,8 +83,8 @@ from .const import (
     WAKE_ARRIVAL_WINDOW,
 )
 from .output import MemberOutput
-from .music_assistant import MusicAssistant
-from .position import Position
+from .players.music_assistant import MusicAssistant
+from .players.position import Position
 from .ramp import VolumeRamp
 
 if TYPE_CHECKING:

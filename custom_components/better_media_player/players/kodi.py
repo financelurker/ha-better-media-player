@@ -21,7 +21,7 @@ from homeassistant.components.media_player import BrowseMedia
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import Context
 
-from .backend import ENQUEUE_MODES, VideoBackend
+from .base import ENQUEUE_MODES, VideoBackend
 
 QUEUE_TYPE = "better_kodi_queue"
 ENQUEUE_PREFIX = "better_kodi://enqueue/"
