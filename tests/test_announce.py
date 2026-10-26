@@ -290,6 +290,8 @@ async def test_no_source_change_and_no_snooze_meanwhile(hass, home, freezer):
 
 
 async def test_the_action_speaks_a_message(hass, home, freezer):
+    import homeassistant.components.tts  # noqa: F401 (loaded for the patch)
+
     await _room(hass, home, freezer)
     with patch(
         "homeassistant.components.tts.generate_media_source_id", return_value="media-source://tts/hello"
