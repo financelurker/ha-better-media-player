@@ -10,6 +10,11 @@ supports Home Assistant's announcements, e.g. Music Assistant's):
    meanwhile is paused, overlaid or turned down (setting on the device).
 3. The room is off: the music player, else the video player. The room's
    devices (speakers, volume device) come up for it and go off right after.
+4. No player of the room announces (fallback): the active source's player,
+   else (room off) the music player, else the video player plays it as
+   usual media: what played is paused, the announcement plays, then what
+   played starts again where it was (best effort: a queue may be lost) and
+   the player's volume comes back.
 
 The announcing player's system does the rest (Music Assistant: chime, its
 announcement volume, pausing and resuming the music) and its call returns
@@ -58,6 +63,7 @@ from .const import (
     SOURCE_AUDIO,
     SOURCE_VIDEO,
 )
+from .position import Position
 
 if TYPE_CHECKING:
     from .controller import RoomController, Source
@@ -67,7 +73,10 @@ _LOGGER = logging.getLogger(__name__)
 ANNOUNCE_VOLUME = "announce_volume"  # in extra: 0..100 (Music Assistant's)
 SETTLE_SECONDS = 2  # the room holds still this long after the announcement
 PLAY_TIMEOUT = 300  # s: an announcement that is not over by then is taken as over
+START_SECONDS = 10  # fallback: the announcement (or what played) starts within this
 _NOT_READY = {STATE_OFF, "standby", "unavailable", "unknown"}
+_PLAYING = {"playing", "buffering"}
+_HOLDS = {"playing", "buffering", "paused"}  # something to come back to
 
 
 def announce_volume(volume: float | None, cap: float | None) -> int | None:
@@ -112,7 +121,11 @@ class RoomAnnouncer:
 
     @property
     def available(self) -> bool:
-        return any(self.can(s) for s in self.ctrl.sources.values())
+        """Announcements are offered: a player announces, or plays media (fallback)."""
+        return any(
+            self.can(s) or self.ctrl.player_supports(s, MediaPlayerEntityFeature.PLAY_MEDIA)
+            for s in self.ctrl.sources.values()
+        )
 
     def choose(self) -> Source | None:
         """The player that announces (see the module's docstring)."""
@@ -128,6 +141,28 @@ class RoomAnnouncer:
             if src is not None and self.can(src):
                 return src
         return None
+
+    def choose_fallback(self) -> Source | None:
+        """No player announces: the active source's player, else the music player,
+        else the video player (one that plays media)."""
+        ctrl = self.ctrl
+        plays = [s for s in ctrl.sources.values() if ctrl.player_supports(s, MediaPlayerEntityFeature.PLAY_MEDIA)]
+        active = [s for s in plays if ctrl.source_active(s)]
+        if active:
+            return ctrl.active_source if ctrl.active_source in active else active[0]
+        return next((s for key in (SOURCE_AUDIO, SOURCE_VIDEO) for s in plays if s.key == key), None)
+
+    def fallback_volume(self, volume: float | str | None) -> float | None:
+        """The fallback's volume for the player (0..1): asked for, else the room
+        volume; at night at most the limit. With a volume device the device has
+        the room's volume: only a number asked for is set on the player."""
+        if self.ctrl.volume_device is not None:
+            return None if volume is None or isinstance(volume, str) else volume
+        level = self.ctrl.volume.preset_value(volume) if isinstance(volume, str) else volume
+        if level is None:
+            level = self.ctrl.volume.value
+        cap = self.ctrl.night.cap
+        return level if cap is None or level is None else min(level, cap)
 
     def skipped(self, ignore_quiet: bool) -> bool:
         """A quiet room: nothing from outside (unless asked to ignore it)."""
@@ -167,6 +202,9 @@ class RoomAnnouncer:
             _LOGGER.info("%s: quiet, announcement left out", ctrl.entry.title)
             return
         src = self.choose()
+        native = src is not None
+        if src is None:
+            src = self.choose_fallback()
         if src is None:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
@@ -174,8 +212,12 @@ class RoomAnnouncer:
                 translation_placeholders={"room": ctrl.entry.title},
             )
         data = {**(extra or {})}
-        if (level := self.volume(volume)) is not None:  # (a bad preset fails before anything)
-            data[ANNOUNCE_VOLUME] = level
+        fallback_level: float | None = None
+        if native:
+            if (level := self.volume(volume)) is not None:  # (a bad preset fails before anything)
+                data[ANNOUNCE_VOLUME] = level
+        else:
+            fallback_level = self.fallback_volume(volume)
         film = self.film(src)
         roles = self._roles_for(src)
         protected: list[str] = []
@@ -195,7 +237,10 @@ class RoomAnnouncer:
             undo_film = await self._film_before(film) if film else None
             # its own task: the room holds still until the player's system is
             # through, also if our caller gives up (e.g. an automation restarts)
-            play = self.hass.async_create_task(self._play(src.player, media_id, media_type, data))
+            if native:
+                play = self.hass.async_create_task(self._play(src.player, media_id, media_type, data))
+            else:
+                play = self.hass.async_create_task(self._play_fallback(src, media_id, media_type, fallback_level))
             await asyncio.shield(play)
         finally:
             if play is not None and not play.done():
@@ -220,6 +265,83 @@ class RoomAnnouncer:
                 await self.hass.services.async_call(MP_DOMAIN, "play_media", data, blocking=True)
         except TimeoutError:
             _LOGGER.warning("%s: announcement on %s not over after %s s", self.ctrl.entry.title, player, PLAY_TIMEOUT)
+
+    async def _play_fallback(self, src: Source, media_id: str, media_type: str, level: float | None) -> None:
+        """The player cannot announce: pause what plays, play the announcement as
+        usual media, then start what played again where it was (best effort)."""
+        ctrl = self.ctrl
+        _LOGGER.info("%s: announcement on %s (it does not announce: played as media)", ctrl.entry.title, src.player)
+        state = self.hass.states.get(src.player)
+        before: dict[str, Any] | None = None
+        if state is not None and state.state in _HOLDS:
+            position = Position.of(self.hass, src.player)
+            before = {
+                "id": state.attributes.get(ATTR_MEDIA_CONTENT_ID),
+                "type": state.attributes.get(ATTR_MEDIA_CONTENT_TYPE),
+                "seconds": position.seconds if position is not None else None,
+                "paused": state.state == "paused",
+            }
+            if state.state != "paused" and ctrl.player_supports(src, MediaPlayerEntityFeature.PAUSE):
+                await ctrl._player(src, "media_pause")
+        out, _src = ctrl.player_output(src.player)
+        volume_before = out.level() if out is not None else None
+        if level is not None and out is not None and out.can_set:
+            await ctrl._player(src, "volume_set", {"volume_level": level})
+        try:
+            async with asyncio.timeout(PLAY_TIMEOUT):
+                await ctrl._player(src, "play_media", {"media_content_id": media_id, "media_content_type": media_type})
+                await self._played(src, media_id)
+        except TimeoutError:
+            _LOGGER.warning("%s: announcement on %s not over after %s s", ctrl.entry.title, src.player, PLAY_TIMEOUT)
+        finally:
+            await self._restore(src, before)
+            if level is not None and volume_before is not None and out is not None and out.can_set:
+                await ctrl._player(src, "volume_set", {"volume_level": volume_before})
+
+    async def _played(self, src: Source, media_id: str) -> None:
+        """Until the announcement has played: it starts (within START_SECONDS),
+        then ends (the player no longer plays it; its duration as a bound)."""
+        ctrl = self.ctrl
+
+        def _state():
+            return self.hass.states.get(src.player)
+
+        def _started() -> bool:
+            st = _state()
+            return st is not None and (
+                st.attributes.get(ATTR_MEDIA_CONTENT_ID) == media_id or st.state in _PLAYING
+            )
+
+        if not await ctrl._wait_until(_started, START_SECONDS):
+            return
+        st = _state()
+        duration = st.attributes.get("media_duration") if st is not None else None
+        bound = float(duration) + 5 if isinstance(duration, (int, float)) and duration > 0 else PLAY_TIMEOUT
+
+        def _over() -> bool:
+            now = _state()
+            return now is None or now.state not in _PLAYING or now.attributes.get(ATTR_MEDIA_CONTENT_ID) not in (
+                media_id,
+                st.attributes.get(ATTR_MEDIA_CONTENT_ID) if st is not None else None,
+            )
+
+        await ctrl._wait_until(_over, bound)
+
+    async def _restore(self, src: Source, before: dict[str, Any] | None) -> None:
+        """What played starts again where it was (paused stays paused); else the
+        player stops."""
+        ctrl = self.ctrl
+        if before is None or not before["id"] or not before["type"]:
+            if ctrl.player_state(src) in _PLAYING and ctrl.player_supports(src, MediaPlayerEntityFeature.STOP):
+                await ctrl._player(src, "media_stop")
+            return
+        await ctrl._player(src, "play_media", {"media_content_id": before["id"], "media_content_type": before["type"]})
+        playing = await ctrl._wait_until(lambda: ctrl.player_state(src) in _PLAYING, START_SECONDS)
+        seconds = before["seconds"]
+        if playing and seconds and ctrl.player_supports(src, MediaPlayerEntityFeature.SEEK):
+            await ctrl._player(src, "media_seek", {"seek_position": round(seconds, 1)})
+        if before["paused"] and ctrl.player_supports(src, MediaPlayerEntityFeature.PAUSE):
+            await ctrl._player(src, "media_pause")
 
     def _roles_for(self, src: Source) -> list[str]:
         """The roles kept on for the announcement (automatic power only)."""

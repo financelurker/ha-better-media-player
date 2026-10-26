@@ -141,6 +141,7 @@ class FakeHome:
     volume_lag: float = 0.0  # s a player reports a volume it was set to (in order)
     ma_power: bool = False  # the music players have Music Assistant's (fake) power control
     ma_announce: bool = False  # the music players announce (Music Assistant)
+    plays_media: bool = False  # play_media plays (a tts clip is over right away), media_play resumes
     announce_hold: Any = None  # an asyncio.Event: an announcement lasts until it is set
     announcements: list[tuple[str, dict]] = field(default_factory=list)
     _announce_locks: dict = field(default_factory=dict)
@@ -342,6 +343,15 @@ class FakeHome:
             elif service in ("media_play", "play_media") and entity_id in GROUPS:
                 if self.members(entity_id):
                     self.group("playing", self.members(entity_id), entity_id)
+            elif service == "play_media" and self.plays_media:
+                content = data.get("media_content_id")
+                self.set(entity_id, "playing", media_content_id=content,
+                         media_content_type=data.get("media_content_type"), media_position=0.0,
+                         media_position_updated_at=self.now(), media_duration=3.0)
+                if str(content).startswith("media-source://tts"):
+                    self.set(entity_id, "idle")  # a short clip: over right away
+            elif service == "media_play" and self.plays_media:
+                self.set(entity_id, "playing")
             elif service == "media_seek":
                 self.set(entity_id, st.state, media_position=float(data["seek_position"]),
                          media_position_updated_at=self.now())
