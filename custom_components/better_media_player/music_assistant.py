@@ -8,7 +8,7 @@ Assistant's own (see backend.py).
 
 Follow me decides who joins a group when; this module only knows how. Group
 players with static members cannot be recognised (Home Assistant does not
-show it): they stay a note in the README.
+show it): they stay a note in docs/follow-me.md.
 """
 
 from __future__ import annotations
