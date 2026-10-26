@@ -63,7 +63,6 @@ class SleepEndSensor(ControlEntity, SensorEntity):
         return self.ctrl.sleep.active
 
     _attr_device_class = SensorDeviceClass.TIMESTAMP
-    _attr_icon = "mdi:sleep"
 
     @property
     def native_value(self) -> datetime | None:
@@ -83,7 +82,6 @@ class WakeSensor(ControlEntity, SensorEntity):
 
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = PHASES
-    _attr_icon = "mdi:alarm"
 
     @property
     def native_value(self) -> str:

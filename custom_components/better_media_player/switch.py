@@ -20,7 +20,7 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     if is_hub(entry):
-        async_add_entities([HubSwitch(entry, entry.runtime_data, CONF_DYNAMIC_CONTROLS, "mdi:eye-refresh-outline")])
+        async_add_entities([HubSwitch(entry, entry.runtime_data, CONF_DYNAMIC_CONTROLS)])
         return
     ctrl = entry.runtime_data
     entities: list[SwitchEntity] = [AutoPowerSwitch(entry, ctrl, "auto_power")]
@@ -31,10 +31,10 @@ async def async_setup_entry(
     for role_key, prefix in ((ROLE_DISPLAY, "display"), (ROLE_AUDIO, "audio")):
         role = ctrl.roles.get(role_key)
         if role is not None and ctrl.can_standby(role):
-            entities.append(SettingSwitch(entry, ctrl, f"{prefix}_standby", "mdi:power-sleep"))
+            entities.append(SettingSwitch(entry, ctrl, f"{prefix}_standby"))
     if ctrl.follow_capable:
-        entities.append(SettingSwitch(entry, ctrl, "prewarm", "mdi:speaker-wireless"))
-        entities.append(SettingSwitch(entry, ctrl, "wake_detect_left", "mdi:exit-run"))
+        entities.append(SettingSwitch(entry, ctrl, "prewarm"))
+        entities.append(SettingSwitch(entry, ctrl, "wake_detect_left"))
     prune_entities(hass, entry, "switch", entities)
     async_add_entities(entities)
 
@@ -44,10 +44,9 @@ class SettingSwitch(BetterMediaPlayerEntity, SwitchEntity):
 
     _attr_entity_category = EntityCategory.CONFIG
 
-    def __init__(self, entry, ctrl, key: str, icon: str) -> None:
+    def __init__(self, entry, ctrl, key: str) -> None:
         super().__init__(entry, ctrl, key)
         self._key = key
-        self._attr_icon = icon
 
     @property
     def is_on(self) -> bool:
@@ -65,10 +64,9 @@ class HubSwitch(HubEntity, SwitchEntity):
 
     _attr_entity_category = EntityCategory.CONFIG
 
-    def __init__(self, entry, hub, key: str, icon: str) -> None:
+    def __init__(self, entry, hub, key: str) -> None:
         super().__init__(entry, hub, key)
         self._key = key
-        self._attr_icon = icon
 
     @property
     def is_on(self) -> bool:
@@ -108,7 +106,6 @@ class QuietSwitch(ControlEntity, SwitchEntity):
     def usable(self) -> bool:
         return self.ctrl.follow_room or self.ctrl.quiet
 
-    _attr_icon = "mdi:sleep"
 
     @property
     def is_on(self) -> bool:
@@ -131,7 +128,6 @@ class NightModeSwitch(ControlEntity, SwitchEntity):
     def usable(self) -> bool:
         return True
 
-    _attr_icon = "mdi:weather-night"
 
     @property
     def is_on(self) -> bool:

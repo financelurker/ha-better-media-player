@@ -46,7 +46,6 @@ class AllOffButton(ControlEntity, ButtonEntity):
 class SleepPlusButton(ControlEntity, ButtonEntity):
     """Sleep timer +15 minutes (starts one if none runs)."""
 
-    _attr_icon = "mdi:timer-plus-outline"
 
     @property
     def usable(self) -> bool:
@@ -57,7 +56,6 @@ class SleepPlusButton(ControlEntity, ButtonEntity):
 
 
 class WakeSnoozeButton(ControlEntity, ButtonEntity):
-    _attr_icon = "mdi:alarm-snooze"
 
     @property
     def usable(self) -> bool:
@@ -68,7 +66,6 @@ class WakeSnoozeButton(ControlEntity, ButtonEntity):
 
 
 class WakeStopButton(ControlEntity, ButtonEntity):
-    _attr_icon = "mdi:alarm-off"
 
     @property
     def usable(self) -> bool:
@@ -81,7 +78,6 @@ class WakeStopButton(ControlEntity, ButtonEntity):
 class FollowStartButton(ControlEntity, ButtonEntity):
     """Follow me from here: only while music plays on this room's own player."""
 
-    _attr_icon = "mdi:account-music"
 
     @property
     def usable(self) -> bool:
@@ -105,7 +101,6 @@ class FollowStartButton(ControlEntity, ButtonEntity):
 class FollowStopButton(ControlEntity, ButtonEntity):
     """Follow me off: the music stays here (or goes back where it was started)."""
 
-    _attr_icon = "mdi:account-music-outline"
 
     @property
     def usable(self) -> bool:
