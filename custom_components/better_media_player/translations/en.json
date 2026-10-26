@@ -772,5 +772,27 @@
       "night_mode_on": "Night mode on (devices up)",
       "night_mode_off": "Night mode off (devices up)"
     }
+  },
+  "issues": {
+    "missing_entities": {
+      "title": "{room}: entities missing",
+      "description": "The room is set up with entities that Home Assistant does not have (any more):\n\n{entities}\n\nReplace or remove them under **Configure** of the room (Settings → Devices & services → Better Media Player). A renamed entity is followed by itself."
+    },
+    "disabled_entities": {
+      "title": "{room}: entities disabled",
+      "description": "The room is set up with entities that are disabled:\n\n{entities}\n\nEnable them again, or replace or remove them under **Configure** of the room (Settings → Devices & services → Better Media Player)."
+    },
+    "shared_entities": {
+      "title": "Devices switched by several rooms",
+      "description": "Several rooms switch or play on the same entities; each would turn them on and off for itself:\n\n{entities}\n\nEvery plug, device and player belongs to one room: remove it from the others under **Configure** of the room (Settings → Devices & services → Better Media Player)."
+    },
+    "group_player": {
+      "title": "{room}: group player as the room's player",
+      "description": "The room's player is a group player:\n\n{entities}\n\nA room needs its own player (a group's queue would be lost). Choose the room's own player under **Configure** of the room (Settings → Devices & services → Better Media Player)."
+    },
+    "follow_player_not_group": {
+      "title": "Follow me: no group player",
+      "description": "The follow-me player `{entity}` is not a Music Assistant group player. Follow me needs a group player with dynamic members: choose one under **Configure** of the central settings (Settings → Devices & services → Better Media Player)."
+    }
   }
 }

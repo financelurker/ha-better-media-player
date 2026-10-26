@@ -55,6 +55,18 @@ How the room behaves – times, waits, standby, night mode, volume presets and f
 
 The **Central settings** device has *Follow me: default volume*, *Dynamic controls* and *Hide delay*; its **Configure** only asks for the follow-me player.
 
+## Repairs
+
+What a room is set up with is checked against Home Assistant:
+
+- **A renamed entity** (new entity id) is followed: the room takes the new id by itself.
+- **Settings → Repairs** shows, until the cause is gone:
+  - entities a room is set up with that do not exist (any more) or are disabled (an error for a missing player, a warning otherwise; checked from a minute after Home Assistant has started, as some integrations add their entities late);
+  - plugs, devices or players that several rooms switch (each belongs to one room; sensors may be shared);
+  - a group player as a room's player, or a follow-me player that is no Music Assistant group player.
+
+Fix them under **Configure** of the room (or of the central settings).
+
 ---
 
 Related: [How the room behaves](room.md) · [Room volume](volume.md) · [Reference](reference.md)

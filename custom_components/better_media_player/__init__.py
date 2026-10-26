@@ -31,6 +31,7 @@ from .const import (
 from .announce import async_setup_services
 from .controller import RoomController
 from .hub import FollowManager, get_rooms
+from .issues import async_setup_issues, get_checker
 
 type BetterMediaPlayerConfigEntry = ConfigEntry[RoomController | FollowManager]
 
@@ -44,6 +45,14 @@ def is_hub(entry: ConfigEntry) -> bool:
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.data.setdefault(DOMAIN, {}).setdefault("rooms", {})
     async_setup_services(hass)
+    async_setup_issues(hass)
+
+    @callback
+    def _entry_changed(change: ConfigEntryChange, entry: ConfigEntry) -> None:
+        if entry.domain == DOMAIN and (checker := get_checker(hass)) is not None:
+            checker.changed()  # added, removed, set up, unloaded, options changed
+
+    async_dispatcher_connect(hass, SIGNAL_CONFIG_ENTRY_CHANGED, _entry_changed)
     return True
 
 
