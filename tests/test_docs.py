@@ -136,6 +136,11 @@ def test_every_page_in_readme():
     assert [p.name for p in PAGES if f"{REPO_BLOB}docs/{p.name})" not in readme] == []
 
 
+def test_every_image_used():
+    used = {Path(link.split("?")[0]).name for file in [README, *PAGES] for link in links(file)}
+    assert sorted(p.name for p in (DOCS / "images").iterdir() if p.name not in used) == []
+
+
 def test_anchor_slugs(tmp_path):
     page = tmp_path / "page.md"
     page.write_text("# Night mode, sleep timer and wake up\n## Is it for you?\n## A\n## A\n```yaml\n# not a heading\n```\n")

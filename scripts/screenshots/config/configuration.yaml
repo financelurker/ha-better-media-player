@@ -9,8 +9,11 @@ homeassistant:
   latitude: 48.2
   longitude: 16.37
   customize:
-    media_player.lounge_room:
-      friendly_name: Kodi
+    media_player.kodi:
+      entity_picture: /local/cover-show.jpg
+    media_player.bedroom_kodi:
+      entity_picture: /local/cover-show.jpg
+    media_player.guest_room_kodi:
       entity_picture: /local/cover-show.jpg
     media_player.walkman:
       friendly_name: Family Room Player
@@ -27,6 +30,18 @@ recorder:
   purge_keep_days: 1
 demo:
 
+# stand-in for Better Kodi (stand_ins/better_kodi): two Kodi players with handover
+better_kodi:
+media_player:
+  - platform: better_kodi
+    players:
+      - name: Kodi
+        unique_id: kodi_family_room
+      - name: Bedroom Kodi
+        unique_id: kodi_bedroom
+      - name: Guest Room Kodi
+        unique_id: kodi_guest_room
+
 logger:
   default: warning
   logs:
@@ -39,6 +54,8 @@ input_boolean:
     name: Speaker plug state
   sub_plug_state:
     name: Subwoofer plug state
+  bedroom_tv_plug_state:
+    name: Bedroom TV plug state
 
 template:
   - switch:
@@ -72,6 +89,16 @@ template:
         turn_off:
           - action: input_boolean.turn_off
             target: { entity_id: input_boolean.sub_plug_state }
+      - name: Bedroom TV plug
+        unique_id: bedroom_tv_plug
+        state: "{{ is_state('input_boolean.bedroom_tv_plug_state', 'on') }}"
+        icon: mdi:television
+        turn_on:
+          - action: input_boolean.turn_on
+            target: { entity_id: input_boolean.bedroom_tv_plug_state }
+        turn_off:
+          - action: input_boolean.turn_off
+            target: { entity_id: input_boolean.bedroom_tv_plug_state }
     sensor:
       - name: TV power
         unique_id: tv_power

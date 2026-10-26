@@ -9,7 +9,7 @@
 
 It is a custom integration in the spirit of Better Thermostat: you tell it what is in the room, it takes care of the rest.
 
-![Dashboard while Kodi plays](https://raw.githubusercontent.com/financelurker/ha-better-media-player/main/docs/images/dashboard.png?v=95d86116a1)
+![Dashboard while Kodi plays](https://raw.githubusercontent.com/financelurker/ha-better-media-player/main/docs/images/dashboard.png?v=ce396117c6)
 
 ## What it does
 

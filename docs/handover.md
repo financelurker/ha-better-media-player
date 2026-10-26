@@ -4,6 +4,8 @@
 
 Continue what plays in one room in another: the music or the film goes on there, this room goes off. With the room's select **Hand over to** (it offers the rooms that can take it over, while something plays) or the action `better_media_player.handover` ([example](automations.md#handover)).
 
+<img src="images/handover.png" alt="The room's select Hand over to, open: the rooms that can take over" width="420">
+
 - **The destination powers up first** (its power sequence for that source: TV, player, speakers), then the playback moves: **music** with its queue, going on where the track was, paused music stays paused (Music Assistant); **video** with Better Kodi's handover (it continues where the film was). The destination plays at its own room volume (night mode and presets apply there).
 - **What the destination played before** is replaced, as with a source change.
 - **During follow me**, handing the music over ends follow me: the music goes to the destination, the other rooms stop.
