@@ -13,20 +13,29 @@ It is a custom integration in the spirit of Better Thermostat: you tell it what 
 
 ## What it does
 
+### In a room
+
 - **[Power in the right order](https://github.com/financelurker/ha-better-media-player/blob/main/docs/room.md#order):** press play on Kodi → the TV comes on, Kodi wakes up, then the speakers; speakers never pop and a player is only used once it is ready.
 - **Shared speakers:** one set of speakers (plus subwoofer) serves both a video player such as Kodi and a music player such as Music Assistant.
-- **[On and off by itself](https://github.com/financelurker/ha-better-media-player/blob/main/docs/room.md#when-devices-go-off):** music that starts on the room's player – also as part of a Music Assistant group – powers the speakers. When nothing plays any more, everything goes off after a while (e.g. the TV 10 min after Kodi is off).
+- **[On and off by itself](https://github.com/financelurker/ha-better-media-player/blob/main/docs/room.md#when-devices-go-off):** music that starts on the room's player powers the speakers. When nothing plays any more, everything goes off after a while (e.g. the TV 10 min after Kodi is off).
 - **[Plugs or devices](https://github.com/financelurker/ha-better-media-player/blob/main/docs/room.md#devices-instead-of-plugs):** TV, speakers and subwoofer can hang on switchable plugs, turn themselves on and off (a TV or AV receiver as media player, a remote), be switched by your own scripts (e.g. IR) – or a mix.
 - **[Room off](https://github.com/financelurker/ha-better-media-player/blob/main/docs/room.md#power-button-and-sources):** leaves a Music Assistant group, stops playback, turns the video player off and powers everything down.
 - **[One volume per room](https://github.com/financelurker/ha-better-media-player/blob/main/docs/volume.md)**, with presets (quiet, normal, loud, party) – on the players or on an amplifier, AV receiver or soundbar.
 - **[Night mode, sleep timer and wake up](https://github.com/financelurker/ha-better-media-player/blob/main/docs/night-sleep-wake.md)** with fades.
-- **[Follow me](https://github.com/financelurker/ha-better-media-player/blob/main/docs/follow-me.md):** start it in a room and the music moves with you from room to room, using the rooms' occupancy sensors and one Music Assistant group player.
-- **[Handover](https://github.com/financelurker/ha-better-media-player/blob/main/docs/handover.md):** continue the music or the film in another room, where it was.
-- **[Announcements](https://github.com/financelurker/ha-better-media-player/blob/main/docs/announcements.md)** in one or more rooms, over what plays there: a room that is off powers up for it and goes off again; a film pauses; at night at most the night mode's limit; quiet rooms are left out.
+- **[Announcements](https://github.com/financelurker/ha-better-media-player/blob/main/docs/announcements.md)** over what plays: a room that is off powers up for it and goes off again; a film pauses; at night at most the night mode's limit.
 - **[Media browser and search](https://github.com/financelurker/ha-better-media-player/blob/main/docs/media-browser.md)** across all of the room's players, with their queues on top; picking a movie powers up TV and Kodi first.
 - **[Manual override](https://github.com/financelurker/ha-better-media-player/blob/main/docs/room.md#switched-by-hand):** switch a plug (or turn a device on) by hand and the room steps back until everything is off again.
 - **[Tidy dashboards](https://github.com/financelurker/ha-better-media-player/blob/main/docs/dashboards.md):** controls that make no sense right now are hidden.
 - **[For your own automations](https://github.com/financelurker/ha-better-media-player/blob/main/docs/automations.md):** events for source changes, night mode, sleep timer and wake up; device triggers for source changes and night mode.
+
+### Across rooms
+
+- **[Group playback](https://github.com/financelurker/ha-better-media-player/blob/main/docs/volume.md):** a Music Assistant group powers the speakers of every room in it; the group decides the volume, each room keeps its night mode's limit.
+- **[Follow me](https://github.com/financelurker/ha-better-media-player/blob/main/docs/follow-me.md):** start it in a room and the music moves with you from room to room, using the rooms' occupancy sensors and one Music Assistant group player; it never takes over a room that plays something else and leaves quiet rooms out.
+- **[Wake up with follow me](https://github.com/financelurker/ha-better-media-player/blob/main/docs/night-sleep-wake.md#with-follow-me):** the music follows you out of the bedroom.
+- **[Handover](https://github.com/financelurker/ha-better-media-player/blob/main/docs/handover.md):** continue the music or the film in another room, where it was; the select offers only the rooms that can take it over.
+- **[Announcements in several rooms](https://github.com/financelurker/ha-better-media-player/blob/main/docs/announcements.md):** rooms that play together as a group get it once, through the group, in step; quiet rooms are left out.
+- **[Central settings](https://github.com/financelurker/ha-better-media-player/blob/main/docs/setup.md):** the follow-me player and the dynamic controls for all rooms.
 
 ## Is it for you?
 
