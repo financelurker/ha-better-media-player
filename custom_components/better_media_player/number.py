@@ -22,7 +22,7 @@ from .const import (
     SOURCE_VIDEO,
 )
 from .entity import BetterMediaPlayerEntity, ControlEntity, HubEntity, prune_entities
-from .sleep import MAX_MINUTES
+from .room.sleep import MAX_MINUTES
 
 
 async def async_setup_entry(
@@ -41,16 +41,16 @@ async def async_setup_entry(
         return
     ctrl = entry.runtime_data
     entities = []
-    if ROLE_DISPLAY in ctrl.roles:
+    if ROLE_DISPLAY in ctrl.power.roles:
         entities.append(MinutesNumber(entry, ctrl, "display_run_down", 0, 120))
-    if ROLE_AUDIO in ctrl.roles or ROLE_BASS in ctrl.roles:
+    if ROLE_AUDIO in ctrl.power.roles or ROLE_BASS in ctrl.power.roles:
         entities.append(MinutesNumber(entry, ctrl, "audio_run_down", 0, 120))
-    if ROLE_VIDEO_HOST in ctrl.roles or ROLE_AUDIO_HOST in ctrl.roles:
+    if ROLE_VIDEO_HOST in ctrl.power.roles or ROLE_AUDIO_HOST in ctrl.power.roles:
         entities.append(MinutesNumber(entry, ctrl, "host_run_down", 0, 120))
     if SOURCE_VIDEO in ctrl.sources:
         entities.append(MinutesNumber(entry, ctrl, "video_idle_timeout", 0, 480))
         entities.append(MinutesNumber(entry, ctrl, "night_video_idle_timeout", 0, 480))
-    if ROLE_DISPLAY in ctrl.roles:
+    if ROLE_DISPLAY in ctrl.power.roles:
         entities.append(MinutesNumber(entry, ctrl, "night_display_run_down", 0, 120))
     entities.append(PercentNumber(entry, ctrl, "night_max_volume"))
     entities += [PresetNumber(entry, ctrl, name) for name in PRESETS]
@@ -61,14 +61,14 @@ async def async_setup_entry(
     s, mins = UnitOfTime.SECONDS, UnitOfTime.MINUTES
     entities.append(SettingNumber(entry, ctrl, "start_timeout", 10, 600, 5, s))
     for role_key, prefix in ((ROLE_DISPLAY, "display"), (ROLE_AUDIO, "audio")):
-        role = ctrl.roles.get(role_key)
+        role = ctrl.power.roles.get(role_key)
         if role is None:
             continue
         entities.append(SettingNumber(entry, ctrl, f"{prefix}_on_wait", 0, 120, 1, s))
-        if ctrl.can_standby(role):
+        if ctrl.power.can_standby(role):
             entities.append(SettingNumber(entry, ctrl, f"{prefix}_standby_w", 0, 200, 0.5, UnitOfPower.WATT))
             entities.append(SettingNumber(entry, ctrl, f"{prefix}_standby_max", 1, 120, 1, mins))
-    if ROLE_VIDEO_HOST in ctrl.roles or ROLE_AUDIO_HOST in ctrl.roles:
+    if ROLE_VIDEO_HOST in ctrl.power.roles or ROLE_AUDIO_HOST in ctrl.power.roles:
         entities.append(SettingNumber(entry, ctrl, "host_on_wait", 0, 120, 1, s))
     entities.append(SettingNumber(entry, ctrl, "sleep_fade", 0, 60, 1, mins))
     entities.append(SettingNumber(entry, ctrl, "snooze_minutes", 1, 120, 1, mins))

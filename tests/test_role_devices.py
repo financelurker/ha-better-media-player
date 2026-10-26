@@ -81,7 +81,7 @@ async def test_a_device_that_never_comes_is_left_out(hass, home, freezer):
     hass.async_create_task(_turn_on(hass))
     await tick(hass, freezer, 100)  # start timeout 90 s
     assert _calls(home, KODI, "turn_on"), "the start goes on without it"
-    assert LG in entry.runtime_data.held
+    assert LG in entry.runtime_data.power.held
     assert _state(hass, "sensor.living_room_status") == "on"
 
 
@@ -248,7 +248,7 @@ async def test_a_held_tv_turned_on_again_while_needed_stays_automatic(hass, home
     await hass.async_block_till_done()
     hass.states.async_set(LG, "off")  # own remote
     await tick(hass, freezer, 40)
-    assert LG in ctrl.held
+    assert LG in ctrl.power.held
     hass.states.async_set(LG, "on")  # own remote again, Kodi still plays (room needs it)
     await tick(hass, freezer, 5)
     home.kodi("off")  # Kodi gone (its own remote)
@@ -268,7 +268,7 @@ async def test_a_held_tv_is_switched_again_at_the_next_automatic_start(hass, hom
     await hass.async_block_till_done()
     hass.states.async_set(LG, "off")  # own remote while needed -> held
     await tick(hass, freezer, 40)
-    assert LG in ctrl.held
+    assert LG in ctrl.power.held
     home.kodi("off")  # Kodi suspended by its own remote
     await tick(hass, freezer, 1500)  # display run-down 10 min
     assert not home.on(TV) and _state(hass, LG) == "unavailable"
@@ -287,7 +287,7 @@ async def test_a_device_gone_behind_its_plug_counts_as_off(hass, home, freezer):
     await _turn_on(hass)
     await _turn_off(hass)
     await tick(hass, freezer, 300)
-    assert ctrl._fully_off()
+    assert ctrl.power.fully_off()
 
 
 async def test_the_plug_of_a_shared_device_stays_while_another_role_needs_it(hass, home, freezer):
@@ -370,7 +370,7 @@ async def test_a_network_tv_gone_in_deep_standby_counts_as_off(hass, home, freez
     await _turn_off(hass)
     hass.states.async_set(LG, "unavailable")  # network TV gone in deep standby
     await tick(hass, freezer, 300)
-    assert ctrl._fully_off()
+    assert ctrl.power.fully_off()
 
 
 async def test_music_powers_a_shared_device_through_the_display_plug(hass, home, freezer):
@@ -433,7 +433,7 @@ async def test_the_rooms_own_turn_on_switches_a_held_tv_again(hass, home, freeze
     await hass.async_block_till_done()
     hass.states.async_set(LG, "off")
     await tick(hass, freezer, 10)
-    assert LG in entry.runtime_data.held
+    assert LG in entry.runtime_data.power.held
     await _turn_on(hass)  # the room's power button
     assert _state(hass, LG) == "on"
 

@@ -36,7 +36,8 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_SLEEP_FADE, DOMAIN, EVENT_SLEEP_TIMER_FINISHED
+from ..const import CONF_SLEEP_FADE, DOMAIN, EVENT_SLEEP_TIMER_FINISHED
+from .. import clock
 
 if TYPE_CHECKING:
     from .controller import RoomController
@@ -54,10 +55,6 @@ REASON_ROOM_OFF = "room_off"
 
 _PLAYING = {"playing", "buffering"}
 _POWERED = {"on", "idle", "playing", "paused", "buffering"}
-
-
-def _now() -> float:
-    return dt_util.utcnow().timestamp()
 
 
 class SleepTimer:
@@ -89,7 +86,7 @@ class SleepTimer:
         s = self._s
         if not s:
             return 0
-        return max(0, math.ceil((s["ends_at"] - _now()) / 60))
+        return max(0, math.ceil((s["ends_at"] - clock.now()) / 60))
 
     def fading_player(self, player: str | None) -> bool:
         """This player's volume is being lowered right now (not its real volume)."""
@@ -153,7 +150,7 @@ class SleepTimer:
         async with self._lock:
             await self._end_fade(restore=True)
             self.ctrl.data["sleep"] = {
-                "ends_at": _now() + minutes * 60,
+                "ends_at": clock.now() + minutes * 60,
                 "fade": fade * 60,
                 "fade_player": None,
                 "fade_from": None,
@@ -175,9 +172,9 @@ class SleepTimer:
             s = self._s
             if s is None:  # cancelled meanwhile
                 return
-            ends = max(s["ends_at"], _now()) + minutes * 60
-            s["ends_at"] = min(ends, _now() + MAX_MINUTES * 60)
-            s["fade"] = min(s["fade"], s["ends_at"] - _now())
+            ends = max(s["ends_at"], clock.now()) + minutes * 60
+            s["ends_at"] = min(ends, clock.now() + MAX_MINUTES * 60)
+            s["fade"] = min(s["fade"], s["ends_at"] - clock.now())
             self._changed(now=True)
         self.ctrl._spawn(self._async_step())
 
@@ -208,7 +205,7 @@ class SleepTimer:
         s = self._s
         if s is None or self.ctrl._stopped:
             return
-        now = _now()
+        now = clock.now()
         fade_start = s["ends_at"] - s["fade"]
         if now < fade_start:
             at = fade_start
@@ -248,7 +245,7 @@ class SleepTimer:
             s = self._s
             if s is None:
                 return
-            now = _now()
+            now = clock.now()
             if self.ctrl.announce.active:
                 return  # an announcement plays: the timer goes on after it (async_announce_done)
             if now >= s["ends_at"]:
@@ -377,7 +374,7 @@ class SleepTimer:
     @staticmethod
     def _expired_while_down(s: dict[str, Any]) -> bool:
         """The end lies more than a step in the past: HA was not running then."""
-        return _now() - s["ends_at"] > 2 * FADE_STEP_SECONDS
+        return clock.now() - s["ends_at"] > 2 * FADE_STEP_SECONDS
 
     async def _end_fade(self, restore: bool) -> None:
         """Stop a running fade; with restore, the volume from before comes back."""

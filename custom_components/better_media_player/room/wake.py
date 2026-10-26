@@ -30,7 +30,7 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.util import dt as dt_util
 
-from .const import (
+from ..const import (
     CONF_NIGHT_FADE_IN,
     CONF_SLEEP_FADE,
     CONF_START_TIMEOUT,
@@ -41,6 +41,7 @@ from .const import (
     EVENT_WAKE_STARTED,
 )
 from .ramp import VolumeRamp
+from .. import clock
 
 if TYPE_CHECKING:
     from .controller import RoomController, Source
@@ -71,10 +72,6 @@ FAILED_NOT_PLAYING = "not_playing"
 
 _PLAYING = {"playing", "buffering"}
 _POWERED = {"on", "idle", "playing", "paused", "buffering"}
-
-
-def _now() -> float:
-    return dt_util.utcnow().timestamp()
 
 
 class WakeAlarm:
@@ -172,7 +169,7 @@ class WakeAlarm:
         w = self._w
         if w is None:
             return
-        w["last_present"] = _now()
+        w["last_present"] = clock.now()
         if not w.get("seen"):
             w["seen"] = True
             self.ctrl._save()
@@ -240,7 +237,7 @@ class WakeAlarm:
             "fade_s": float(DEFAULT_FADE_MINUTES if fade_minutes is None else fade_minutes) * 60,
             "max_s": float(max_minutes) * 60 if max_minutes else None,
             "room_was_off": not ctrl.room_on,
-            "started_at": _now(),
+            "started_at": clock.now(),
             "requested_at": None,
             "playing_since": None,
             "fade_t0": None,
@@ -291,11 +288,11 @@ class WakeAlarm:
         src = ctrl.sources[w["source"]]
         ctrl.source_watch.note_request(w["source"])  # a wake is a wish for its source
         w["phase"] = PHASE_STARTING
-        w["started_at"] = _now()
+        w["started_at"] = clock.now()
         w["seen_new"] = False
         self._changed()
         # safety net: also a start that hangs ends in a failed wake
-        self._schedule(_now() + float(ctrl.setting(CONF_START_TIMEOUT)) + PLAY_TIMEOUT)
+        self._schedule(clock.now() + float(ctrl.setting(CONF_START_TIMEOUT)) + PLAY_TIMEOUT)
         resume = w.pop("resume", False) and ctrl.player_state(src) == "paused"
         self._before = self._snapshot(src)
         try:
@@ -315,7 +312,7 @@ class WakeAlarm:
             return
         if self._w is not w or w["phase"] != PHASE_STARTING:
             return  # ended, replaced or snoozed meanwhile
-        w["requested_at"] = _now()
+        w["requested_at"] = clock.now()
         self._schedule(w["requested_at"] + PLAY_TIMEOUT)
         if w.get("seen_new") or (ctrl.source_playing(src) and self._before[0] not in _PLAYING):
             await self._playing(w)
@@ -354,8 +351,8 @@ class WakeAlarm:
         src = ctrl.sources[w["source"]]
         out = ctrl.vol(src)
         ctrl.volume.async_cancel_apply(out.id)  # this start's volume is the wake's
-        w["playing_since"] = _now()
-        w["fade_t0"] = _now()
+        w["playing_since"] = clock.now()
+        w["fade_t0"] = clock.now()
         w["user_volume"] = False
         w["phase"] = PHASE_FADING if w["fade_s"] > 0 else PHASE_PLAYING
         self._changed()
@@ -403,7 +400,7 @@ class WakeAlarm:
     async def _fade_from_now(self, w: dict[str, Any], src: Source) -> None:
         night = self.ctrl.night
         start, target = night.limit(w["start_volume"]), night.limit(w["target_volume"])
-        left = max(0.0, w["fade_t0"] + w["fade_s"] - _now())
+        left = max(0.0, w["fade_t0"] + w["fade_s"] - clock.now())
         progress = 1 - left / w["fade_s"] if w["fade_s"] else 1
         await self._set_volume(src, round(start + (target - start) * progress, 3))
         if self._w is w and w["phase"] == PHASE_FADING:
@@ -447,7 +444,7 @@ class WakeAlarm:
             return
         target = self.ctrl.night.limit(w["target_volume"])
         if w["phase"] == PHASE_FADING and w.get("fade_t0"):
-            left = w["fade_t0"] + w["fade_s"] - _now()
+            left = w["fade_t0"] + w["fade_s"] - clock.now()
             self._fade(src, target, max(left, 0))
         elif w["phase"] == PHASE_PLAYING and not w.get("user_volume"):
             out = self.ctrl.vol(src)
@@ -520,7 +517,7 @@ class WakeAlarm:
             self.ctrl._spawn(self.async_finish(REASON_STOPPED))
 
         self._stop_check = async_track_point_in_utc_time(
-            self.hass, _due, dt_util.utc_from_timestamp(_now() + STOP_SETTLE)
+            self.hass, _due, dt_util.utc_from_timestamp(clock.now() + STOP_SETTLE)
         )
 
     @callback
@@ -545,7 +542,7 @@ class WakeAlarm:
         if self._ramp is not None:
             self._ramp.stop()
         w["phase"] = PHASE_SNOOZED
-        w["snooze_until"] = _now() + minutes * 60
+        w["snooze_until"] = clock.now() + minutes * 60
         can_pause = ctrl.player_supports(src, MediaPlayerEntityFeature.PAUSE)
         # a start that was still under way is done again from the beginning
         w["resume"] = can_pause and not starting
@@ -595,7 +592,7 @@ class WakeAlarm:
     def _schedule(self, at: float) -> None:
         self._unschedule()
         self._unsub = async_track_point_in_utc_time(
-            self.hass, self._due, dt_util.utc_from_timestamp(max(at, _now()))
+            self.hass, self._due, dt_util.utc_from_timestamp(max(at, clock.now()))
         )
 
     @callback
@@ -608,7 +605,7 @@ class WakeAlarm:
         if w is None or self.ctrl._stopped:
             return
         ctrl = self.ctrl
-        now = _now()
+        now = clock.now()
         phase = w["phase"]
         if phase == PHASE_STARTING:
             src = ctrl.sources[w["source"]]
@@ -650,7 +647,7 @@ class WakeAlarm:
         w = self._w
         if w is None:
                 return
-        now = _now()
+        now = clock.now()
         phase = w["phase"]
         src = self._src()
         if src is None:

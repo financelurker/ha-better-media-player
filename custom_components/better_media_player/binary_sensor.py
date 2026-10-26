@@ -22,10 +22,10 @@ async def async_setup_entry(
 ) -> None:
     ctrl = entry.runtime_data
     entities: list[BinarySensorEntity] = [ProblemSensor(entry, ctrl, "problem")]
-    if ROLE_DISPLAY in ctrl.roles:
+    if ROLE_DISPLAY in ctrl.power.roles:
         entities.append(DemandSensor(entry, ctrl, "display_demand", ROLE_DISPLAY))
-    if ROLE_AUDIO in ctrl.roles or ROLE_BASS in ctrl.roles:
-        role = ROLE_AUDIO if ROLE_AUDIO in ctrl.roles else ROLE_BASS
+    if ROLE_AUDIO in ctrl.power.roles or ROLE_BASS in ctrl.power.roles:
+        role = ROLE_AUDIO if ROLE_AUDIO in ctrl.power.roles else ROLE_BASS
         entities.append(DemandSensor(entry, ctrl, "audio_demand", role))
     async_add_entities(entities)
 
@@ -41,7 +41,7 @@ class DemandSensor(BetterMediaPlayerEntity, BinarySensorEntity):
 
     @property
     def is_on(self) -> bool:
-        return self.ctrl.demand(self._role)
+        return self.ctrl.power.demand(self._role)
 
 
 class ProblemSensor(BetterMediaPlayerEntity, BinarySensorEntity):

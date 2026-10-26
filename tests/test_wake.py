@@ -9,7 +9,7 @@ from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import CoreState
 from homeassistant.helpers import entity_registry as er
 
-from custom_components.better_media_player.browser import KIND_ITEM, make_id
+from custom_components.better_media_player.room.browser import KIND_ITEM, make_id
 from custom_components.better_media_player.const import (
     DOMAIN,
     EVENT_WAKE_FAILED,

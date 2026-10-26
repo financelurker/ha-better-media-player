@@ -513,7 +513,7 @@ async def test_reload_during_sequence_leaves_zombie(hass, home, freezer):
     old = entry.runtime_data
     await hass.services.async_call("media_player", "turn_on", {"entity_id": ROOM}, blocking=True)
     await hass.async_block_till_done()
-    assert old.sequence_running
+    assert old.sequence.running
     seen = []
     orig0 = old.async_update
     async def spy0(reason=""):

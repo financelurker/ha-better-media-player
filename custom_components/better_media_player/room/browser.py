@@ -45,8 +45,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.translation import async_get_translations
 
-from .players.base import ENQUEUE_MODES
-from .const import DOMAIN
+from ..players.base import ENQUEUE_MODES
+from ..const import DOMAIN
 
 if TYPE_CHECKING:
     from .controller import RoomController

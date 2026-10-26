@@ -7,7 +7,7 @@ from pytest_homeassistant_custom_component.common import async_capture_events
 
 from homeassistant.exceptions import ServiceValidationError
 
-from custom_components.better_media_player.browser import KIND_ITEM, make_id
+from custom_components.better_media_player.room.browser import KIND_ITEM, make_id
 from custom_components.better_media_player.const import DOMAIN, EVENT_WAKE_FINISHED
 from custom_components.better_media_player.hub import FollowSession, get_hub
 

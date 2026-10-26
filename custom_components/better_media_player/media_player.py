@@ -33,8 +33,8 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from . import BetterMediaPlayerConfigEntry
-from .browser import RoomBrowser, is_own_id
-from .announce import ANNOUNCE_VOLUME
+from .room.browser import RoomBrowser, is_own_id
+from .room.announce import ANNOUNCE_VOLUME
 from .const import (
     ATTR_IGNORE_QUIET,
     ATTR_PRESET,
@@ -58,7 +58,7 @@ from .const import (
 )
 from .entity import BetterMediaPlayerEntity
 from .hub import get_hub, room_of
-from .sleep import MAX_MINUTES
+from .room.sleep import MAX_MINUTES
 
 BASE_FEATURES = MediaPlayerEntityFeature.TURN_ON | MediaPlayerEntityFeature.TURN_OFF
 
@@ -545,7 +545,7 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
     async def async_handover(
         self, destination: str, source: str | None = None, keep_source_playing: bool = False
     ) -> None:
-        await self.ctrl.async_handover(room_of(self.hass, destination), source, keep_source_playing, destination)
+        await self.ctrl.handover.async_hand_over(room_of(self.hass, destination), source, keep_source_playing, destination)
 
     async def async_snooze(self, minutes: float | None = None) -> None:
         await self.ctrl.wake.async_snooze(minutes)
