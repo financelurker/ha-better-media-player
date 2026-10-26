@@ -122,8 +122,8 @@ class NightMode:
         if on:
             self._cancel_ramps()
             ctrl.data.pop("night_fade_back", None)
-            bass = ctrl.roles.get(ROLE_BASS)
-            if bass is not None and ctrl.auto_power and not ctrl.manual and ctrl.role_on(bass):
+            bass = ctrl.power.roles.get(ROLE_BASS)
+            if bass is not None and ctrl.auto_power and not ctrl.manual and ctrl.power.role_on(bass):
                 bass.force_off = True  # no run-down
             for out, src in self._outputs():
                 await self._clamp(out, src)
@@ -149,7 +149,7 @@ class NightMode:
             ctrl._save()
             return
         watch = ctrl.source_watch
-        if watch.source is None or watch.changing or ctrl.sequence_running:
+        if watch.source is None or watch.changing or ctrl.sequence.running:
             return  # told when the room (or its new source) is up
         if bool(ctrl.data["night_announced"]) != self.active:
             self._fire(self.active, "switched")

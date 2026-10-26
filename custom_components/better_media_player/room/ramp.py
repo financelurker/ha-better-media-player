@@ -23,6 +23,8 @@ from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.util import dt as dt_util
 
+from .. import clock
+
 if TYPE_CHECKING:
     from .output import DeviceOutput, PlayerOutput
 
@@ -37,9 +39,6 @@ def ease_in_out(progress: float) -> float:
     """Slow at the start and at the end (a cosine curve)."""
     return 0.5 - 0.5 * math.cos(math.pi * progress)
 
-
-def _now() -> float:
-    return dt_util.utcnow().timestamp()
 
 
 class VolumeRamp:
@@ -89,7 +88,7 @@ class VolumeRamp:
             self._spawn(self.output.async_set(target))
             return True
         self._start, self._target = current, target
-        self._t0, self._duration = _now(), float(seconds)
+        self._t0, self._duration = clock.now(), float(seconds)
         self._remember(current, keep=self._match(current) is not None)
         self.aborted = False
         self.running = True
@@ -98,7 +97,7 @@ class VolumeRamp:
 
     def recent(self) -> list[float]:
         """The values set lately (their reports may still come)."""
-        now = _now()
+        now = clock.now()
         return [v for _, v, at in self._recent if now - at <= LAG_SECONDS]
 
     def _match(self, current: float) -> int | None:
@@ -111,7 +110,7 @@ class VolumeRamp:
 
     def _remember(self, value: float, keep: bool = True) -> None:
         """A value we set (or start from); keep: the steps before still count."""
-        now = _now()
+        now = clock.now()
         self._seq += 1
         recent = [e for e in self._recent if e[0] >= self._matched] if keep else []
         recent.append((self._seq, value, now))
@@ -122,7 +121,7 @@ class VolumeRamp:
     @property
     def remaining(self) -> float:
         """Seconds left of a running ramp (0: none)."""
-        return max(0.0, self._t0 + self._duration - _now()) if self.running else 0.0
+        return max(0.0, self._t0 + self._duration - clock.now()) if self.running else 0.0
 
     @callback
     def stop(self) -> None:
@@ -146,7 +145,7 @@ class VolumeRamp:
 
     @callback
     def _schedule(self) -> None:
-        at = min(_now() + self._step_seconds, self._t0 + self._duration)
+        at = min(clock.now() + self._step_seconds, self._t0 + self._duration)
         self._unsub = async_track_point_in_utc_time(self.hass, self._due, dt_util.utc_from_timestamp(at))
 
     @callback
@@ -168,7 +167,7 @@ class VolumeRamp:
             self.cancel()
             return
         self._matched = seq
-        progress = min(1.0, (_now() - self._t0) / self._duration)
+        progress = min(1.0, (clock.now() - self._t0) / self._duration)
         shaped = self._curve(progress) if self._curve is not None else progress
         value = round(self._start + (self._target - self._start) * shaped, 3)
         done = progress >= 1.0

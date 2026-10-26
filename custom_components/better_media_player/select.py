@@ -96,7 +96,7 @@ class HandoverSelect(ControlEntity, SelectEntity):
 
     def _targets(self) -> dict[str, RoomController]:
         rooms = sorted(get_rooms(self.hass).values(), key=lambda r: r.entry.title)
-        return {r.entry.title: r for r in rooms if self.ctrl.handover_blocker(r) is None}
+        return {r.entry.title: r for r in rooms if self.ctrl.handover.blocker(r) is None}
 
     @property
     def usable(self) -> bool:
@@ -111,4 +111,4 @@ class HandoverSelect(ControlEntity, SelectEntity):
         return None  # an action, not a state
 
     async def async_select_option(self, option: str) -> None:
-        await self.ctrl.async_handover(self._targets().get(option))
+        await self.ctrl.handover.async_hand_over(self._targets().get(option))

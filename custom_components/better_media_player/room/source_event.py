@@ -117,12 +117,12 @@ class SourceWatch:
             and not src.suppressed
             and not ctrl.turning_off
             and ctrl.player_state(src) not in (*_UNCERTAIN, "off", "standby")
-            and (ctrl.room_on or not ctrl.roles)
+            and (ctrl.room_on or not ctrl.power.roles)
         )
 
     def _current(self) -> str | None:
         ctrl = self.ctrl
-        if ctrl.sequence_running:
+        if ctrl.sequence.running:
             # nothing changes until the room is ready (e.g. the TV has power)
             if self._requested is not None:
                 self._requested = (self._requested[0], time.monotonic())  # counts from the end of the start
@@ -172,7 +172,7 @@ class SourceWatch:
             # Home Assistant started: the room is as it is, once its players have
             # reported (and no sequence is running)
             loading = any(ctrl.player_state(s) in _NOT_LOADED for s in ctrl.sources.values())
-            if ctrl.sequence_running or (loading and time.monotonic() - self._since < FIRST_LOOK_SECONDS):
+            if ctrl.sequence.running or (loading and time.monotonic() - self._since < FIRST_LOOK_SECONDS):
                 self._recheck()
                 return
             self._announced = self._current()
@@ -184,7 +184,7 @@ class SourceWatch:
         current = self._current()
         if current == self._announced:
             self._pending = None
-            if self._requested is not None and self._requested[0] == current and not ctrl.sequence_running:
+            if self._requested is not None and self._requested[0] == current and not ctrl.sequence.running:
                 self._requested = None  # asked for what it is already
             return
         now = time.monotonic()

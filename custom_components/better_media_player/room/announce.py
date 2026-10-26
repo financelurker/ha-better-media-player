@@ -373,7 +373,7 @@ class RoomAnnouncer:
         ctrl = self.ctrl
         if not ctrl.auto_power or ctrl.manual:
             return []
-        return [k for k, r in ctrl.roles.items() if src.key in r.sources and ctrl.night.role_enabled(k)]
+        return [k for k, r in ctrl.power.roles.items() if src.key in r.sources and ctrl.night.role_enabled(k)]
 
     async def _power_up(self, src: Source, roles: list[str]) -> None:
         """The devices the player needs come up (if off); a player that is off is woken."""
@@ -381,11 +381,11 @@ class RoomAnnouncer:
         timeout = float(ctrl.setting(CONF_START_TIMEOUT))
         if roles:
             await ctrl.async_update("announce")
-            wanted = [ctrl.roles[k] for k in roles]
+            wanted = [ctrl.power.roles[k] for k in roles]
             # until the power sequence is through: the devices report on and their
             # waits after switching on (e.g. speakers that need a moment) are over
             if not await ctrl._wait_until(
-                lambda: not ctrl.sequence_running and all(ctrl.role_fully_on(r) for r in wanted), timeout
+                lambda: not ctrl.sequence.running and all(ctrl.power.role_fully_on(r) for r in wanted), timeout
             ):
                 _LOGGER.warning("%s: devices not up for the announcement, announcing anyway", ctrl.entry.title)
         if ctrl.player_state(src) in _NOT_READY and ctrl.player_supports(src, MediaPlayerEntityFeature.TURN_ON):
@@ -433,7 +433,7 @@ class RoomAnnouncer:
         room's fades still."""
         ctrl = self.ctrl
         for key in roles:
-            if (role := ctrl.roles.get(key)) is not None and not ctrl.role_on(role):
+            if (role := ctrl.power.roles.get(key)) is not None and not ctrl.power.role_on(role):
                 self._brought_up.add(key)
         if self._running == 0:
             self._off = False
@@ -502,8 +502,8 @@ class RoomAnnouncer:
                 src.suppressed = True
                 await ctrl._source_off(src)
         for key in brought_up:
-            role = ctrl.roles.get(key)
-            if role is not None and not ctrl.role_demand(role):
+            role = ctrl.power.roles.get(key)
+            if role is not None and not ctrl.power.role_demand(role):
                 role.force_off = True
         if self.active:
             return  # a new one began meanwhile: it holds the room still now

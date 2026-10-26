@@ -29,8 +29,8 @@ async def async_setup_entry(
     entities.append(NightModeSwitch(entry, ctrl, "night_mode"))
     # how the room behaves (set on the device, not in the options)
     for role_key, prefix in ((ROLE_DISPLAY, "display"), (ROLE_AUDIO, "audio")):
-        role = ctrl.roles.get(role_key)
-        if role is not None and ctrl.can_standby(role):
+        role = ctrl.power.roles.get(role_key)
+        if role is not None and ctrl.power.can_standby(role):
             entities.append(SettingSwitch(entry, ctrl, f"{prefix}_standby"))
     if ctrl.follow_capable:
         entities.append(SettingSwitch(entry, ctrl, "prewarm"))

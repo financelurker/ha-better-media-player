@@ -545,7 +545,7 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
     async def async_handover(
         self, destination: str, source: str | None = None, keep_source_playing: bool = False
     ) -> None:
-        await self.ctrl.async_handover(room_of(self.hass, destination), source, keep_source_playing, destination)
+        await self.ctrl.handover.async_hand_over(room_of(self.hass, destination), source, keep_source_playing, destination)
 
     async def async_snooze(self, minutes: float | None = None) -> None:
         await self.ctrl.wake.async_snooze(minutes)

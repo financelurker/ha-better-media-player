@@ -55,9 +55,10 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.storage import Store
-from homeassistant.util import dt as dt_util
 
+from . import clock
 from .const import (
+
     CONF_DEFAULT_VOLUME,
     CONF_FOLLOW_PLAYER,
     CONF_NIGHT_FADE_IN,
@@ -105,9 +106,6 @@ START_GRACE_SECONDS = 30  # after a start, MA may report "playing" late
 VIDEO_RESUME_MAX_SECONDS = 3 * 3600  # resume after video only within this time
 
 
-def _now() -> float:
-    return dt_util.utcnow().timestamp()
-
 
 def get_hub(hass: HomeAssistant) -> FollowManager | None:
     return hass.data.get(DOMAIN, {}).get("hub")
@@ -143,7 +141,7 @@ class FollowSession:
 
     def reset(self, group: str | None, by_us: bool = False) -> None:
         self.group = group
-        self.started_at = _now()
+        self.started_at = clock.now()
         self.started_by_us = by_us
         self.backed.clear()
         self.leaving.clear()
@@ -554,7 +552,7 @@ class FollowManager:
         Also true while that room is already back in the group but Music Assistant
         has not resumed yet (join reported late, play not yet effective).
         """
-        now = _now()
+        now = clock.now()
         s = self.session
         if s.group != group or self.ma.state(group) != MediaPlayerState.PAUSED:
             return False
@@ -587,7 +585,7 @@ class FollowManager:
     async def _evaluate(self) -> None:
         if any(r.announce.active for r in get_rooms(self.hass).values()):
             return  # an announcement takes players out of groups for a moment (again after it)
-        now = _now()
+        now = clock.now()
         self._track_arrivals(now)
         s = self.session
         await self._night_groups()
@@ -859,7 +857,7 @@ class FollowManager:
         group = self.follow_player
         return self.active and (
             self.ma.state(group) in PLAYING
-            or (s.group == group and s.started_by_us and _now() - s.started_at < START_GRACE_SECONDS)
+            or (s.group == group and s.started_by_us and clock.now() - s.started_at < START_GRACE_SECONDS)
         )
 
     def _require_follow_player(self) -> str:
@@ -919,7 +917,7 @@ class FollowManager:
                 self._commands.pop((room.audio_player, f"join:{group}"), None)
                 await self._join(room, group, volume_override=volume)
             if self.ma.state(group) not in PLAYING:
-                s.started_at, s.started_by_us = _now(), True
+                s.started_at, s.started_by_us = clock.now(), True
                 self._commands.pop((group, "play"), None)
                 await self._resume(group)
         self.async_schedule("wake")
@@ -960,7 +958,7 @@ class FollowManager:
 
     def _due(self, target: str, action: str) -> bool:
         """True if this command was not sent within the repeat window; marks it sent."""
-        now = _now()
+        now = clock.now()
         last = self._commands.get((target, action))
         if last is not None and now - last < COMMAND_REPEAT_SECONDS:
             return False
