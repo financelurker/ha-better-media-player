@@ -2,7 +2,7 @@
 
 [← Back to the overview](../README.md)
 
-Entities, settings and states of a room.
+Entities, settings and states of a room. `<room>` is the room's part of the entity id (with Home Assistant 2026.6 or newer it may start with the area's name, see [Setup](setup.md)).
 
 ## Entities
 
