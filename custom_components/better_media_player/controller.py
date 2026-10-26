@@ -1376,6 +1376,7 @@ class RoomController:
         finally:
             if asyncio.current_task() is self._seq_task:
                 self._seq_task = None
+            self._changed.set()  # (waiting for the sequence: it is through)
             if not self._stopped:
                 self._update_status()
                 self._notify()
