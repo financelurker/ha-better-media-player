@@ -322,7 +322,7 @@ async def test_a_device_woken_over_cec_during_the_start_is_no_manual_mode(hass, 
     home.handle = handle
     home.kodi_boots = True
     hass.async_create_task(_turn_on(hass))
-    await tick(hass, freezer, 20, step=1)
+    await tick(hass, freezer, 20)
     assert not ctrl.manual
 
 
@@ -397,7 +397,7 @@ async def test_a_host_plug_used_by_a_role_is_shown_in_the_devices_step(hass, hom
     assert result["errors"] == {"display": "duplicate_device"}
 
 
-# ------------------------------------------------------- from bug injection
+# -------------------------------- devices on their own, failed starts, actions
 
 
 async def test_a_tv_on_its_own_app_counts_as_on(hass, home, freezer):

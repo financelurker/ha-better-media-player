@@ -12,7 +12,7 @@ from homeassistant.setup import async_setup_component
 from custom_components.better_media_player.const import DOMAIN, EVENT_SOURCE_CHANGED
 
 from .conftest import FOLLOW, GROUP, KITCHEN_OCC, KODI, MUSIC, SPEAKERS, TV, setup_room
-from .helpers import ROOM, follow_from, settle, tick
+from .helpers import HOST, ROOM, follow_from, settle, tick
 
 
 def _data(events):
@@ -184,9 +184,6 @@ async def test_music_only_room_offers_no_video_trigger(hass, home, freezer):
     assert home.on(SPEAKERS) is False
 
 
-HOST = "switch.kodi_box_plug"
-
-
 async def _call(hass, service, **data):
     await hass.services.async_call("media_player", service, {"entity_id": ROOM, **data}, blocking=True)
     await hass.async_block_till_done()
@@ -291,7 +288,7 @@ async def test_first_look_waits_for_the_sequence(hass, home, freezer):
     assert _data(events) == [("audio", None, "selected")]
 
 
-# ------------------------------------------------------- from bug injection
+# -------------------------------------------------- what is (no) source change
 
 
 async def test_a_suppressed_player_still_on_is_no_source(hass, home, freezer):

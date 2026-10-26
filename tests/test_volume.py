@@ -151,7 +151,7 @@ async def test_player_with_volume_gets_no_note(hass, home):
     assert result["type"] is FlowResultType.CREATE_ENTRY
 
 
-async def test_r1_member_reports_before_group_lists_it(hass, home, freezer):
+async def test_member_reports_before_group_lists_it(hass, home, freezer):
     """MA: member playing + group volume before the group lists it -> must not be learned."""
     await music_at(hass, home, freezer, 0.3)
     home.music("idle")
@@ -164,7 +164,7 @@ async def test_r1_member_reports_before_group_lists_it(hass, home, freezer):
     assert room_volume(hass) == 0.3
 
 
-async def test_r2_idle_group_member_volume(hass, home, freezer):
+async def test_idle_group_member_volume(hass, home, freezer):
     """Member still joined to an idle group (e.g. joined, group not started yet)."""
     await music_at(hass, home, freezer, 0.3)
     home.music("idle")
@@ -177,7 +177,7 @@ async def test_r2_idle_group_member_volume(hass, home, freezer):
     assert room_volume(hass) == 0.3
 
 
-async def test_r3_user_back_to_applied_value_within_30s(hass, home, freezer):
+async def test_user_back_to_applied_value_within_30s(hass, home, freezer):
     """Applied 0.25 on Kodi; user presses down (0.20) then up (0.25) on the remote."""
     await music_at(hass, home, freezer, 0.25)
     home.music("idle")
@@ -195,7 +195,7 @@ async def test_r3_user_back_to_applied_value_within_30s(hass, home, freezer):
     assert room_volume(hass) == 0.25, "user's change ignored as 'own'"
 
 
-async def test_r4_kodi_wake_restore_and_room_volume_double_set(hass, home, freezer):
+async def test_kodi_wake_restore_and_room_volume_double_set(hass, home, freezer):
     """Sleep ends on Kodi (suspends), room volume changes later, Kodi wakes: one set expected."""
     await setup_room_kodi_playing(hass, home, freezer, 0.5)
     await hass.services.async_call(
@@ -238,7 +238,7 @@ async def setup_room_kodi_playing(hass, home, freezer, volume):
     return entry
 
 
-async def test_r5_player_without_volume_set_is_learned_from(hass, home, freezer):
+async def test_player_without_volume_set_is_learned_from(hass, home, freezer):
     """A player without VOLUME_SET takes no part, but its reported volume is learned."""
     from .conftest import setup_room
 
@@ -253,7 +253,7 @@ async def test_r5_player_without_volume_set_is_learned_from(hass, home, freezer)
     assert room_volume(hass) is None, f"learned {room_volume(hass)} from a player that cannot set volume"
 
 
-async def test_r6_play_on_after_unjoin_with_stale_group(hass, home, freezer):
+async def test_play_on_after_unjoin_with_stale_group(hass, home, freezer):
     """MA reports the unjoin after the service returns: async_apply sees the group and skips."""
     entry = await music_at(hass, home, freezer, 0.3)
     home.group("playing", [MUSIC], GROUP)

@@ -20,7 +20,7 @@ from custom_components.better_media_player.const import (
 from .conftest import KODI, MUSIC, SPEAKERS, TV, setup_room, start_follow
 from .helpers import ROOM, SNOOZE, WAKE, count_calls, settle, start_wake, tick, vol, volume_sets, wake_playing
 
-STOP = "button.living_room_stop_wake"
+WAKE_STOP = "button.living_room_stop_wake"
 
 
 async def _room(hass, home, volume=0.5):
@@ -168,7 +168,7 @@ async def test_stop_wake_keeps_playing(hass, home, freezer):
     finished = async_capture_events(hass, EVENT_WAKE_FINISHED)
     await _room(hass, home)
     await wake_playing(hass, home, freezer)
-    await hass.services.async_call("button", "press", {"entity_id": STOP}, blocking=True)
+    await hass.services.async_call("button", "press", {"entity_id": WAKE_STOP}, blocking=True)
     await hass.async_block_till_done()
     assert [e.data["reason"] for e in finished] == ["stopped"]
     v = vol(hass)
@@ -276,7 +276,7 @@ async def test_controls_hidden_while_no_wake(hass, home, freezer):
     assert reg.async_get(SNOOZE).hidden_by == er.RegistryEntryHider.INTEGRATION
     await wake_playing(hass, home, freezer)
     assert reg.async_get(SNOOZE).hidden_by is None
-    assert reg.async_get(STOP).hidden_by is None
+    assert reg.async_get(WAKE_STOP).hidden_by is None
     await hass.services.async_call(DOMAIN, "stop_wake", {"entity_id": ROOM}, blocking=True)
     await hass.async_block_till_done()
     await tick(hass, freezer, 5)  # hidden after the hide delay (3 s)
@@ -426,7 +426,7 @@ async def test_idle_between_two_items_is_no_stop(hass, home, freezer):
     await tick(hass, freezer, 10)
     home.music("idle")
     await hass.async_block_till_done()
-    await tick(hass, freezer, 2, step=1)
+    await tick(hass, freezer, 2)
     home.music("playing")
     await hass.async_block_till_done()
     await tick(hass, freezer, 130)

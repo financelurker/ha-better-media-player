@@ -9,10 +9,21 @@ from homeassistant.helpers import entity_registry as er
 from custom_components.better_media_player.const import CONF_ENTRY_TYPE, DOMAIN, ENTRY_TYPE_HUB
 
 from .conftest import KITCHEN_OCC, LIVING_OCC, SPEAKERS, setup_hub, setup_room
-from .helpers import NIGHT, PRESET, QUIET, ROOM, SLEEP, SLEEP_PLUS, WAKE, follow_from, tick
+from .helpers import (
+    MUSIC_ONLY,
+    NIGHT,
+    PRESET,
+    QUIET,
+    ROOM,
+    SLEEP,
+    SLEEP_END,
+    SLEEP_PLUS,
+    WAKE,
+    follow_from,
+    tick,
+)
 
 ALL_OFF = "button.living_room_all_off"
-SLEEP_END = "sensor.living_room_sleep_timer_end"
 FOLLOW_ROOMS = "sensor.better_media_player_follow_rooms"
 ROOM_CONTROLS = [ALL_OFF, SLEEP, SLEEP_PLUS, SLEEP_END, NIGHT, QUIET, WAKE, PRESET]
 ALWAYS = [ROOM, "switch.living_room_automatic_power", "number.living_room_night_maximum_volume",
@@ -265,9 +276,6 @@ async def test_quiet_follows_the_central_settings(hass, home, freezer):
     assert _hidden(hass, QUIET)
 
 
-MUSIC_ONLY = {"video_player": None, "display": None, "speakers": None, "bass": None}
-
-
 def _registry_log(hass):
     out = []
 
@@ -374,7 +382,7 @@ async def test_a_new_hide_delay_also_for_a_pending_hide(hass, home, freezer):
     assert PRESET not in _shown(hass)
 
 
-# ------------------------------------------------------- from bug injection
+# --------------------------- without plugs, while turning on, central settings
 
 
 async def test_controls_show_at_once_without_plugs(hass, home, freezer):

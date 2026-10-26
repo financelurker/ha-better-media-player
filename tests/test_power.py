@@ -1,4 +1,4 @@
-"""Behaviour of the room controller."""
+"""How the room powers its devices: order, run-downs, timeouts, manual mode, restarts."""
 
 from __future__ import annotations
 
@@ -13,7 +13,10 @@ from custom_components.better_media_player.const import (
 )
 
 from .conftest import BASS, GROUP, KODI, MUSIC, SPEAKERS, TV, TV_POWER, setup_room
-from .helpers import ROOM, call_order, tick
+from .helpers import HOST, ROOM, call_order, tick
+
+MA_COVER = "http://192.168.10.21:8095/imageproxy/abc?size=512&fmt=jpg"
+
 
 # ------------------------------------------------------------------- start
 
@@ -397,9 +400,6 @@ async def test_entity_ids_match_readme(hass, home):
 # ------------------------------------------------------------------ cover art
 
 
-MA_COVER = "http://192.168.10.21:8095/imageproxy/abc?size=512&fmt=jpg"
-
-
 async def test_music_cover_goes_through_ha_proxy(hass, home, hass_client, aioclient_mock):
     """Music Assistant gives an absolute http URL: serve it via the HA image proxy."""
     aioclient_mock.get(MA_COVER, content=b"JPEGDATA", headers={"Content-Type": "image/jpeg"})
@@ -439,8 +439,6 @@ async def test_device_shows_manifest_version(hass, home):
     device = next(iter(dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)))
     assert device.sw_version == version
 
-
-HOST = "switch.kodi_box_plug"
 
 async def test_off_order_host_before_display_with_standby(hass, home, freezer):
     hass.states.async_set(TV_POWER, "80")

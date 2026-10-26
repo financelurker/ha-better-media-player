@@ -17,7 +17,18 @@ from custom_components.better_media_player.const import (
 )
 
 from .conftest import AVR, FOLLOW, GROUP, KODI, MUSIC, SPEAKERS, setup_room
-from .helpers import NIGHT, PRESET, ROOM, music_at, room_volume, select_preset, start_wake, tick, vol
+from .helpers import (
+    MUSIC_ONLY,
+    NIGHT,
+    PRESET,
+    ROOM,
+    music_at,
+    room_volume,
+    select_preset,
+    start_wake,
+    tick,
+    vol,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -243,9 +254,6 @@ async def test_wake_target_is_the_power_on_preset(hass, home, freezer):
     entry.runtime_data.data["room_volume"] = 0.7
     await start_wake(hass, start_volume=0.05, fade_minutes=2)
     assert entry.runtime_data.data["wake"]["target_volume"] == 0.3
-
-
-MUSIC_ONLY = {"video_player": None, "display": None, "speakers": None, "bass": None}
 
 
 async def test_player_dropout_is_no_power_on(hass, home, freezer):

@@ -1,4 +1,4 @@
-"""Night mode: no subwoofer, shorter video times, volume limit, fade back."""
+"""Night mode: no subwoofer, shorter video times, volume limit, fade back; in groups; its event."""
 
 from __future__ import annotations
 
@@ -33,6 +33,9 @@ from .conftest import (
     start_follow,
 )
 from .helpers import NIGHT, ROOM, STATUS, count_calls, music_at, set_night, tick, vol, volume_sets
+
+KNIGHT = "switch.kitchen_night_mode"
+
 
 # ------------------------------------------------------------------ subwoofer
 
@@ -327,14 +330,6 @@ async def test_group_limited_only_when_all_rooms_at_night(hass, house, freezer):
     assert GROUP  # the 'always' group plays no part here
 
 
-KNIGHT = "switch.kitchen_night_mode"
-
-
-async def _sw(hass, entity, on):
-    await hass.services.async_call("switch", "turn_on" if on else "turn_off", {"entity_id": entity}, blocking=True)
-    await hass.async_block_till_done()
-
-
 async def _follow_at_night(hass, house, freezer, kitchen_night=True):
     hass.states.async_set(LIVING_OCC, "on")
     hass.states.async_set(KITCHEN_OCC, "on")
@@ -342,9 +337,9 @@ async def _follow_at_night(hass, house, freezer, kitchen_night=True):
     await start_follow(hass, house)
     await hass.async_block_till_done()
     await tick(hass, freezer, 3)
-    await _sw(hass, NIGHT, True)
+    await set_night(hass, True, entity_id=NIGHT)
     if kitchen_night:
-        await _sw(hass, KNIGHT, True)
+        await set_night(hass, True, entity_id=KNIGHT)
     await tick(hass, freezer, 3)
 
 
@@ -355,13 +350,13 @@ async def test_single_room_member_fades_back(hass, house, freezer):
     await start_follow(hass, house)
     await hass.async_block_till_done()
     await tick(hass, freezer, 3)
-    await _sw(hass, NIGHT, True)
+    await set_night(hass, True, entity_id=NIGHT)
     assert house.members(FOLLOW) == [MUSIC]
     assert vol(hass) == 0.3
     n = len(volume_sets(house, MUSIC))
     living = next(e for e in hass.config_entries.async_entries(DOMAIN) if e.title == "Living Room")
     living.runtime_data.data["room_volume"] = 0.4  # the room's own volume plays no part in the group
-    await _sw(hass, NIGHT, False)
+    await set_night(hass, False, entity_id=NIGHT)
     await tick(hass, freezer, 60, step=5)
     assert 0.3 < vol(hass) < 0.5  # fading
     await tick(hass, freezer, 90, step=5)
@@ -373,8 +368,8 @@ async def test_single_room_member_fades_back(hass, house, freezer):
 
 async def test_both_rooms_leave_together(hass, house, freezer):
     await _follow_at_night(hass, house, freezer)
-    await _sw(hass, NIGHT, False)
-    await _sw(hass, KNIGHT, False)
+    await set_night(hass, False, entity_id=NIGHT)
+    await set_night(hass, False, entity_id=KNIGHT)
     await tick(hass, freezer, 150, step=5)
     assert get_hub(hass).data["volumes"][FOLLOW] == 60
     assert vol(hass, MUSIC) == 0.5
@@ -385,7 +380,7 @@ async def test_paused_group_member_back_at_once(hass, house, freezer):
     await _follow_at_night(hass, house, freezer)
     house.group("paused", house.members(FOLLOW), FOLLOW)
     await hass.async_block_till_done()
-    await _sw(hass, KNIGHT, False)
+    await set_night(hass, False, entity_id=KNIGHT)
     await tick(hass, freezer, 6, step=2)
     assert vol(hass, KITCHEN) == 0.6
     assert vol(hass, MUSIC) == 0.3  # still in night mode
@@ -397,11 +392,11 @@ async def test_other_group_member_back(hass, house, freezer):
     house.kitchen("playing", volume_level=0.6)
     await hass.async_block_till_done()
     await tick(hass, freezer, 12, step=4)  # the group's volume while nobody limits it
-    await _sw(hass, NIGHT, True)
-    await _sw(hass, KNIGHT, True)
+    await set_night(hass, True, entity_id=NIGHT)
+    await set_night(hass, True, entity_id=KNIGHT)
     await tick(hass, freezer, 12, step=4)
     assert vol(hass, GROUP) == 0.3
-    await _sw(hass, KNIGHT, False)
+    await set_night(hass, False, entity_id=KNIGHT)
     await tick(hass, freezer, 150, step=5)
     assert vol(hass, KITCHEN) == 0.6
 
@@ -469,12 +464,11 @@ async def test_night_on_during_start_keeps_bass_off(hass, home, freezer):
     await asyncio.sleep(0)
     assert hass.states.get(STATUS).state == "starting"
     await set_night(hass)
-    await tick(hass, freezer, 8)
-    await tick(hass, freezer, 10)
+    await tick(hass, freezer, 18)
     assert not home.on(BASS)
 
 
-# 6: night mode switched on during the sleep fade: the fade must go on
+# night mode switched on during the sleep fade: the fade must go on
 async def test_night_on_during_sleep_fade_keeps_fading(hass, home, freezer):
     await music_at(hass, home, freezer, 0.5)
     await hass.services.async_call(
@@ -490,7 +484,7 @@ async def test_night_on_during_sleep_fade_keeps_fading(hass, home, freezer):
     assert vol(hass) < 0.25  # still fading down
 
 
-# 7: restart (reload) in the middle of the fade back
+# restart (reload) in the middle of the fade back
 async def test_restart_mid_fade_back_goes_on(hass, home, freezer):
     entry = await music_at(hass, home, freezer, 0.5)
     await set_night(hass)
@@ -504,7 +498,7 @@ async def test_restart_mid_fade_back_goes_on(hass, home, freezer):
     assert vol(hass) == 0.5
 
 
-# 8: quick on/off: subwoofer back
+# quick on/off: subwoofer back
 async def test_quick_on_off_bass_back(hass, home, freezer):
     await music_at(hass, home, freezer, 0.5)
     await set_night(hass)
@@ -513,7 +507,7 @@ async def test_quick_on_off_bass_back(hass, home, freezer):
     assert home.on(BASS)
 
 
-# 9: duplicate commands on night on
+# duplicate commands on night on
 async def test_one_volume_command_on_switch(hass, home, freezer):
     await music_at(hass, home, freezer, 0.5)
     n = len(volume_sets(home, MUSIC))
@@ -676,7 +670,7 @@ async def test_device_triggers(hass, home, freezer):
     assert hits == ["night_mode_on", "night_mode_off"]
 
 
-# --------------------------------------------------------------- from review
+# --------------------------------------------------------------- event: timing
 
 
 async def test_switched_during_a_source_switch_comes_when_it_is_done(hass, home, freezer):

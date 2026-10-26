@@ -36,16 +36,22 @@ from .conftest import (
     setup_hub,
     setup_room,
 )
-from .helpers import KROOM, ROOM, follow_from, quiet_leaves_and_cuts_speakers, stop_follow, tick
+from .helpers import KROOM, ROOM, follow_from, quiet_leaves_and_cuts_speakers, tick
 
 START = "button.living_room_follow_me"
-STOP = "button.living_room_stop_follow_me"
+FOLLOW_STOP = "button.living_room_stop_follow_me"
 KSTART = "button.kitchen_follow_me"
-KSTOP = "button.kitchen_stop_follow_me"
+KITCHEN_STOP = "button.kitchen_stop_follow_me"
+TRACK = "library://track/42"
 
 
 def _calls(home, service):
     return [c[2] for c in home.calls if c[1] == service]
+
+
+async def stop_follow(hass, room=ROOM) -> None:
+    await hass.services.async_call(DOMAIN, "stop_follow", {"entity_id": room}, blocking=True)
+    await hass.async_block_till_done()
 
 
 # ------------------------------------------------------------------ start
@@ -113,7 +119,7 @@ async def test_buttons_shown_only_when_usable(hass, house, freezer):
     reg = er.async_get(hass)
     hidden = er.RegistryEntryHider.INTEGRATION
     assert reg.async_get(START).hidden_by == hidden  # nothing plays
-    assert reg.async_get(STOP).hidden_by == hidden
+    assert reg.async_get(FOLLOW_STOP).hidden_by == hidden
 
     house.music("playing")
     await hass.async_block_till_done()
@@ -125,14 +131,14 @@ async def test_buttons_shown_only_when_usable(hass, house, freezer):
     assert get_hub(hass).active
     await tick(hass, freezer, 4)  # hidden after the hide delay (3 s)
     assert reg.async_get(START).hidden_by == hidden  # follow me runs: no start anywhere
-    assert reg.async_get(STOP).hidden_by is None
-    assert reg.async_get(KSTOP).hidden_by is None
+    assert reg.async_get(FOLLOW_STOP).hidden_by is None
+    assert reg.async_get(KITCHEN_STOP).hidden_by is None
 
-    await hass.services.async_call("button", "press", {"entity_id": STOP}, blocking=True)
+    await hass.services.async_call("button", "press", {"entity_id": FOLLOW_STOP}, blocking=True)
     await hass.async_block_till_done()
     assert not get_hub(hass).active
     await tick(hass, freezer, 4)
-    assert reg.async_get(STOP).hidden_by == hidden
+    assert reg.async_get(FOLLOW_STOP).hidden_by == hidden
 
 
 async def test_pressing_a_hidden_start_fails(hass, house):
@@ -788,7 +794,7 @@ async def test_short_pause_keeps_room_off(hass, house, freezer):
     assert MUSIC not in house.members(FOLLOW), "short pause ended the session: turned-off room rejoined"
 
 
-# ------------------------------------------------- review of follow me 2
+# ---------------------------------------------------- failures, stops, reloads
 
 
 def _hub_entry(hass):
@@ -1001,9 +1007,6 @@ async def test_start_while_left_in_the_paused_follow_player_says_so(hass, house)
     err = await _start_error(hass)
     assert err.translation_key == "start_follow_paused"
     assert err.translation_placeholders["group"] == "All Players (follow)"
-
-
-TRACK = "library://track/42"
 
 
 def _seeks(house, entity_id):

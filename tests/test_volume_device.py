@@ -261,6 +261,27 @@ async def test_no_volume_note_with_a_device(hass, home):
     assert result["type"] is FlowResultType.CREATE_ENTRY, "no note: the device sets the volume"
 
 
+async def test_a_room_player_cannot_be_the_volume_device(hass, home):
+    from homeassistant import config_entries
+
+    home.group("idle", [], FOLLOW)
+    await setup_room(hass)  # media_player.living_room exists
+    assert er.async_get(hass).async_get(ROOM).platform == DOMAIN
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "room"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"name": "Kitchen"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"audio_player": KITCHEN, "special": {}})
+    sections = {"actions": {}, "standby": {}, "follow": {}}
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_VOLUME_CONTROL: VOLUME_DEVICE, CONF_VOLUME_ENTITY: ROOM, **sections}
+    )
+    assert result["errors"] == {CONF_VOLUME_ENTITY: "volume_is_room"}
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_VOLUME_CONTROL: VOLUME_DEVICE, CONF_VOLUME_ENTITY: FOLLOW, **sections}
+    )
+    assert result["errors"] == {CONF_VOLUME_ENTITY: "group_player"}
+
+
 # ------------------------------------------------------ groups and follow me
 
 
@@ -342,7 +363,7 @@ async def _to_device_mode(hass, entry):
     await hass.async_block_till_done()
 
 
-# ------------------------------------------------------------- follow me
+# ----------------------------------------------- follow me with a volume device
 
 
 async def test_follow_from_a_device_room_keeps_follow_me_volume(hass, home, freezer):
@@ -554,31 +575,7 @@ async def test_mode_change_during_sleep_fade_restores_the_player(hass, home, fre
     assert vol(hass, MUSIC) == 0.8, "the player stays at the faded level for good"
 
 
-# ------------------------------------------------------------------ setup
-
-
-async def test_a_room_player_cannot_be_the_volume_device(hass, home):
-    from homeassistant import config_entries
-
-    home.group("idle", [], FOLLOW)
-    await setup_room(hass)  # media_player.living_room exists
-    assert er.async_get(hass).async_get(ROOM).platform == DOMAIN
-    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "room"})
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"name": "Kitchen"})
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"audio_player": KITCHEN, "special": {}})
-    sections = {"actions": {}, "standby": {}, "follow": {}}
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_VOLUME_CONTROL: VOLUME_DEVICE, CONF_VOLUME_ENTITY: ROOM, **sections}
-    )
-    assert result["errors"] == {CONF_VOLUME_ENTITY: "volume_is_room"}
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_VOLUME_CONTROL: VOLUME_DEVICE, CONF_VOLUME_ENTITY: FOLLOW, **sections}
-    )
-    assert result["errors"] == {CONF_VOLUME_ENTITY: "group_player"}
-
-
-# ------------------------------------------------------- from bug injection
+# ------------------------------------- coarse numbers, own levels, follow wake
 
 
 async def test_coarse_number_night_fade_back(hass, home, freezer):

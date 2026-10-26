@@ -26,14 +26,19 @@ WAKE = "sensor.living_room_wake"
 SNOOZE = "button.living_room_snooze"
 SLEEP = "number.living_room_sleep_timer"
 SLEEP_PLUS = "button.living_room_sleep_timer_15_min"
+SLEEP_END = "sensor.living_room_sleep_timer_end"
 KROOM = "media_player.kitchen"
+HOST = "switch.kodi_box_plug"  # the plug of the video player's hardware
+# setup_room overrides for a room with music only
+MUSIC_ONLY = {"video_player": None, "display": None, "speakers": None, "bass": None}
 
 
 # ------------------------------------------------------------------- time
 
 
 async def tick(hass, freezer, seconds: float = 3, step: float = 1, between=None) -> None:
-    """Let time pass in steps, so periodic checks and timeouts fire on their way."""
+    """Let time pass in steps, so periodic checks and timeouts fire on their way
+    (between: called after each step, e.g. to deliver a late report)."""
     left = seconds
     while left > 0:
         freezer.tick(timedelta(seconds=min(step, left)))
@@ -96,8 +101,8 @@ def volume_sets(home, entity_id: str) -> list[float]:
 # ---------------------------------------------------------------- actions
 
 
-async def set_night(hass, on: bool = True) -> None:
-    await hass.services.async_call("switch", "turn_on" if on else "turn_off", {"entity_id": NIGHT}, blocking=True)
+async def set_night(hass, on: bool = True, entity_id: str = NIGHT) -> None:
+    await hass.services.async_call("switch", "turn_on" if on else "turn_off", {"entity_id": entity_id}, blocking=True)
     await hass.async_block_till_done()
 
 
@@ -123,11 +128,6 @@ async def follow_from(hass, house, player=MUSIC, room=ROOM, volume=0.25) -> None
         house.kitchen("playing", volume_level=volume)
     await hass.async_block_till_done()
     await hass.services.async_call(DOMAIN, "start_follow", {"entity_id": room}, blocking=True)
-    await hass.async_block_till_done()
-
-
-async def stop_follow(hass, room=ROOM) -> None:
-    await hass.services.async_call(DOMAIN, "stop_follow", {"entity_id": room}, blocking=True)
     await hass.async_block_till_done()
 
 

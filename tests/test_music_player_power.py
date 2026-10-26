@@ -17,13 +17,13 @@ from .helpers import (
     wake_playing,
 )
 
-MUSIC_ONLY = {"video_player": None, "display": None}
+NO_VIDEO = {"video_player": None, "display": None}
 
 
 async def _room(hass, home, state="off"):
     home.ma_power = True
     home.music(state)
-    entry = await setup_room(hass, **MUSIC_ONLY)
+    entry = await setup_room(hass, **NO_VIDEO)
     entry.runtime_data.data["last_source"] = "audio"
     return entry
 
@@ -104,7 +104,7 @@ async def test_the_room_turns_it_on_and_off(hass, home, freezer):
 
 async def test_without_power_control_idle_is_not_in_use(hass, home, freezer):
     home.music("off")
-    entry = await setup_room(hass, **MUSIC_ONLY)
+    entry = await setup_room(hass, **NO_VIDEO)
     entry.runtime_data.data["last_source"] = "audio"
     home.music("idle")
     await hass.async_block_till_done()
@@ -144,7 +144,7 @@ async def test_only_turn_on_is_no_power_control(hass, home, freezer):
     from .conftest import MA_FEATURES
 
     home.music("off")
-    entry = await setup_room(hass, **MUSIC_ONLY)
+    entry = await setup_room(hass, **NO_VIDEO)
     entry.runtime_data.data["last_source"] = "audio"
     hass.states.async_set(MUSIC, "idle", {"supported_features": MA_FEATURES | F.TURN_ON, "mass_player_type": "player"})
     await hass.async_block_till_done()
@@ -264,7 +264,7 @@ async def test_without_speakers_of_the_room_it_is_left_alone(hass, home, freezer
     assert not calls_to(home, MUSIC, "turn_off"), "no devices to go off with"
 
 
-# ------------------------------------------------------------------ review
+# ----------------------------------------------- restarts, failures, run-downs
 
 
 async def test_speakers_not_reported_yet_after_a_restart(hass, home, freezer):

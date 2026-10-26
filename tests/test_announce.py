@@ -264,10 +264,10 @@ async def test_a_sleep_fade_goes_on_after_it(hass, home, freezer):
     await hass.services.async_call(
         DOMAIN, "set_sleep_timer", {"entity_id": ROOM, "minutes": 10, "fade_minutes": 10}, blocking=True
     )
-    await tick(hass, freezer, 60, 10)
+    await tick(hass, freezer, 60, step=10)
     assert entry.runtime_data.sleep.fading_player(MUSIC)
     await announce(hass, volume=0.8)
-    await tick(hass, freezer, 60, 10)
+    await tick(hass, freezer, 60, step=10)
     assert entry.runtime_data.sleep.fading_player(MUSIC), "not taken for a change by hand"
     assert hass.states.get(MUSIC).attributes["volume_level"] < 0.5
 
@@ -304,7 +304,7 @@ async def test_part_of_a_group_gets_it_on_its_own_players(hass, house, freezer):
     assert set(house.members(FOLLOW)) == {MUSIC, KITCHEN}, "the group plays on"
 
 
-# ------------------------------------------------------------ bug injection
+# ---------------------------------------------- the room holds still meanwhile
 
 
 async def test_a_room_that_is_off_takes_the_music_player(hass, home, freezer):
@@ -342,7 +342,7 @@ async def test_the_sleep_timer_waits_for_it(hass, home, freezer):
     await hass.services.async_call(
         DOMAIN, "set_sleep_timer", {"entity_id": ROOM, "minutes": 1, "fade_minutes": 0}, blocking=True
     )
-    await tick(hass, freezer, 50, 10)
+    await tick(hass, freezer, 50, step=10)
     home.announce_hold = asyncio.Event()
     task = speak_later(hass)
     await settle_held(hass)
@@ -359,14 +359,14 @@ async def test_a_preset_fade_goes_on_after_it(hass, home, freezer):
     await hass.services.async_call(
         DOMAIN, "set_volume_preset", {"entity_id": ROOM, "preset": "party", "fade_seconds": 10}, blocking=True
     )
-    await tick(hass, freezer, 2, 0.5)
+    await tick(hass, freezer, 2, step=0.5)
     await announce(hass, volume=0.9)
-    await tick(hass, freezer, 15, 0.5)
+    await tick(hass, freezer, 15, step=0.5)
     assert hass.states.get(MUSIC).attributes["volume_level"] == 0.7
     assert hass.states.get(PRESET).state == "party"
 
 
-# ------------------------------------------------------------------- review
+# ----------------------------------------------------- groups, films, failures
 
 
 async def test_a_device_target_announces_once(hass, home, freezer):
@@ -500,13 +500,13 @@ async def test_the_nights_fade_back_goes_on_in_the_time_it_had_left(hass, home, 
     await hass.services.async_call("switch", "turn_on", {"entity_id": NIGHT}, blocking=True)
     await tick(hass, freezer, 5)
     await hass.services.async_call("switch", "turn_off", {"entity_id": NIGHT}, blocking=True)
-    await tick(hass, freezer, 60, 5)  # half of the 2 min fade back
+    await tick(hass, freezer, 60, step=5)  # half of the 2 min fade back
     await announce(hass)
-    await tick(hass, freezer, 70, 5)
+    await tick(hass, freezer, 70, step=5)
     assert hass.states.get(MUSIC).attributes["volume_level"] == 0.6, "done within the 2 min"
 
 
-# ------------------------------------------------------------ second review
+# ---------------------------------------------- protection, rooms that are off
 
 
 async def test_a_failed_start_keeps_another_announcements_protection(hass, home, freezer):

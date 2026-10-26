@@ -251,7 +251,7 @@ async def test_not_between_two_systems(hass, ma_living_only, home, freezer):
     assert err.value.translation_key == "handover_not_supported"
 
 
-# ----------------------------------------------------------- from review
+# ------------------------------------------------------ volume, groups, errors
 
 
 async def test_the_destination_plays_at_its_room_volume(hass, rooms, freezer):

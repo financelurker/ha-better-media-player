@@ -136,7 +136,7 @@ async def test_with_a_volume_device_the_player_keeps_its_volume(hass, home, free
     assert levels[0] == 0.5, "a number asked for is set on the player"
 
 
-# ------------------------------------------------------------------ review
+# ----------------------------------------------- playing again, volume, groups
 
 
 async def test_a_real_player_plays_the_whole_clip_first(hass, home, freezer):
@@ -222,7 +222,7 @@ async def test_a_player_in_a_group_is_left_alone(hass, home, freezer):
     assert not [p for p in _played(home, MUSIC) if p[0] == "play_media"]
 
 
-# ------------------------------------------------------------ second review
+# ------------------------------------------------------- films, night, streams
 
 
 async def test_music_is_announced_on_the_music_player_also_with_kodi_idle(hass, home, freezer):

@@ -16,10 +16,7 @@ from custom_components.better_media_player.const import DOMAIN, EVENT_SLEEP_TIME
 from custom_components.better_media_player.hub import get_hub
 
 from .conftest import BASS, FOLLOW, KODI, LIVING_OCC, MUSIC, SPEAKERS, TV, setup_room, start_follow
-from .helpers import ROOM, SLEEP, SLEEP_PLUS, count_calls, tick, vol
-
-END = "sensor.living_room_sleep_timer_end"
-
+from .helpers import ROOM, SLEEP, SLEEP_END, SLEEP_PLUS, count_calls, tick, vol
 
 async def _playing_music(hass, home, **overrides):
     entry = await setup_room(hass, **overrides)
@@ -42,7 +39,7 @@ async def test_fade_then_room_off_and_restore(hass, home, freezer):
     await _playing_music(hass, home)
     await _set(hass, 10, fade=5)
     assert hass.states.get(SLEEP).state == "10.0"
-    assert hass.states.get(END).state != "unknown"
+    assert hass.states.get(SLEEP_END).state != "unknown"
     assert hass.states.get(ROOM).attributes["sleep_timer_ends_at"] is not None
 
     await tick(hass, freezer, 5 * 60)
@@ -61,7 +58,7 @@ async def test_fade_then_room_off_and_restore(hass, home, freezer):
     assert count_calls(home, MUSIC, "media_stop") == 1
     assert vol(hass) == 0.5
     assert hass.states.get(SLEEP).state == "0.0"
-    assert hass.states.get(END).state == "unknown"
+    assert hass.states.get(SLEEP_END).state == "unknown"
     assert [e.data["reason"] for e in events] == ["expired"]
     assert events[0].data["entity_id"] == ROOM
 
@@ -277,7 +274,7 @@ async def test_expired_during_downtime_waits_for_ha_start(hass, home, freezer):
     assert hass.states.get(SLEEP).state == "0.0"
 
 
-# 1 ------------------------------------------------------------ late volume report
+# ------------------------------------------------------------ late volume report
 async def test_late_volume_report_aborts_own_fade(hass, home, freezer):
     await _playing_music(hass, home)
     original = home.handle
@@ -301,7 +298,7 @@ async def test_late_volume_report_aborts_own_fade(hass, home, freezer):
     assert hass.states.get(ROOM).attributes["sleep_timer_fading"] is True, "own fade taken as external change"
 
 
-# 2 ------------------------------------------- user change right before cancel/+15/end
+# ------------------------------------------- user change right before cancel/+15/end
 async def test_user_volume_then_cancel_keeps_user_volume(hass, home, freezer):
     await _playing_music(hass, home)
     await _set(hass, 3, fade=3)
@@ -336,7 +333,7 @@ async def test_user_volume_in_last_step_then_expiry(hass, home, freezer):
     assert vol(hass) == 0.4, "user volume overwritten by restore"
 
 
-# 3 --------------------------------------------------- follow base volume polluted
+# --------------------------------------------------- follow base volume polluted
 async def test_fade_pollutes_follow_base_volume(hass, house, freezer):
     original = house.handle
 
@@ -363,7 +360,7 @@ async def test_fade_pollutes_follow_base_volume(hass, house, freezer):
     assert stored == pytest.approx(60, abs=1), f"follow base volume now {stored}"
 
 
-# 4 ------------------------------------------------ auto power off: never cancelled
+# ------------------------------------------------ auto power off: never cancelled
 async def test_auto_power_off_room_off_keeps_stale_timer(hass, home, freezer):
     await setup_room(hass)
     await hass.services.async_call(
@@ -377,7 +374,7 @@ async def test_auto_power_off_room_off_keeps_stale_timer(hass, home, freezer):
     assert hass.states.get(SLEEP).state == "0.0", "timer survives a room that went fully off"
 
 
-# 5 ------------------------------------------- HA start with players not yet known
+# ------------------------------------------- HA start with players not yet known
 async def test_restart_with_unavailable_states_keeps_timer(hass, home, freezer):
     events = async_capture_events(hass, EVENT_SLEEP_TIMER_FINISHED)
     entry = await _playing_music(hass, home)
@@ -402,7 +399,7 @@ async def test_restart_with_unavailable_states_keeps_timer(hass, home, freezer):
     assert hass.states.get(SLEEP).state != "0.0"
 
 
-# 6 ----------------------------------------------- fade start is saved right away
+# ----------------------------------------------- fade start is saved right away
 async def test_fade_start_saved_at_once(hass, home, freezer, hass_storage):
     entry = await _playing_music(hass, home)
     await _set(hass, 2, fade=2)
@@ -411,7 +408,7 @@ async def test_fade_start_saved_at_once(hass, home, freezer, hass_storage):
     assert stored["fade_from"] == 0.5
 
 
-# 7 ------------------------------------------- someone set a volume: restore dropped
+# ------------------------------------------- someone set a volume: restore dropped
 async def test_restore_dropped_when_volume_set_meanwhile(hass, home, freezer):
     entry = await setup_room(hass)
     home.kodi_boots = True
@@ -427,7 +424,7 @@ async def test_restore_dropped_when_volume_set_meanwhile(hass, home, freezer):
     assert entry.runtime_data.data["volume_restore"] == {}
 
 
-# 8 ------------------------------------------- timer end during a manual "off"
+# ------------------------------------------- timer end during a manual "off"
 async def test_no_second_off_while_turning_off(hass, home, freezer):
     entry = await _playing_music(hass, home)
     ctrl = entry.runtime_data
