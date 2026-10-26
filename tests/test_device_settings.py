@@ -134,7 +134,7 @@ async def test_central_settings_are_entities(hass, home):
     ):
         assert reg.async_get(entity_id).entity_category is EntityCategory.CONFIG
     await _set(hass, "number.better_media_player_follow_me_default_volume", 40)
-    assert hub.runtime_data.base_volume(FOLLOW) == 40  # nothing remembered yet: the default
+    assert hub.runtime_data.volume.base_volume(FOLLOW) == 40  # nothing remembered yet: the default
 
 
 # ------------------------------------------------------------------ migration

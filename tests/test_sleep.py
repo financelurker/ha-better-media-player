@@ -13,7 +13,7 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.util import dt as dt_util
 
 from custom_components.better_media_player.const import DOMAIN, EVENT_SLEEP_TIMER_FINISHED
-from custom_components.better_media_player.hub import get_hub
+from custom_components.better_media_player.follow import get_hub
 
 from .conftest import BASS, FOLLOW, KODI, LIVING_OCC, MUSIC, SPEAKERS, TV, setup_room, start_follow
 from .helpers import ROOM, SLEEP, SLEEP_END, SLEEP_PLUS, count_calls, tick, vol

@@ -298,7 +298,7 @@ async def test_prewarm_is_no_power_on(hass, home, freezer):
     ctrl = entry.runtime_data
     await tick(hass, freezer, 3)
     ctrl.data["room_volume"] = 0.45
-    ctrl.set_prewarm(True)
+    ctrl.follow.set_prewarm(True)
     await hass.async_block_till_done()
     await tick(hass, freezer, 3)
     assert home.on(SPEAKERS)

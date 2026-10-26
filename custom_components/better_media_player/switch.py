@@ -32,7 +32,7 @@ async def async_setup_entry(
         role = ctrl.power.roles.get(role_key)
         if role is not None and ctrl.power.can_standby(role):
             entities.append(SettingSwitch(entry, ctrl, f"{prefix}_standby"))
-    if ctrl.follow_capable:
+    if ctrl.follow.capable:
         entities.append(SettingSwitch(entry, ctrl, "prewarm"))
         entities.append(SettingSwitch(entry, ctrl, "wake_detect_left"))
     prune_entities(hass, entry, "switch", entities)
@@ -104,7 +104,7 @@ class QuietSwitch(ControlEntity, SwitchEntity):
 
     @property
     def usable(self) -> bool:
-        return self.ctrl.follow_room or self.ctrl.quiet
+        return self.ctrl.follow.takes_part or self.ctrl.quiet
 
 
     @property

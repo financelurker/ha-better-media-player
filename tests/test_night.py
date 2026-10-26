@@ -15,7 +15,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.setup import async_setup_component
 
 from custom_components.better_media_player.const import DOMAIN, EVENT_NIGHT_MODE, EVENT_SOURCE_CHANGED
-from custom_components.better_media_player.hub import get_hub
+from custom_components.better_media_player.follow import get_hub
 
 from .conftest import (
     BASS,

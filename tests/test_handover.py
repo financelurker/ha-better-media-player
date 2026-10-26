@@ -120,7 +120,7 @@ async def test_music_cannot_play_on_while_moving(hass, rooms, freezer):
 
 
 async def test_follow_me_ends_into_the_destination(hass, rooms, freezer):
-    from custom_components.better_media_player.hub import get_hub
+    from custom_components.better_media_player.follow import get_hub
 
     home = rooms
     home.group("idle", [], FOLLOW)

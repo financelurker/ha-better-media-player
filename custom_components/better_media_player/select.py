@@ -20,7 +20,7 @@ from .const import (
 )
 from .room.controller import RoomController
 from .entity import BetterMediaPlayerEntity, ControlEntity, prune_entities
-from .hub import get_rooms
+from .room import get_rooms
 
 
 async def async_setup_entry(

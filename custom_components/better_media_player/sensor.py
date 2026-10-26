@@ -29,7 +29,7 @@ async def async_setup_entry(
         SleepEndSensor(entry, ctrl, "sleep_timer_end"),
         WakeSensor(entry, ctrl, "wake"),
     ]
-    if ctrl.follow_capable:
+    if ctrl.follow.capable:
         entities.append(FollowStateSensor(entry, ctrl, "follow_state"))
     async_add_entities(entities)
 
@@ -101,11 +101,11 @@ class FollowStateSensor(BetterMediaPlayerEntity, SensorEntity):
 
     @property
     def native_value(self) -> str:
-        return self.ctrl.follow_state
+        return self.ctrl.follow.state
 
     @property
     def extra_state_attributes(self) -> dict:
-        return {"presence": self.ctrl.presence(), "prewarm": self.ctrl.prewarm}
+        return {"presence": self.ctrl.follow.presence(), "prewarm": self.ctrl.follow.prewarm}
 
 
 class FollowSensor(Visibility, HubEntity, SensorEntity):

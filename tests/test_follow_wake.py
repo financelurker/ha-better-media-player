@@ -9,7 +9,8 @@ from homeassistant.exceptions import ServiceValidationError
 
 from custom_components.better_media_player.room.browser import KIND_ITEM, make_id
 from custom_components.better_media_player.const import DOMAIN, EVENT_WAKE_FINISHED
-from custom_components.better_media_player.hub import FollowSession, get_hub
+from custom_components.better_media_player.follow import get_hub
+from custom_components.better_media_player.follow.manager import FollowSession
 
 from .conftest import FOLLOW, KITCHEN, KITCHEN_OCC, LIVING_OCC, MUSIC, SPEAKERS, setup_hub, setup_room
 from .helpers import KROOM, ROOM, WAKE, settle, tick, vol

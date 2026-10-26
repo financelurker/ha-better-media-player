@@ -33,7 +33,6 @@ from homeassistant.const import (
     SERVICE_TURN_OFF,
     SERVICE_TURN_ON,
     STATE_OFF,
-    STATE_ON,
     STATE_STANDBY,
 )
 from homeassistant.core import (
@@ -55,16 +54,11 @@ from homeassistant.helpers.storage import Store
 
 from ..const import (
     CONF_AUDIO_RUN_DOWN,
-    CONF_OCCUPANCY,
-    CONF_PRESENCE_RUN_DOWN,
-    CONF_PREWARM,
     CONF_VOLUME_CONTROL,
     CONF_VOLUME_ENTITY,
-    CONF_VOLUME_OFFSET,
     DEFAULTS,
     DOMAIN,
     ENTITY_DEFAULTS,
-    FOLLOW_INACTIVE,
     ROLE_AUDIO,
     ROLE_AUDIO_HOST,
     ROLE_BASS,
@@ -85,7 +79,8 @@ from ..const import (
     TICK_SECONDS,
     VOLUME_DEVICE,
 )
-from ..hub import get_hub, get_rooms
+from ..follow import get_hub
+from . import get_rooms
 from .sleep import REASON_ROOM_OFF, SleepTimer
 from .announce import RoomAnnouncer
 from ..players import backend_for
@@ -95,6 +90,7 @@ from .source_event import SourceWatch
 from .output import DeviceOutput, PlayerOutput
 from .volume import RoomVolume
 from .wake import PHASE_STARTING, REASON_ROOM_OFF as WAKE_ROOM_OFF, WakeAlarm
+from .follow import RoomFollow
 from .handover import RoomHandover
 from .power import GROUP_ACTIVE_STATES, NOT_AVAILABLE, POWERED_STATES, RoomPower
 from .sequence import PowerSequence
@@ -172,10 +168,7 @@ class RoomController:
         self.manual = False
         self.error: str | None = None
 
-        # follow me
-        self.occupancy: list[str] = list(o.get(CONF_OCCUPANCY) or [])
-        self.prewarm = False
-        self.follow_state = FOLLOW_INACTIVE
+        self.follow = RoomFollow(self)
 
         # where the room's volume is heard
         device = o.get(CONF_VOLUME_ENTITY) if o.get(CONF_VOLUME_CONTROL) == VOLUME_DEVICE else None
@@ -422,12 +415,6 @@ class RoomController:
         """Started, and the room's source is known (its players have reported)."""
         return self._started and self.source_watch.ready
 
-    @property
-    def follow_room(self) -> bool:
-        """The room takes part in follow me (follow me is set up)."""
-        hub = self.hub
-        return self.follow_capable and hub is not None and hub.follow_player is not None
-
     def vol(self, src: Source) -> PlayerOutput | DeviceOutput:
         """Where this source's volume is heard (room features act there)."""
         return self.volume_device or self._outputs[src.key]
@@ -478,16 +465,8 @@ class RoomController:
         if not self.source_active_raw(src) or src.suppressed:
             return False
         if src.key == SOURCE_AUDIO:
-            return self._group_counts(src)
+            return self.follow.group_counts(src)
         return True
-
-    def _group_counts(self, src: Source) -> bool:
-        """Group playback counts, except follow me in a quiet room (unless it wakes there)."""
-        hub = get_hub(self.hass)
-        groups = src.backend.groups_of(src.player)
-        if hub is None or not groups or not self.quiet or self.wake.follow_holding:
-            return True
-        return any(not hub.follows(g) for g in groups)
 
     def source_ready(self, src: Source) -> bool:
         """Started far enough to be used."""
@@ -498,22 +477,12 @@ class RoomController:
             return state in POWERED_STATES
         return True
 
-    # ------------------------------------------------------------- follow me
+    # ------------------------------------------------------------- what plays
 
     @property
     def audio_player(self) -> str | None:
         src = self.sources.get(SOURCE_AUDIO)
         return src.player if src else None
-
-    @property
-    def follow_capable(self) -> bool:
-        return self.audio_player is not None and bool(self.occupancy)
-
-    @property
-    def follow_tracked_entities(self) -> list[str]:
-        out = list(self.occupancy)
-        out += [s.player for s in self.sources.values()]
-        return out
 
     @property
     def quiet(self) -> bool:
@@ -533,44 +502,6 @@ class RoomController:
             and self.source_playing(src)
             and not src.backend.groups_of(src.player)
         )
-
-    @property
-    def prewarm_enabled(self) -> bool:
-        return bool(self.setting(CONF_PREWARM))
-
-    @property
-    def presence_run_down(self) -> float:
-        return float(self.setting(CONF_PRESENCE_RUN_DOWN)) * 60.0
-
-    @property
-    def volume_offset(self) -> float:
-        return float(self.setting(CONF_VOLUME_OFFSET))
-
-    def presence(self) -> str:
-        """'present', 'empty' or 'unknown' (all sensors unavailable)."""
-        known = False
-        for entity_id in self.occupancy:
-            state = self._state(entity_id)
-            if state is None or state.state in NOT_AVAILABLE:
-                continue
-            known = True
-            if state.state == STATE_ON:
-                return "present"
-        return "empty" if known else "unknown"
-
-    @callback
-    def set_follow_state(self, state: str) -> None:
-        if self.follow_state != state:
-            self.follow_state = state
-            self._notify()
-
-    @callback
-    def set_prewarm(self, on: bool) -> None:
-        if self.prewarm == on:
-            return
-        self.prewarm = on
-        if self._started:
-            self._spawn(self.async_update("prewarm"))
 
     # ------------------------------------------------------------- properties
 
@@ -991,7 +922,7 @@ class RoomController:
         self.announce.async_room_off()
         if (hub := get_hub(self.hass)) is not None:
             hub.room_turned_off(self)
-        self.prewarm = False
+        self.follow.prewarm = False
         # flag everything first: state events during the awaits below must not
         # start the room again
         for src in self.sources.values():
@@ -1015,7 +946,7 @@ class RoomController:
         self.data["quiet"] = on
         self._save()
         if on:
-            self.prewarm = False
+            self.follow.prewarm = False
             hub = get_hub(self.hass)
             if hub is not None:
                 await hub.async_update("quiet")

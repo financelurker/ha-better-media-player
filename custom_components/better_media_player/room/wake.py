@@ -207,7 +207,7 @@ class WakeAlarm:
             raise HomeAssistantError(f"Unknown source: {key}")
         if follow:
             hub = ctrl.hub
-            if hub is None or key != "audio" or not ctrl.follow_capable:
+            if hub is None or key != "audio" or not ctrl.follow.capable:
                 raise ServiceValidationError(
                     translation_domain=DOMAIN,
                     translation_key="follow_wake",
@@ -330,11 +330,11 @@ class WakeAlarm:
             join_volume = None
         if w.get("follow") and w.get("started_once") and w.get("playing_since"):
             # snooze over (or a restart): back into the group
-            w["follow"] = await hub.async_wake_resume(self.ctrl, join_volume)
+            w["follow"] = await hub.wake.async_resume(self.ctrl, join_volume)
         else:
             data = w.get("data") or {}
             media = {k: data[k] for k in ("media_content_id", "media_content_type") if data.get(k)}
-            w["follow"] = await hub.async_wake_start(self.ctrl, media, join_volume)
+            w["follow"] = await hub.wake.async_start(self.ctrl, media, join_volume)
             w["started_once"] = True
         self.ctrl.data.setdefault("last_source", "audio")
 
@@ -551,7 +551,7 @@ class WakeAlarm:
         if w.get("follow") is not None:
             # only this room snoozes: it leaves the group, the others play on
             if (hub := ctrl.hub) is not None:
-                await hub.async_wake_snooze(ctrl)
+                await hub.wake.async_snooze(ctrl)
         elif ctrl.source_playing(src):
             if can_pause:
                 await ctrl._player(src, "media_pause")

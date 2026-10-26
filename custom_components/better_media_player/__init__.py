@@ -30,7 +30,8 @@ from .const import (
 )
 from .room.announce import async_setup_services
 from .room.controller import RoomController
-from .hub import FollowManager, get_rooms
+from .follow.manager import FollowManager
+from .room import get_rooms
 from .issues import async_setup_issues, get_checker
 
 type BetterMediaPlayerConfigEntry = ConfigEntry[RoomController | FollowManager]
@@ -138,7 +139,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: BetterMediaPlayerConfig
         if is_hub(entry):
             hass.data[DOMAIN].pop("hub", None)
             for room in get_rooms(hass).values():
-                room.set_prewarm(False)
+                room.follow.set_prewarm(False)
                 room.notify()  # no follow me without the central entry
     return ok
 
