@@ -194,14 +194,14 @@ async def test_two_at_once_on_one_player_one_after_the_other(hass, home, freezer
     assert hass.states.get(MUSIC).attributes["volume_level"] == 0.4
 
 
-async def test_without_an_id_to_play_again_it_resumes(hass, home, freezer):
+async def test_without_an_id_to_play_again_it_is_not_started(hass, home, freezer):
     await _room(hass, home, freezer)
     home.set(MUSIC, "playing", media_content_id=None)
     await hass.async_block_till_done()
     home.played.clear()
     await _speak(hass)
     services = [s for s, _d in _played(home, MUSIC)]
-    assert services.count("play_media") == 1 and "media_play" in services
+    assert services.count("play_media") == 1 and "media_play" not in services, "media_play would play the clip"
 
 
 async def test_kodis_ids_are_not_played_again(hass, home, freezer):
@@ -214,7 +214,7 @@ async def test_kodis_ids_are_not_played_again(hass, home, freezer):
     await _speak(hass)
     services = [s for s, _d in _played(home, KODI)]
     assert services.count("play_media") == 1, "only the announcement"
-    assert "media_play" in services
+    assert "media_play" not in services
 
 
 async def test_the_volume_comes_back_before_what_played(hass, home, freezer):
@@ -237,3 +237,99 @@ async def test_a_player_in_a_group_is_left_alone(hass, home, freezer):
     with pytest.raises(ServiceValidationError):
         await _speak(hass)
     assert not [p for p in _played(home, MUSIC) if p[0] == "play_media"]
+
+
+
+# ------------------------------------------------------------ second review
+
+
+async def test_music_is_announced_on_the_music_player_also_with_kodi_idle(hass, home, freezer):
+    await _room(hass, home, freezer)
+    home.kodi("idle")
+    await hass.async_block_till_done()
+    home.played.clear()
+    await _speak(hass)
+    assert not [p for p in _played(home, KODI) if p[0] == "play_media"]
+    assert ("play_media", TTS) in [(s, d.get("media_content_id")) for s, d in _played(home, MUSIC)]
+
+
+async def test_a_film_with_paused_music_keeps_both(hass, home, freezer):
+    await _film(hass, home, freezer, music="paused")
+    await _speak(hass)
+    music = [(s, d.get("media_content_id")) for s, d in _played(home, MUSIC) if s in ("play_media", "media_pause")]
+    assert music == [("play_media", TTS), ("play_media", "track-7"), ("media_pause", None)]
+    kodi = [s for s, _d in _played(home, KODI) if s in ("media_pause", "media_play", "play_media")]
+    assert kodi == ["media_pause", "media_play"], "the film is paused and goes on, not replaced"
+
+
+async def test_at_night_the_volume_comes_back_too(hass, home, freezer):
+    await _room(hass, home, freezer, volume=0.25)
+    await hass.services.async_call("switch", "turn_on", {"entity_id": NIGHT}, blocking=True)
+    await hass.async_block_till_done()
+    home.played.clear()
+    await _announce(hass, volume=0.9)
+    levels = [d["volume_level"] for s, d in _played(home, MUSIC) if s == "volume_set"]
+    assert levels == [0.3, 0.25]
+
+
+async def test_something_started_meanwhile_is_not_replaced(hass, home, freezer):
+    from .test_announce import _settle, _speak_later, _tick_held
+
+    await _room(hass, home, freezer)
+    home.clip_seconds = 6.0
+    task = _speak_later(hass)
+    await _settle(hass)
+    await _tick_held(hass, freezer, 2)
+    home.set(MUSIC, "playing", media_content_id="playlist-9")  # picked in the app meanwhile
+    await _settle(hass)
+    await task
+    await _tick(hass, freezer, 10)
+    assert not [d for s, d in _played(home, MUSIC) if s == "play_media" and d["media_content_id"] == "track-7"]
+
+
+async def test_two_over_a_film_resume_it_after_the_last(hass, home, freezer):
+    from .test_announce import _settle, _speak_later, _tick_held
+
+    await _film(hass, home, freezer)
+    home.clip_seconds = 6.0
+    first = _speak_later(hass)
+    await _settle(hass)
+    await _tick_held(hass, freezer, 1)
+    second = _speak_later(hass)
+    await _settle(hass)
+    await _tick_held(hass, freezer, 8)  # the first is over, the second plays
+    assert "media_play" not in [s for s, _d in _played(home, KODI)], "still paused"
+    await _tick_held(hass, freezer, 10)
+    await first
+    await second
+    await _tick(hass, freezer, 5)
+    assert [s for s, _d in _played(home, KODI)].count("media_play") == 1
+
+
+async def test_the_old_media_reported_playing_for_a_moment_is_not_the_clip(hass, home, freezer):
+    from .test_announce import _settle, _speak_later, _tick_held
+
+    await _room(hass, home, freezer, state="paused")
+    home.clip_seconds, home.report_lag = 6.0, 1.0
+    task = _speak_later(hass)
+    await _settle(hass, 200)
+    assert ("play_media", TTS) in [(s, d.get("media_content_id")) for s, d in _played(home, MUSIC)]
+    home.set(MUSIC, "playing")  # still shows the paused track, as playing, for a moment
+    await _tick_held(hass, freezer, 5)
+    assert not [d for s, d in _played(home, MUSIC) if s == "play_media" and d["media_content_id"] == "track-7"]
+    await _tick_held(hass, freezer, 6)
+    await task
+    await _tick(hass, freezer, 3)
+    assert [d for s, d in _played(home, MUSIC) if s == "play_media" and d["media_content_id"] == "track-7"], (
+        "back after the clip"
+    )
+
+
+async def test_a_stream_starts_anew_without_a_seek(hass, home, freezer):
+    await _room(hass, home, freezer)
+    home.set(MUSIC, "playing", media_duration=None)  # a radio stream
+    await hass.async_block_till_done()
+    home.played.clear()
+    await _speak(hass)
+    services = [s for s, _d in _played(home, MUSIC)]
+    assert services.count("play_media") == 2 and "media_seek" not in services

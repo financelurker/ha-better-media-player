@@ -754,7 +754,7 @@
       "message": "{player} spielt in einer Gruppe ({group}): die Gruppe in Music Assistant übergeben oder die Musik direkt auf {player} starten."
     },
     "announce_not_supported": {
-      "message": "Kein Player in {room} kann Durchsagen."
+      "message": "Kein Player in {room} kann die Durchsage spielen (ein Player in einer Gruppe bleibt unberührt)."
     },
     "announce_nothing": {
       "message": "Gib eine Nachricht oder eine media_content_id an."
