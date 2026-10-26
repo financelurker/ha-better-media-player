@@ -101,6 +101,6 @@ Questions, bugs and ideas: [GitHub issues](https://github.com/financelurker/ha-b
 
 ## License
 
-Eclipse Public License 2.0, see [LICENSE](https://github.com/financelurker/ha-better-media-player/blob/main/LICENSE).
+Apache License 2.0, see [LICENSE](https://github.com/financelurker/ha-better-media-player/blob/main/LICENSE).
 
 This project is not affiliated with Home Assistant, the Open Home Foundation, Kodi or Music Assistant.
