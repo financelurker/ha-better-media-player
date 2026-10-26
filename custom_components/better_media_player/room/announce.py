@@ -64,6 +64,7 @@ from ..const import (
     SOURCE_VIDEO,
 )
 from ..players.position import Position
+from . import room_of
 
 if TYPE_CHECKING:
     from .controller import RoomController, Source
@@ -640,7 +641,6 @@ ANNOUNCE_SCHEMA = cv.make_entity_service_schema(
 @callback
 def async_setup_services(hass: HomeAssistant) -> None:
     """better_media_player.announce: one or more rooms, coordinated."""
-    from . import room_of
 
     async def _announce(call: ServiceCall) -> None:
         data = call.data

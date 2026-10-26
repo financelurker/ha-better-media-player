@@ -13,7 +13,7 @@ from homeassistant.const import STATE_ON
 from homeassistant.core import callback
 
 from ..const import CONF_OCCUPANCY, CONF_PRESENCE_RUN_DOWN, CONF_PREWARM, CONF_VOLUME_OFFSET, FOLLOW_INACTIVE
-from ..follow import get_hub
+from ..follow import EMPTY, PRESENT, UNKNOWN, get_hub
 from .power import NOT_AVAILABLE
 
 if TYPE_CHECKING:
@@ -67,8 +67,8 @@ class RoomFollow:
                 continue
             known = True
             if state.state == STATE_ON:
-                return "present"
-        return "empty" if known else "unknown"
+                return PRESENT
+        return EMPTY if known else UNKNOWN
 
     def group_counts(self, src: Source) -> bool:
         """Group playback counts, except follow me in a quiet room (unless it wakes there)."""

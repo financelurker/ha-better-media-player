@@ -1,4 +1,4 @@
-"""Central settings entry: follow me.
+"""Central settings entry: follow me (the session; its volume: volume.py, a follow wake: wake.py).
 
 The whole installation has one follow-me player: a Music Assistant group
 player with dynamic members. Follow me is started explicitly in a room where
@@ -91,11 +91,8 @@ _LOGGER = logging.getLogger(__name__)
 UNCERTAIN = {None, STATE_UNAVAILABLE, STATE_UNKNOWN}
 HARD_EXCLUSIONS = (FOLLOW_EXCLUDED_QUIET, FOLLOW_EXCLUDED_VIDEO, FOLLOW_EXCLUDED_OFF, FOLLOW_SNOOZED)
 
-
 COMMAND_REPEAT_SECONDS = 30  # do not repeat the same command within this time
 VIDEO_RESUME_MAX_SECONDS = 3 * 3600  # resume after video only within this time
-
-
 
 
 @dataclass
