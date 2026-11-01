@@ -585,7 +585,9 @@ class BmpPanel extends LitElement {
   static styles = css`
     :host {
       display: block;
-      height: 100%;
+      /* the window's height: Home Assistant's panel frame gives none (2026.10) */
+      height: 100vh;
+      height: 100dvh;
       --bmp-picture: #1e88e5;
       --bmp-sound: #ef6c00;
       --bmp-cec: #7e57c2;

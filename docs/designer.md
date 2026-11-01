@@ -6,7 +6,7 @@ Better Media Player has a page of its own in Home Assistant's sidebar: **Better 
 
 **In this release the panel only shows.** Rooms are still set up in the integration's options (Settings → Devices & services → Better Media Player → **Configure**), and how a room behaves is set on its device. Editing in the panel comes in a later release.
 
-Tested on a local Home Assistant 2026.2 with the demo integration (simulated devices).
+Tested on a local Home Assistant 2026.2 and 2026.10 with the demo integration (simulated devices).
 
 ![The panel: the Family Room's devices and cables, the film's route highlighted](images/panel.png)
 
