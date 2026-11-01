@@ -42,7 +42,7 @@ It is a custom integration in the spirit of Better Thermostat: you tell it what 
 
 A page of its own in Home Assistant's sidebar shows every room as a drawing: its players, its devices, how they are cabled, and what each player needs when it starts. In this release it only shows; rooms are still set up in the integration's options. [More about the panel](https://github.com/financelurker/ha-better-media-player/blob/main/docs/designer.md).
 
-![The panel: a room's devices and cables, the film's route highlighted](https://raw.githubusercontent.com/financelurker/ha-better-media-player/main/docs/images/panel.png?v=4db60e3116)
+![The panel: a room's devices and cables, the film's route highlighted](https://raw.githubusercontent.com/financelurker/ha-better-media-player/main/docs/images/panel.png?v=77c128b57d)
 
 ## Is it for you?
 

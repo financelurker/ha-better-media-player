@@ -38,7 +38,6 @@
   "route.woken": "geweckt",
   "route.on_cec": "an per CEC",
   "route.direct": "direkt versorgt",
-  "insp.room_summary": "{devices}, {cables}",
   "insp.click": "Ein Gerät oder Kabel anklicken, um zu sehen, wie es eingerichtet ist.",
   "insp.migrated": "Noch keine Kabel beschrieben: Die Player versorgen die Geräte direkt (gepunktete Linien), wie bisher.",
   "insp.entity": "Player",
@@ -80,12 +79,12 @@
   "central.off": "aus",
   "central.settings": "Einstellungen",
   "central.missing": "Der zentrale Eintrag ist nicht eingerichtet: Follow me und die Dashboard-Einstellungen sind aus.",
-  "central.hint": "Die Einstellungen, die es nur einmal gibt. Alles zu einem Raum steht beim Raum.",
   "save_failed": "Die Anordnung konnte nicht gespeichert werden: {error}",
   "count.devices_one": "{n} Gerät",
   "count.devices": "{n} Geräte",
   "count.cables_one": "{n} Kabel",
   "count.cables": "{n} Kabel",
   "retry": "Erneut versuchen",
-  "dismiss": "Schließen"
+  "dismiss": "Schließen",
+  "close": "Schließen"
 }

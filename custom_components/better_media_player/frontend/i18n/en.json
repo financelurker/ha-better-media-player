@@ -38,7 +38,6 @@
   "route.woken": "woken",
   "route.on_cec": "on by CEC",
   "route.direct": "fed directly",
-  "insp.room_summary": "{devices}, {cables}",
   "insp.click": "Click a device or a cable to see how it is set up.",
   "insp.migrated": "No cables are described yet: the players feed the devices directly (dotted lines), as before.",
   "insp.entity": "Player",
@@ -80,12 +79,12 @@
   "central.off": "off",
   "central.settings": "Settings",
   "central.missing": "The central entry is not set up: follow me and the dashboard settings are off.",
-  "central.hint": "The settings that exist only once. Everything about a room is with the room.",
   "save_failed": "Could not save the arrangement: {error}",
   "count.devices_one": "{n} device",
   "count.devices": "{n} devices",
   "count.cables_one": "{n} cable",
   "count.cables": "{n} cables",
   "retry": "Retry",
-  "dismiss": "Dismiss"
+  "dismiss": "Dismiss",
+  "close": "Close"
 }

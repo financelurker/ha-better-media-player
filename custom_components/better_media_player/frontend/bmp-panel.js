@@ -149,11 +149,10 @@ class BmpPanel extends LitElement {
         </header>
         <div class="viewonly">${t("view_only")}</div>
         ${this._notice ? html`<div class="notice" role="alert">${this._notice}<button class="chip" @click=${() => { this._notice = null; }}>${t("dismiss")}</button></div>` : nothing}
-        <div class="main">
+        <div class="main ${this._page === "room" && this._tab === "wiring" && this._selected ? "details" : ""}">
           ${this._renderNav()}
           ${this._page === "central"
-            ? html`<section class="stage"><div class="page">${this._renderCentral()}</div></section>
-                <section class="inspector"><h2>${t("nav.general")}</h2><p class="muted">${t("central.hint")}</p></section>`
+            ? html`<section class="stage"><div class="page">${this._renderCentral()}</div></section>`
             : room
               ? this._renderRoom(room)
               : html`<section class="stage"><div class="message">${t("no_rooms")}</div></section>`}
@@ -192,7 +191,9 @@ class BmpPanel extends LitElement {
           ? html`<div class="page">${this._renderSettings(room)}</div>`
           : html`${this._renderSources(room)}${this._renderDiagram(room)}${this._renderRoute(room)}`}
       </section>
-      <section class="inspector">${this._tab === "settings" ? html`<h2>${room.name}</h2><div class="kind">${t("tab.settings")}</div>` : this._renderInspector(room)}</section>
+      ${this._tab === "wiring" && this._selected ? html`<section class="inspector">
+        <button class="close" title=${t("close")} aria-label=${t("close")} @click=${() => { this._selected = null; }}>×</button>
+        ${this._renderInspector(room)}</section>` : nothing}
     `;
   }
 
@@ -296,7 +297,8 @@ class BmpPanel extends LitElement {
   _renderRoute(room) {
     const t = this._t;
     const src = room.sources.find((s) => s.id === this._source);
-    if (!src) return html`<div class="route">${t("route.pick")}</div>`;
+    if (!src)
+      return html`<div class="route">${!room.cables.length && room.devices.length ? html`${t("insp.migrated")} ` : nothing}${t("route.pick")} ${t("insp.click")}</div>`;
     const r = room.routes[src.id];
     const devices = r.devices.map((id) => room.devices.find((d) => d.id === id)).filter((d) => d && !PASSIVE.includes(d.kind));
     const name = (d) => d.name || t(`kind.${d.kind}`);
@@ -315,12 +317,6 @@ class BmpPanel extends LitElement {
   _renderInspector(room) {
     const t = this._t;
     const sel = this._selected;
-    if (!sel) {
-      return html`<h2>${room.name}</h2>
-        <div class="kind">${t("insp.room_summary", this._counts(room))}</div>
-        ${!room.cables.length && room.devices.length ? html`<p class="note">${t("insp.migrated")}</p>` : nothing}
-        <p class="muted">${t("insp.click")}</p>`;
-    }
     if (sel.type === "cable") {
       const c = room.cables[sel.index];
       if (!c) return nothing;
@@ -452,7 +448,11 @@ class BmpPanel extends LitElement {
   }
 
   _focusDrawing() {  // (pointerdown is prevented: no text selection, so no focus by itself)
-    this.renderRoot.querySelector(".canvas-wrap")?.focus({ preventScroll: true });
+    const wrap = this.renderRoot.querySelector(".canvas-wrap");
+    if (!wrap) return;
+    wrap.dataset.pointer = "";  // focused by the mouse: no focus ring (that is for the keyboard)
+    wrap.addEventListener("blur", () => delete wrap.dataset.pointer, { once: true });
+    wrap.focus({ preventScroll: true });
   }
 
   _onPanStart(e) {
@@ -610,7 +610,11 @@ class BmpPanel extends LitElement {
     .notice { display: flex; align-items: center; gap: 12px; justify-content: space-between; padding: 8px 16px; background: var(--warning-color, #f9a825); color: #000; }
     .zoombar button:disabled { opacity: .4; cursor: default; }
     .viewonly { padding: 8px 16px; background: var(--bmp-card); border-bottom: 1px solid var(--bmp-line); color: var(--bmp-muted); font-size: 13px; }
-    .main { display: grid; grid-template-columns: 220px 1fr 320px; min-height: 0; }
+    .main { display: grid; grid-template-columns: 220px 1fr; min-height: 0; }
+    .main.details { grid-template-columns: 220px 1fr 320px; }
+    .inspector { position: relative; }
+    .close { position: absolute; top: 8px; right: 8px; width: 32px; height: 32px; border: 0; border-radius: 50%; background: none; font-size: 20px; color: var(--bmp-muted); }
+    .close:hover { background: var(--bmp-chip); color: var(--bmp-text); }
     aside, .inspector { background: var(--bmp-card); overflow: auto; }
     aside { border-right: 1px solid var(--bmp-line); padding: 12px 0; }
     .inspector { border-left: 1px solid var(--bmp-line); padding: 16px; }
@@ -626,7 +630,7 @@ class BmpPanel extends LitElement {
     .tabs { display: flex; gap: 4px; padding: 0 16px; background: var(--bmp-card); border-bottom: 1px solid var(--bmp-line); }
     .tabs button { border: 0; background: none; padding: 12px 14px 10px; border-bottom: 3px solid transparent; color: var(--bmp-muted); font-weight: 500; }
     .tabs button[aria-selected="true"] { color: var(--bmp-primary); border-bottom-color: var(--bmp-primary); }
-    .page { overflow: auto; padding: 20px 16px; display: grid; gap: 16px; align-content: start; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+    .page { overflow: auto; padding: 20px 16px; display: grid; gap: 16px; align-content: start; align-items: start; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
     .card { background: var(--bmp-card); border: 1px solid var(--bmp-line); border-radius: var(--ha-card-border-radius, 12px); padding: 16px 18px; display: grid; gap: 12px; align-content: start; }
     .card h3 { margin: 0; font-size: 16px; font-weight: 500; }
     .settings { display: grid; gap: 2px; }
@@ -642,7 +646,8 @@ class BmpPanel extends LitElement {
     .legend i.picture { border-color: var(--bmp-picture); }
     .legend i.sound { border-color: var(--bmp-sound); border-top-style: dashed; }
     .legend i.direct { border-color: var(--bmp-muted); border-top-style: dotted; border-top-width: 2px; }
-    .canvas-wrap:focus-visible { outline: 2px solid var(--bmp-primary); outline-offset: -2px; }
+    .canvas-wrap:focus { outline: none; }
+    .canvas-wrap:focus-visible:not([data-pointer]) { outline: 2px solid var(--bmp-primary); outline-offset: -2px; }
     .canvas-wrap { position: relative; overflow: hidden; min-height: 0; background-image: radial-gradient(var(--bmp-line) 1px, transparent 1px); background-size: 20px 20px; }
     svg#canvas { display: block; width: 100%; height: 100%; user-select: none; -webkit-user-select: none; touch-action: none; cursor: grab; }
     .zoombar { position: absolute; right: 12px; bottom: 12px; display: flex; flex-direction: column; gap: 6px; }
@@ -691,7 +696,7 @@ class BmpPanel extends LitElement {
     .inputs span { font-family: var(--code-font-family, ui-monospace, monospace); font-size: 12px; background: var(--bmp-chip); border-radius: 6px; padding: 3px 7px; }
     .muted { color: var(--bmp-muted); }
     .note { margin: 0 0 12px; padding: 10px 12px; border-radius: 8px; background: var(--bmp-chip); font-size: 13px; }
-    @media (max-width: 1100px) { .main { grid-template-columns: 180px 1fr 280px; } }
+    @media (max-width: 1100px) { .main { grid-template-columns: 180px 1fr; } .main.details { grid-template-columns: 180px 1fr 280px; } }
     @media (max-width: 820px) {
       .main { display: block; overflow: auto; }
       aside { display: flex; gap: 8px; align-items: center; overflow-x: auto; padding: 8px 16px; border-right: 0; border-bottom: 1px solid var(--bmp-line); }
