@@ -295,7 +295,6 @@ async def test_a_circle_and_two_inputs_for_one_source_are_refused(hass, home):
     result = await _options(hass, entry)
     result = await _go(hass, result, {"next_step_id": "connection_add"})
     result = await _go(hass, result, {"from": "speakers", "to": "display", "signals": ["sound"]})
-    result = await _go(hass, result, {"input": "HDMI 1", "mode": "bmp"})
     assert result["errors"] == {"base": "connection_cycle"}
 
     entry2 = await _room(hass, home, connections=(VIDEO_AVR, {"from": "video_player", "to": "display", "signals": ["sound"], "input": "HDMI 2"}))
@@ -310,11 +309,11 @@ async def test_editing_and_removing_connections(hass, home):
     entry = await _room(hass, home)
     result = await _options(hass, entry)
     result = await _go(hass, result, {"next_step_id": "connection_edit"})
-    result = await _go(hass, result, {"connection": "audio_player → speakers (sound): NET"})
+    result = await _go(hass, result, {"connection": "2"})  # music → speakers
     result = await _go(hass, result, {"from": "audio_player", "to": "speakers", "signals": ["sound"]})
     result = await _go(hass, result, {"input": "TUNER", "mode": "cec"})
     result = await _go(hass, result, {"next_step_id": "connection_remove"})
-    result = await _go(hass, result, {"connections": ["video_player → speakers (sound): BD"]})
+    result = await _go(hass, result, {"connections": ["1"]})  # film → speakers
     await _save(hass, result)
     assert [(c["from"], c["to"], c["input"], c.get("mode", "bmp")) for c in entry.options["connections"]] == [
         ("video_player", "display", "HDMI 2", "bmp"),
@@ -347,3 +346,184 @@ async def test_removing_a_role_drops_its_connections(hass, home):
     await hass.async_block_till_done()
     assert [(c["from"], c["to"]) for c in entry.options["connections"]] == [("video_player", "display")]
     assert "speakers_inputs" not in entry.options
+
+
+# ------------------------------------------------- from the review: timing
+
+
+async def test_a_second_start_waits_for_cec_again(hass, home, freezer):
+    await _room(hass, home, connections=(), display_power_on="cec")
+    await _start_video(hass, home, freezer)
+    hass.states.async_set(LG, "on")  # over CEC
+    await hass.async_block_till_done()
+    home.kodi("off")
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 12 * 60, step=30)  # the TV runs down, BMP switches it off
+    assert hass.states.get(LG).state == "off"
+    await hass.services.async_call("media_player", "turn_on", {"entity_id": ROOM}, blocking=True)
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 3)
+    assert LG not in entry_power(hass).held  # waits for CEC again, not given up at once
+    assert ("media_player", "turn_on", LG) not in home.calls
+
+
+async def test_no_input_while_the_tv_is_starting(hass, home, freezer):
+    await _room(hass, home, connections=(VIDEO_IN,), display_on_wait=8)
+    await hass.services.async_call("media_player", "turn_on", {"entity_id": ROOM}, blocking=True)
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 5)  # the TV's wait after switching on
+    assert selects(home, LG) == []
+    await tick(hass, freezer, 5)
+    assert selects(home, LG) == ["HDMI 2"]
+
+
+async def test_no_input_action_while_the_device_is_off(hass, home, freezer):
+    hass.states.async_set("script.avr_net", "off")
+    await _room(
+        hass, home, connections=({**VIDEO_IN, "input": "NET", "to": "display"},),
+        display_inputs=None, display_input_actions={"NET": "script.avr_net"}, display_power_on="cec",
+    )
+    await hass.services.async_call("media_player", "turn_on", {"entity_id": ROOM}, blocking=True)
+    await hass.async_block_till_done()
+    home.kodi("idle")
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 5)  # the TV is still off (CEC expected)
+    assert not [e for s, e, d in home.played if e == "script.avr_net"]
+    hass.states.async_set(LG, "on")
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 3)
+    assert [e for s, e, d in home.played if e == "script.avr_net"] == ["script.avr_net"]
+
+
+async def test_cec_is_awaited_from_when_the_player_is_up(hass, home, freezer):
+    """A slow Kodi: the TV's CEC timeout counts from Kodi's start, not the TV's."""
+    await _room(hass, home, connections=(), display_power_on="cec", display_cec_timeout=15)
+    await hass.services.async_call("media_player", "turn_on", {"entity_id": ROOM}, blocking=True)
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 30)  # Kodi takes 30 s
+    home.kodi("idle")
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 5)
+    assert LG not in entry_power(hass).held
+    await tick(hass, freezer, 15)  # now nothing came over CEC
+    assert LG in entry_power(hass).held
+
+
+async def test_a_tv_switched_by_hand_puts_the_room_into_no_manual_mode(hass, home, freezer):
+    await _room(hass, home, connections=(), display_power_on="never", display_power_off="never")
+    hass.states.async_set(LG, "on")  # by hand
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 5)
+    assert not entry_power(hass).ctrl.manual
+    await _start_video(hass, home, freezer)
+    home.kodi("off")
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 12 * 60, step=30)
+    assert hass.states.get(LG).state == "on"  # never switched off by the room
+    assert ("media_player", "turn_off", LG) not in home.calls
+
+
+async def test_back_on_its_default_input_after_a_power_cycle(hass, home, freezer):
+    await _room(hass, home)
+    home.music("playing")
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 10)
+    home.avr("off", source="TUNER")  # eco standby, back on its default input
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 3)
+    home.avr("on")
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 10)
+    assert hass.states.get(AVR).attributes["source"] == "NET"  # chosen again, no "by hand"
+
+
+async def test_a_change_by_hand_is_forgotten_with_the_next_source(hass, home, freezer):
+    same = {**VIDEO_AVR, "input": "NET"}  # film and music on the same input
+    await _room(hass, home, connections=(same, MUSIC_AVR))
+    home.music("playing")
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 10)
+    home.avr("on", source="TUNER")
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 10)
+    home.kodi("playing")
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 10)
+    assert hass.states.get(AVR).attributes["source"] == "NET"
+
+
+async def test_manual_mode_leaves_the_inputs_alone(hass, home, freezer):
+    await _room(hass, home)
+    hass.states.async_set(SPEAKERS, "on")  # plug by hand: manual mode
+    home.avr("on", source="TUNER")
+    await hass.async_block_till_done()
+    home.music("playing")
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 30)
+    assert entry_power(hass).ctrl.manual
+    assert selects(home, AVR) == []
+
+
+async def test_a_cec_input_that_does_not_come_is_given_up(hass, home, freezer):
+    await _room(hass, home, connections=({**VIDEO_IN, "mode": "cec"},), display_cec_timeout=10)
+    await _start_video(hass, home, freezer)
+    await tick(hass, freezer, 60)
+    assert selects(home, LG) == []
+    assert hass.states.get(LG).attributes["source"] == "HDMI 1"
+
+
+async def test_a_cec_off_falls_back_to_bmp(hass, home, freezer):
+    await _room(hass, home, connections=(), display_power_off="cec", display_cec_fallback=True, display_cec_timeout=10)
+    await _start_video(hass, home, freezer)
+    home.kodi("off")
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 11 * 60, step=10)
+    assert ("media_player", "turn_off", LG) in home.calls
+
+
+async def test_a_picture_only_connection_is_not_on_the_music_route(hass, home, freezer):
+    await _room(hass, home, connections=({"from": "audio_player", "to": "display", "signals": ["picture"]},))
+    home.music("playing")
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 10)
+    assert hass.states.get(LG).state == "off"
+
+
+# ------------------------------------------------- from the review: dialog
+
+
+async def test_two_alike_connections_are_told_apart(hass, home):
+    twin = {**MUSIC_AVR, "mode": "cec"}
+    entry = await _room(hass, home, connections=(MUSIC_AVR, twin))
+    result = await _options(hass, entry)
+    result = await _go(hass, result, {"next_step_id": "connection_remove"})
+    result = await _go(hass, result, {"connections": ["1"]})
+    await _save(hass, result)
+    assert [c.get("mode", "bmp") for c in entry.options["connections"]] == ["bmp"]
+
+
+async def test_a_circle_is_refused_in_the_first_form(hass, home):
+    entry = await _room(hass, home, connections=({"from": "display", "to": "speakers", "signals": ["sound"]},))
+    result = await _options(hass, entry)
+    result = await _go(hass, result, {"next_step_id": "connection_add"})
+    result = await _go(hass, result, {"from": "speakers", "to": "display", "signals": ["sound"]})
+    assert result["step_id"] == "connection" and result["errors"] == {"base": "connection_cycle"}
+
+
+async def test_an_input_on_a_device_without_input_control_is_refused(hass, home):
+    entry = await _room(hass, home, connections=(), **{"bass": ["switch.bass_plug"]})
+    result = await _options(hass, entry)
+    result = await _go(hass, result, {"next_step_id": "connection_add"})
+    result = await _go(hass, result, {"from": "video_player", "to": "bass", "signals": ["sound"]})
+    result = await _go(hass, result, {"input": "LFE", "mode": "bmp"})
+    assert result["errors"] == {"input": "no_input_control"}
+
+
+async def test_input_actions_must_map_inputs_to_actions(hass, home):
+    entry = await _room(hass, home, connections=())
+    result = await _options(hass, entry)
+    result = await _go(hass, result, {"next_step_id": "control_display"})
+    result = await _go(hass, result, {"inputs": LG, "input_actions": {"HDMI 1": "light.hallway"}, "power_on": "bmp", "power_off": "bmp"})
+    assert result["errors"] == {"input_actions": "invalid_input_actions"}
+    result = await _go(hass, result, {"inputs": LG, "input_actions": {"HDMI 1": "script.tv_hdmi1"}, "power_on": "bmp", "power_off": "bmp"})
+    assert result["type"].value == "menu"

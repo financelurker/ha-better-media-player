@@ -7,10 +7,12 @@ from typing import Any
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigFlowResult
+from homeassistant.const import ATTR_FRIENDLY_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import selector as sel
 
 from .const import (
+    ACTION_DOMAINS,
     CONF_CONNECTIONS,
     CONN_ENDS,
     CONN_FROM,
@@ -28,6 +30,7 @@ from .const import (
 from .devices.graph import cycles
 from .devices.model import Edge, Mode, Signal
 
+CONTROL_DEFAULTS = {"input_pause": 0, "power_on": Mode.BMP.value, "power_off": Mode.BMP.value, "cec_fallback": False, "cec_timeout": 15}
 CONTROL_KEYS = ("inputs", "input_actions", "input_pause", "power_on", "power_off", "cec_fallback", "cec_timeout")
 
 
@@ -52,11 +55,35 @@ def input_choices(hass: HomeAssistant, options: dict, target: str) -> list[str]:
     return listed + [a for a in actions if a not in listed]
 
 
-def connection_label(conn: dict) -> str:
-    label = f"{conn[CONN_FROM]} → {conn[CONN_TO]} ({', '.join(conn.get(CONN_SIGNALS) or [])})"
+def end_name(hass: HomeAssistant, options: dict, end: str) -> str:
+    """A connection's end by the name of its (first) entity."""
+    value = options.get(end)
+    entity = value[0] if isinstance(value, list) and value else value
+    state = hass.states.get(entity) if isinstance(entity, str) else None
+    return str(state.attributes.get(ATTR_FRIENDLY_NAME) or entity) if state is not None else str(entity or end)
+
+
+def connection_label(hass: HomeAssistant, options: dict, conn: dict) -> str:
+    label = f"{end_name(hass, options, conn[CONN_FROM])} → {end_name(hass, options, conn[CONN_TO])}"
+    label += f" ({', '.join(conn.get(CONN_SIGNALS) or [])})"
     if conn.get(CONN_INPUT):
         label += f": {conn[CONN_INPUT]}"
+    if (conn.get(CONN_MODE) or Mode.BMP) != Mode.BMP:
+        label += f" [{conn[CONN_MODE]}]"
     return label
+
+
+def has_input_control(options: dict, target: str) -> bool:
+    return target in INPUT_ROLES and bool(
+        options.get(role_conf(target, "inputs")) or options.get(role_conf(target, "input_actions"))
+    )
+
+
+def valid_input_actions(value: Any) -> bool:
+    """{input: action entity} (a script, button, scene …)."""
+    return isinstance(value, dict) and all(
+        isinstance(k, str) and isinstance(v, str) and v.split(".", 1)[0] in ACTION_DOMAINS for k, v in value.items()
+    )
 
 
 def prune(options: dict) -> dict:
@@ -72,35 +99,49 @@ def prune(options: dict) -> dict:
     return out
 
 
+def _edges(connections: list[dict]) -> list[Edge]:
+    return [
+        Edge(c[CONN_FROM], c[CONN_TO], frozenset(Signal(x) for x in c.get(CONN_SIGNALS) or ()), c.get(CONN_INPUT))
+        for c in connections
+    ]
+
+
+NEEDS = {CONN_SOURCES[0]: (Signal.PICTURE, Signal.SOUND), CONN_SOURCES[1]: (Signal.SOUND,)}
+
+
 def validate_connections(hass: HomeAssistant, options: dict) -> dict[str, str]:
     """Errors of the cabling as a whole (key: 'base')."""
     connections = options.get(CONF_CONNECTIONS) or []
     present = set(ends_present(options))
-    edges = []
     for c in connections:
         if c[CONN_FROM] == c[CONN_TO]:
             return {"base": "connection_to_itself"}
-        if c[CONN_FROM] not in present or c[CONN_TO] not in present:
+        if c[CONN_FROM] not in present or c[CONN_TO] not in present or c[CONN_TO] not in CONN_TARGETS:
             return {"base": "connection_end_missing"}
-        if not c.get(CONN_SIGNALS):
+        if not c.get(CONN_SIGNALS) or (c.get(CONN_MODE) or Mode.BMP) not in MODES:
             return {"base": "connection_no_signal"}
-        edges.append(Edge(c[CONN_FROM], c[CONN_TO], frozenset(Signal(s) for s in c[CONN_SIGNALS]), c.get(CONN_INPUT)))
+    edges = _edges(connections)
     if cycles(edges):
         return {"base": "connection_cycle"}
-    for source in CONN_SOURCES:
+    for source, needs in NEEDS.items():
         wanted: dict[str, set[str]] = {}
-        seen, todo = {source}, [source]
-        while todo:
-            at = todo.pop()
-            for e in edges:
-                if e.source == at:
-                    if e.input:
-                        wanted.setdefault(e.target, set()).add(e.input)
-                    if e.target not in seen:
-                        seen.add(e.target)
-                        todo.append(e.target)
+        for signal in needs:
+            seen, todo = {source}, [source]
+            while todo:
+                at = todo.pop()
+                for e in edges:
+                    if e.source == at and signal in e.signals:
+                        if e.input:
+                            wanted.setdefault(e.target, set()).add(e.input)
+                        if e.target not in seen:
+                            seen.add(e.target)
+                            todo.append(e.target)
         if any(len(v) > 1 for v in wanted.values()):
             return {"base": "input_conflict"}
+    for role in INPUT_ROLES:
+        actions = options.get(role_conf(role, "input_actions"))
+        if actions is not None and not valid_input_actions(actions):
+            return {"base": "invalid_input_actions"}
     return {}
 
 
@@ -116,6 +157,10 @@ class CablingSteps:
     def _connections(self) -> list[dict]:
         return list(self.options.get(CONF_CONNECTIONS) or [])
 
+    def _others(self) -> list[dict]:
+        """The connections besides the one being edited."""
+        return [c for i, c in enumerate(self._connections) if i != self._editing]
+
     async def async_step_cabling(self, user_input=None) -> ConfigFlowResult:
         menu = ["connection_add"]
         if self._connections:
@@ -130,23 +175,28 @@ class CablingSteps:
         self._editing = None
         return await self.async_step_connection(user_input)
 
+    def _choices(self) -> list[sel.SelectOptionDict]:
+        """The connections to pick from (by their place in the list)."""
+        return [
+            sel.SelectOptionDict(value=str(i), label=connection_label(self.hass, self.options, c))
+            for i, c in enumerate(self._connections)
+        ]
+
     async def async_step_connection_edit(self, user_input=None) -> ConfigFlowResult:
-        labels = [connection_label(c) for c in self._connections]
         if user_input is not None:
-            self._editing = labels.index(user_input["connection"])
+            self._editing = int(user_input["connection"])
             self._draft = None
             return await self.async_step_connection()
-        schema = vol.Schema({vol.Required("connection"): sel.SelectSelector(sel.SelectSelectorConfig(options=labels))})
+        schema = vol.Schema({vol.Required("connection"): sel.SelectSelector(sel.SelectSelectorConfig(options=self._choices()))})
         return self.async_show_form(step_id="connection_edit", data_schema=schema)
 
     async def async_step_connection_remove(self, user_input=None) -> ConfigFlowResult:
-        labels = [connection_label(c) for c in self._connections]
         if user_input is not None:
-            gone = set(user_input.get("connections") or [])
-            self.options[CONF_CONNECTIONS] = [c for c, label in zip(self._connections, labels) if label not in gone]
+            gone = {int(i) for i in user_input.get("connections") or []}
+            self.options[CONF_CONNECTIONS] = [c for i, c in enumerate(self._connections) if i not in gone]
             return await self.async_step_cabling()
         schema = vol.Schema(
-            {vol.Optional("connections"): sel.SelectSelector(sel.SelectSelectorConfig(options=labels, multiple=True))}
+            {vol.Optional("connections"): sel.SelectSelector(sel.SelectSelectorConfig(options=self._choices(), multiple=True))}
         )
         return self.async_show_form(step_id="connection_remove", data_schema=schema)
 
@@ -161,6 +211,8 @@ class CablingSteps:
                 errors["base"] = "connection_to_itself"
             elif not user_input.get(CONN_SIGNALS):
                 errors["base"] = "connection_no_signal"
+            elif cycles(_edges(self._others() + [{**user_input, CONN_INPUT: None}])):
+                errors["base"] = "connection_cycle"
             else:
                 self._draft = {**(self._draft or {}), **user_input}
                 return await self.async_step_connection_input()
@@ -198,7 +250,9 @@ class CablingSteps:
             else:
                 conns.append(conn)
             candidate = {**self.options, CONF_CONNECTIONS: conns}
-            if conn[CONN_INPUT] and choices and conn[CONN_INPUT] not in choices:
+            if conn[CONN_INPUT] and not has_input_control(self.options, target):
+                errors[CONN_INPUT] = "no_input_control"
+            elif conn[CONN_INPUT] and choices and conn[CONN_INPUT] not in choices:
                 errors[CONN_INPUT] = "unknown_input"
             else:
                 errors = validate_connections(self.hass, candidate)
@@ -218,7 +272,7 @@ class CablingSteps:
             step_id="connection_input",
             data_schema=self.add_suggested_values_to_schema(schema, user_input or current),
             errors=errors,
-            description_placeholders={"target": target},
+            description_placeholders={"target": end_name(self.hass, self.options, target)},
         )
 
     # ------------------------------------------------------------ control
@@ -230,13 +284,18 @@ class CablingSteps:
         return await self._control("speakers", user_input)
 
     async def _control(self, role: str, user_input) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
         if user_input is not None:
-            for key in CONTROL_KEYS:
-                self.options.pop(role_conf(role, key), None)
-            for key, value in user_input.items():
-                if value not in (None, "", {}, []):
-                    self.options[role_conf(role, key)] = value
-            return await self.async_step_cabling()
+            actions = user_input.get("input_actions")
+            if actions not in (None, {}) and not valid_input_actions(actions):
+                errors["input_actions"] = "invalid_input_actions"
+            else:
+                for key in CONTROL_KEYS:
+                    self.options.pop(role_conf(role, key), None)
+                for key, value in user_input.items():
+                    if value not in (None, "", {}, []) and value != CONTROL_DEFAULTS.get(key):
+                        self.options[role_conf(role, key)] = value
+                return await self.async_step_cabling()
         schema = vol.Schema(
             {
                 vol.Optional("inputs"): sel.EntitySelector(sel.EntitySelectorConfig(domain="media_player")),
@@ -254,6 +313,8 @@ class CablingSteps:
         )
         current = {k: self.options[role_conf(role, k)] for k in CONTROL_KEYS if role_conf(role, k) in self.options}
         return self.async_show_form(
-            step_id=f"control_{role}", data_schema=self.add_suggested_values_to_schema(schema, current)
+            step_id=f"control_{role}",
+            data_schema=self.add_suggested_values_to_schema(schema, user_input or current),
+            errors=errors,
         )
 

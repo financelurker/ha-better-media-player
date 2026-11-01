@@ -42,10 +42,6 @@ class Inputs:
     actions: Mapping[str, str] = field(default_factory=dict)  # input -> script, button, …
     pause: float = 0.0  # s after choosing an input (IR: before the next command)
 
-    @property
-    def names(self) -> list[str]:
-        return list(self.actions)
-
 
 @dataclass(frozen=True)
 class Edge:

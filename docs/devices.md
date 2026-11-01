@@ -30,7 +30,7 @@ Per display and speakers (**Display: inputs and switching**, **Speakers: inputs 
 | Setting | Meaning |
 |---|---|
 | **Inputs via** | A media player with a list of sources (`select_source`), usually the device itself. The dialog then offers its inputs. |
-| **Input actions** | For devices without a source list (IR): one action per input, e.g. `{"HDMI 1": "script.tv_hdmi1"}`. |
+| **Input actions** | For devices without a source list (IR): one action per input, one per line, e.g. `HDMI 1: script.tv_hdmi1`. |
 | **Pause after choosing an input** | Before the next command (IR devices may need a moment). |
 | **Switched on by** / **Switched off by** | **BMP** (default): the room switches the device. **CEC**: a player switches it over HDMI-CEC, the room waits for it. **Never**: left alone. Separately for on and off. Plugs and own on/off actions are always switched by the room. |
 | **Fall back to BMP**, **CEC timeout** | If what is expected from CEC does not happen within the timeout (default 15 s), the room does it itself – or, without the fallback, gives up: a device not switched on is left off until the next start, an input not chosen is left as it is. |
@@ -41,6 +41,8 @@ Per display and speakers (**Display: inputs and switching**, **Speakers: inputs 
 - **An input is chosen once the device is on** (TVs ignore it while starting), checked after 5 s (with the device's `source`) and chosen once more if needed; then the room gives up (logged). A device that does not tell its input (IR) gets the command once.
 - **Changed by hand:** an input you change on the device afterwards is kept until the source changes.
 - **CEC:** HDMI-CEC lets devices control each other over the HDMI cable. Switching on is fairly uniform (a starting player wakes the TV and selects its input); switching off depends on the devices (a TV turned off often takes the others with it, a player going off often leaves the TV on). Hence the separate modes for on and off. A device switched on over CEC while the room needs it counts as switched by the room.
+- **CEC needs a player that does it:** the room waits for CEC only from the moment the starting player is up. When the room comes on without a player starting (an announcement, follow me's prewarm), nobody switches a CEC device on – set the fallback for such devices.
+- **Switched by hand or over CEC:** a device set to be switched on by CEC or never, turned on before the room needs it, does not put the room into manual mode.
 - **Manual mode** (a plug switched by hand): inputs are left alone too.
 - The order of switching on stays as without cabling: host plugs and display, then the player, then speakers and subwoofer.
 

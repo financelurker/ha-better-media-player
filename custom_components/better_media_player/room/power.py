@@ -226,7 +226,7 @@ class RoomPower:
     def want_inputs(self, source: str | None) -> None:
         """The inputs of source's route are wanted (None: no source, no wishes)."""
         r = self.routes.get(source) if source else None
-        self.devices.want_inputs(r.inputs if r else {})
+        self.devices.want_inputs(source if r else None, r.inputs if r else {})
 
     # ---------------------------------------------------------------- reading
 
@@ -309,6 +309,8 @@ class RoomPower:
             return
         if kind == "device" and not on:
             return
+        if kind == "device" and self.devices.control_of(entity_id).on is not Mode.BMP:
+            return  # switched on by CEC or by hand, as set up: no manual change
         _LOGGER.info(
             "%s: %s switched %s from outside, switching to manual mode",
             ctrl.entry.title,

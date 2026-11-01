@@ -305,7 +305,7 @@
         },
         "data_description": {
           "inputs": "A media player with a list of sources (select_source), usually the device itself.",
-          "input_actions": "For devices without a source list (IR): an action per input, e.g. {\"HDMI 1\": \"script.tv_hdmi1\"}.",
+          "input_actions": "For devices without a source list (IR): an action per input, one per line, e.g. HDMI 1: script.tv_hdmi1.",
           "input_pause": "Before the next command (IR devices may need a moment).",
           "power_on": "BMP: the room switches it on. CEC: a player switches it on over HDMI-CEC, the room waits for it. Never: left alone. Plugs are always switched by the room.",
           "power_off": "As above, for switching off (after the run-down).",
@@ -327,7 +327,7 @@
         },
         "data_description": {
           "inputs": "A media player with a list of sources (select_source), usually the device itself.",
-          "input_actions": "For devices without a source list (IR): an action per input, e.g. {\"HDMI 1\": \"script.tv_hdmi1\"}.",
+          "input_actions": "For devices without a source list (IR): an action per input, one per line, e.g. HDMI 1: script.tv_hdmi1.",
           "input_pause": "Before the next command (IR devices may need a moment).",
           "power_on": "BMP: the room switches it on. CEC: a player switches it on over HDMI-CEC, the room waits for it. Never: left alone. Plugs are always switched by the room.",
           "power_off": "As above, for switching off (after the run-down).",
@@ -356,10 +356,13 @@
       "connection_no_signal": "A connection carries picture, sound or both.",
       "connection_cycle": "The connections run in a circle for one signal.",
       "input_conflict": "A source would need two different inputs on the same device.",
-      "unknown_input": "The device does not offer this input."
+      "unknown_input": "The device does not offer this input.",
+      "no_input_control": "This device has no way to choose inputs yet: set it up under its inputs and switching first (or leave the input empty).",
+      "invalid_input_actions": "Input actions are a mapping of input to action, e.g. HDMI 1: script.tv_hdmi1 (scripts, buttons, scenes …)."
     },
     "abort": {
-      "invalid_config": "The settings are not consistent. Check media players and power devices."
+      "invalid_config": "The settings are not consistent. Check media players and power devices.",
+      "invalid_cabling": "The cabling is not consistent. Check its connections and the devices' input actions."
     }
   },
   "entity": {

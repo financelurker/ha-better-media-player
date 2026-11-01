@@ -103,6 +103,8 @@ class PowerSequence:
                     await ctrl._source_on(src)
                     if not await ctrl._wait_until(lambda: ctrl.source_ready(src), deadline - clock.now()):
                         raise _StartFailed(f"{src.player} did not start")
+                # the player is up: what it does over CEC is counted from now
+                power.devices.restart_expectations()
 
             # (a role the night mode switched off during the start is left out)
             await power.devices.async_bring_up(after_player, switched)

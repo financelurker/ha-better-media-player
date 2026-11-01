@@ -224,6 +224,8 @@ class RoomController:
         tracked += self.power.devices.entities
         for role in self.power.roles.values():
             tracked += role.power or []
+            if role.inputs is not None and role.inputs.entity:
+                tracked.append(role.inputs.entity)  # its input: checked and watched for changes by hand
         self._unsubs.append(
             async_track_state_change_event(self.hass, list(dict.fromkeys(tracked)), self._on_state_event)
         )
@@ -556,6 +558,7 @@ class RoomController:
     async def async_update(self, reason: str = "") -> None:
         async with self._lock:
             now = clock.now()
+            self.power.devices.settle()
             self._update_sources(now)
             for role in self.power.roles.values():
                 if self.power.role_demand(role):
@@ -579,9 +582,10 @@ class RoomController:
                     self.sequence.start(None)
                 await self.power.devices.async_auto_off(now, OFF_ORDER)
             if not self.manual:
-                # the inputs follow the source in use
+                # the inputs follow the source in use (chosen outside the lock: an
+                # input's pause must not hold the room up)
                 self.power.want_inputs(self.input_source)
-                await self.power.devices.async_apply_inputs()
+                self._spawn(self.power.devices.async_apply_inputs())
             self._update_status()
             # the room comes on: one of its players is used (plugs alone, e.g. follow
             # me's prewarm or a plug switched by hand, are no "on"; the player's start

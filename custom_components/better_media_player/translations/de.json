@@ -305,7 +305,7 @@
         },
         "data_description": {
           "inputs": "Ein Media Player mit Quellenliste (select_source), meist das Gerät selbst.",
-          "input_actions": "Für Geräte ohne Quellenliste (IR): eine Aktion je Eingang, z. B. {\"HDMI 1\": \"script.tv_hdmi1\"}.",
+          "input_actions": "Für Geräte ohne Quellenliste (IR): eine Aktion je Eingang, eine pro Zeile, z. B. HDMI 1: script.tv_hdmi1.",
           "input_pause": "Vor dem nächsten Befehl (IR-Geräte brauchen manchmal einen Moment).",
           "power_on": "BMP: der Raum schaltet es ein. CEC: ein Player schaltet es über HDMI-CEC ein, der Raum wartet darauf. Nie: bleibt unberührt. Steckdosen schaltet immer der Raum.",
           "power_off": "Wie oben, fürs Ausschalten (nach der Nachlaufzeit).",
@@ -327,7 +327,7 @@
         },
         "data_description": {
           "inputs": "Ein Media Player mit Quellenliste (select_source), meist das Gerät selbst.",
-          "input_actions": "Für Geräte ohne Quellenliste (IR): eine Aktion je Eingang, z. B. {\"HDMI 1\": \"script.tv_hdmi1\"}.",
+          "input_actions": "Für Geräte ohne Quellenliste (IR): eine Aktion je Eingang, eine pro Zeile, z. B. HDMI 1: script.tv_hdmi1.",
           "input_pause": "Vor dem nächsten Befehl (IR-Geräte brauchen manchmal einen Moment).",
           "power_on": "BMP: der Raum schaltet es ein. CEC: ein Player schaltet es über HDMI-CEC ein, der Raum wartet darauf. Nie: bleibt unberührt. Steckdosen schaltet immer der Raum.",
           "power_off": "Wie oben, fürs Ausschalten (nach der Nachlaufzeit).",
@@ -356,10 +356,13 @@
       "connection_no_signal": "Eine Verbindung überträgt Bild, Ton oder beides.",
       "connection_cycle": "Die Verbindungen laufen für ein Signal im Kreis.",
       "input_conflict": "Eine Quelle bräuchte am selben Gerät zwei verschiedene Eingänge.",
-      "unknown_input": "Das Gerät bietet diesen Eingang nicht an."
+      "unknown_input": "Das Gerät bietet diesen Eingang nicht an.",
+      "no_input_control": "Dieses Gerät kann noch keine Eingänge wählen: richte das zuerst unter Eingänge und Schalten ein (oder lass den Eingang leer).",
+      "invalid_input_actions": "Eingangs-Aktionen sind eine Zuordnung Eingang → Aktion, z. B. HDMI 1: script.tv_hdmi1 (Skripte, Buttons, Szenen …)."
     },
     "abort": {
-      "invalid_config": "Die Einstellungen passen nicht zusammen. Bitte Media Player und Stromgeräte prüfen."
+      "invalid_config": "Die Einstellungen passen nicht zusammen. Bitte Media Player und Stromgeräte prüfen.",
+      "invalid_cabling": "Die Verkabelung ist nicht stimmig. Prüfe die Verbindungen und die Eingangs-Aktionen der Geräte."
     }
   },
   "entity": {

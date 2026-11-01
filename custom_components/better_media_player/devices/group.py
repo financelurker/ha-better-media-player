@@ -9,9 +9,8 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections import deque
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from collections.abc import Iterable
 
 from homeassistant.const import ATTR_ENTITY_ID, SERVICE_TURN_OFF, SERVICE_TURN_ON, STATE_ON
 from homeassistant.core import HomeAssistant, State
@@ -79,6 +78,9 @@ class DeviceGroup:
         # CEC: power states expected from someone else, since when
         self._expected: dict[str, tuple[bool, float]] = {}
         self._inputs: dict[str, _Input] = {}
+        self._wish_key: str | None = None  # whose inputs are wanted (a source)
+        self._starting: set[str] = set()  # nodes being brought up (no input yet)
+        self._applying = False
 
     # ---------------------------------------------------------------- reading
 
@@ -134,9 +136,9 @@ class DeviceGroup:
         if last is not None and last[0] and now - last[1] < COMMAND_RETRY_SECONDS:
             return True
         expected = self._expected.get(entity_id)
-        return expected is not None and expected[0] and now - expected[1] < self._control(entity_id).timeout
+        return expected is not None and expected[0] and now - expected[1] < self.control_of(entity_id).timeout
 
-    def _control(self, entity_id: str) -> Control:
+    def control_of(self, entity_id: str) -> Control:
         """How the entity is switched (only devices have a mode; plugs and own
         actions are always switched by BMP)."""
         if self.kind(entity_id) == "device":
@@ -144,6 +146,22 @@ class DeviceGroup:
                 if entity_id in node.entities:
                     return node.control
         return Control()
+
+    def settle(self) -> None:
+        """Forget what CEC was expected to do once it is done (call on changes)."""
+        for entity_id, (on, _since) in list(self._expected.items()):
+            if self.is_on(entity_id) == on:
+                del self._expected[entity_id]
+
+    def restart_expectations(self) -> None:
+        """What CEC is expected to do is counted from now: the player that does it
+        has just started (its CEC comes once it is up)."""
+        now = _now()
+        for entity_id, (on, _since) in list(self._expected.items()):
+            self._expected[entity_id] = (on, now)
+        for wish in self._inputs.values():
+            if wish.mode is Mode.CEC and wish.tries == 0 and wish.sent_at is not None:
+                wish.sent_at = now
 
     def plugs_of(self, node: Node) -> list[str]:
         """The node's plugs, and those of other nodes that feed one of its devices
@@ -165,7 +183,7 @@ class DeviceGroup:
             or e in self.held
             or (not self.is_available(e) and not (plugs and self.kind(e) == "device"))
             for e in node.entities
-            if self.kind(e) != "plug" and self._control(e).on is not Mode.NEVER  # not BMP's to switch on
+            if self.kind(e) != "plug" and self.control_of(e).on is not Mode.NEVER  # not BMP's to switch on
         )
 
     def devices_on(self, node: Node) -> bool:
@@ -279,7 +297,7 @@ class DeviceGroup:
             self._expected.pop(entity_id, None)
             return
         now = _now()
-        control = self._control(entity_id)
+        control = self.control_of(entity_id)
         mode = control.on if on else control.off
         if mode is Mode.NEVER:
             return
@@ -344,7 +362,14 @@ class DeviceGroup:
         await self.async_switch_node(node, True, force=True)
         if not self.plugs_of(node):
             return
-        waiting = [e for e in node.entities if self.kind(e) == "device" and e not in self.held and not self.is_available(e)]
+        waiting = [
+            e
+            for e in node.entities
+            if self.kind(e) == "device"
+            and e not in self.held
+            and not self.is_available(e)
+            and self.control_of(e).on is not Mode.NEVER
+        ]
         if not waiting:
             return
         if not await self.owner.wait_until(lambda: all(self.is_available(e) for e in waiting), self.owner.start_timeout()):
@@ -368,9 +393,13 @@ class DeviceGroup:
                 node.last_demand = _now()
                 continue
             switched.append(node)
-            await self.async_node_up(node)
-            if (wait := self.owner.on_wait(node)) > 0:
-                await asyncio.sleep(wait)
+            self._starting.add(node.key)
+            try:
+                await self.async_node_up(node)
+                if (wait := self.owner.on_wait(node)) > 0:
+                    await asyncio.sleep(wait)
+            finally:
+                self._starting.discard(node.key)
             await self._apply_input(node)
 
     async def async_take_down(self, nodes: Iterable[Node]) -> None:
@@ -395,16 +424,20 @@ class DeviceGroup:
 
     # ----------------------------------------------------------------- inputs
 
-    def want_inputs(self, wanted: Mapping[str, tuple[str, Mode]]) -> None:
-        """The input each node should be on (node -> input, who chooses it); a node
-        not listed has no wish. A new wish ends a change by hand."""
-        for key in list(self._inputs):
-            if key not in wanted:
-                del self._inputs[key]
-        for key, (target, mode) in wanted.items():
-            current = self._inputs.get(key)
+    def want_inputs(self, key: str | None, wanted: Mapping[str, tuple[str, Mode]]) -> None:
+        """The input each node should be on for key (a source; node -> input, who
+        chooses it); a node not listed has no wish. A new key (another source)
+        starts afresh: a change by hand or a failure is forgotten."""
+        if key != self._wish_key:
+            self._wish_key = key
+            self._inputs.clear()
+        for node in list(self._inputs):
+            if node not in wanted:
+                del self._inputs[node]
+        for node, (target, mode) in wanted.items():
+            current = self._inputs.get(node)
             if current is None or (current.target, current.mode) != (target, mode):
-                self._inputs[key] = _Input(target, mode)
+                self._inputs[node] = _Input(target, mode)
 
     def input_of(self, node: Node) -> str | None:
         """The input the node reports (None: it does not tell)."""
@@ -423,20 +456,46 @@ class DeviceGroup:
         wish = self._inputs.get(node.key)
         return wish is not None and wish.manual
 
+    def input_ready(self, node: Node) -> bool:
+        """The node can take an input: its devices are really on (not only told to
+        be, nor expected over CEC), and it is not being brought up (its wait after
+        switching on: a TV ignores inputs while starting)."""
+        if node.key in self._starting:
+            return False
+        entity = node.inputs.entity if node.inputs else None
+        if entity:
+            return self.is_on(entity) and self.is_available(entity)
+        # its devices (or, a device only on a plug, the plugs)
+        check = [e for e in node.entities if self.kind(e) != "plug"] or node.entities
+        return bool(check) and all(self.is_on(e) for e in check)
+
     async def async_apply_inputs(self) -> None:
-        """Choose the wanted inputs on the nodes that are on."""
-        for key in list(self._inputs):
-            if (node := self.nodes.get(key)) is not None:
-                await self._apply_input(node)
+        """Choose the wanted inputs on the nodes that can take them (one run at a time)."""
+        if self._applying:
+            return
+        self._applying = True
+        try:
+            for key in list(self._inputs):
+                if (node := self.nodes.get(key)) is not None:
+                    await self._apply_input(node)
+        finally:
+            self._applying = False
 
     async def _apply_input(self, node: Node) -> None:
         wish = self._inputs.get(node.key)
         inputs = node.inputs
-        if wish is None or inputs is None or wish.manual or wish.failed or wish.mode is Mode.NEVER:
+        if wish is None or inputs is None or wish.mode is Mode.NEVER:
             return
-        device = inputs.entity
-        if not (self.is_on(device) and self.is_available(device)) if device else not self.node_on(node):
-            return  # chosen once the device is on (a TV ignores it while starting)
+        if not self.input_ready(node):
+            entity = inputs.entity
+            if not (self.is_on(entity) if entity else self.node_on(node)):
+                # off: the next time it is on, its input is chosen afresh (it may
+                # come back on its default input; that is no change by hand)
+                wish.done = wish.manual = wish.failed = False
+                wish.tries, wish.sent_at = 0, None
+            return
+        if wish.manual or wish.failed:
+            return
         current = self.input_of(node)
         if current == wish.target:
             wish.done = True
@@ -454,6 +513,9 @@ class DeviceGroup:
                 return
             if now - wish.sent_at < node.control.timeout:
                 return
+            if not self.reports_input(node):
+                wish.done = True  # it does not tell: nothing to check
+                return
             if not node.control.fallback:
                 _LOGGER.warning("%s: %s did not get input %s over CEC", self.owner.name, node.key, wish.target)
                 wish.failed = True
@@ -469,6 +531,7 @@ class DeviceGroup:
             return
         wish.tries += 1
         wish.sent_at = now
+        device = inputs.entity
         if (action := inputs.actions.get(wish.target)) is not None:
             await self.owner.run_action(action, True)
         elif device:

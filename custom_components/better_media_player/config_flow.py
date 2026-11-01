@@ -402,9 +402,10 @@ class BetterMediaPlayerOptionsFlow(CablingSteps, OptionsFlow):
 
     async def async_step_save(self, user_input=None) -> ConfigFlowResult:
         self._options = prune(self.options)  # a player or role removed: its connections go with it
-        errors = _validate(self.hass, self.options) or validate_connections(self.hass, self.options)
-        if errors:
+        if _validate(self.hass, self.options):
             return self.async_abort(reason="invalid_config")
+        if validate_connections(self.hass, self.options):
+            return self.async_abort(reason="invalid_cabling")
         return self.async_create_entry(data=self.options)
 
     async def _section(self, step_id: str, user_input) -> ConfigFlowResult:
