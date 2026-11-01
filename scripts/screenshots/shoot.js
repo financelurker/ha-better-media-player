@@ -215,5 +215,23 @@ async function shotDialog(page, file) {
     console.log('mobile');
   }
 
+  if (want('panel')) {
+    // the configuration panel: the Family Room as cabled by cable_demo.py, the film's route shown
+    await page.setViewportSize({ width: 1400, height: 760 });
+    await page.goto(`${BASE}/better-media-player/${session.entry_id}`);
+    await settle(page, 3000);
+    const panel = page.locator('bmp-panel');
+    await panel.getByRole('button', { name: 'Arrange automatically' }).click();  // the places as the panel chooses them
+    await page.waitForTimeout(800);
+    await panel.locator('.chip', { hasText: 'Film' }).click();
+    await page.waitForTimeout(500);
+    await panel.screenshot({ path: `${OUT}/panel.png` });
+    await panel.locator('.tabs button', { hasText: 'Room & behaviour' }).click();
+    await page.waitForTimeout(800);
+    await panel.screenshot({ path: `${OUT}/panel-settings.png` });
+    await page.setViewportSize({ width: 1400, height: 640 });
+    console.log('panel');
+  }
+
   await browser.close();
 })().catch((e) => { console.error(e); process.exit(1); });

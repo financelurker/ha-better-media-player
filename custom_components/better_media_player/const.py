@@ -20,6 +20,7 @@ PLATFORMS: list[Platform] = [
 ]
 
 STORAGE_VERSION = 1
+PANEL_URL = "better-media-player"  # the configuration panel: /better-media-player
 TICK_SECONDS = 10
 
 # Entry types: one per room, and one central entry (follow me).

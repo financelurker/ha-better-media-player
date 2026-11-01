@@ -1,0 +1,242 @@
+"""The configuration panel: what it is shown (websocket commands) and its registration."""
+
+from __future__ import annotations
+
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from homeassistant.setup import async_setup_component
+
+from custom_components.better_media_player.const import CONF_CONNECTIONS, CONF_DISPLAY, CONF_SPEAKERS, DOMAIN
+from custom_components.better_media_player.panel import PANEL_URL, async_setup_panel
+from custom_components.better_media_player.panel.view import routes_of
+
+from .conftest import AVR, BASS, KODI, LG, MUSIC, SPEAKERS, TV, TV_POWER, setup_hub, setup_kitchen, setup_room
+
+CEC_ROOM = {
+    CONF_DISPLAY: [LG],
+    CONF_SPEAKERS: [SPEAKERS],
+    "display_inputs": LG,
+    "display_power_on": "cec",
+    "display_cec_fallback": True,
+    "speakers_inputs": AVR,
+    CONF_CONNECTIONS: [
+        {"from": "video_player", "to": "display", "signals": ["picture", "sound"], "input": "HDMI 2", "mode": "cec"},
+        {"from": "display", "to": "speakers", "signals": ["sound"], "input": "TV/ARC", "mode": "cec"},
+        {"from": "audio_player", "to": "speakers", "signals": ["sound"], "input": "NET"},
+    ],
+}
+
+
+async def _get(hass_ws_client) -> dict:
+    client = await hass_ws_client()
+    await client.send_json_auto_id({"type": "better_media_player/config/get"})
+    msg = await client.receive_json()
+    assert msg["success"], msg
+    return msg["result"]
+
+
+async def test_a_room_from_today_s_options(hass, home, hass_ws_client):
+    """Players are the sources, the roles one device each; without cables everything is fed directly."""
+    await setup_room(hass, display_power=[TV_POWER])
+    result = await _get(hass_ws_client)
+    assert result["central"] is None
+    (room,) = result["rooms"]
+    assert room["name"] == "Living Room" and room["loaded"] is True
+    assert [(s["id"], s["player"], s["needs"]) for s in room["sources"]] == [
+        ("video", KODI, ["picture", "sound"]),
+        ("audio", MUSIC, ["sound"]),
+    ]
+    devices = {d["id"]: d for d in room["devices"]}
+    assert [(d["id"], d["kind"]) for d in room["devices"]] == [
+        ("display", "display"),
+        ("speakers", "speakers"),
+        ("subwoofer", "subwoofer"),
+    ]
+    assert devices["display"]["power"] == {"plugs": [TV], "devices": [], "actions": None, "sensors": [TV_POWER]}
+    assert devices["subwoofer"]["power"]["plugs"] == [BASS] and devices["subwoofer"]["control"] is None
+    assert devices["display"]["control"] == {"on": "bmp", "off": "bmp", "fallback": False, "timeout": 15.0}
+    assert room["cables"] == []
+    assert room["routes"]["video"] == {
+        "devices": ["display", "speakers", "subwoofer"],
+        "cables": [],
+        "direct": ["display", "speakers", "subwoofer"],
+        "inputs": {},
+    }
+    assert room["routes"]["audio"]["devices"] == ["speakers", "subwoofer"]
+    assert room["volume"] == {"where": "players"} and room["layout"] == {}
+
+
+async def test_the_room_s_settings_are_its_configuration_entities(hass, home, hass_ws_client):
+    await setup_room(hass)
+    (room,) = (await _get(hass_ws_client))["rooms"]
+    settings = {s["key"]: s for s in room["settings"]}
+    assert settings["display_run_down"]["state"] == "10.0" and settings["display_run_down"]["unit"] == "min"
+    assert all(s["entity_id"].split(".")[0] in ("number", "select", "switch") for s in room["settings"])
+    assert "sleep_timer" not in settings  # an everyday control, not a setting
+
+
+async def test_cabled_room_routes_inputs_and_cec(hass, home, hass_ws_client):
+    hass.states.async_set(LG, "off", {"source_list": ["HDMI 1", "HDMI 2"]})
+    hass.states.async_set(AVR, "off", {"source_list": ["TV/ARC", "NET"]})
+    await setup_room(hass, **CEC_ROOM, bass=None)
+    (room,) = (await _get(hass_ws_client))["rooms"]
+    assert [(c["from"], c["to"], c["input"], c["mode"]) for c in room["cables"]] == [
+        ("video", "display", "HDMI 2", "cec"),
+        ("display", "speakers", "TV/ARC", "cec"),
+        ("audio", "speakers", "NET", "bmp"),
+    ]
+    devices = {d["id"]: d for d in room["devices"]}
+    assert devices["display"]["power"]["devices"] == [LG] and devices["display"]["control"]["on"] == "cec"
+    assert devices["display"]["inputs"]["list"] == ["HDMI 1", "HDMI 2"]
+    assert devices["speakers"]["inputs"]["entity"] == AVR
+    video, audio = room["routes"]["video"], room["routes"]["audio"]
+    assert video["devices"] == ["display", "speakers"] and video["cables"] == [0, 1] and video["direct"] == []
+    assert video["inputs"] == {"display": {"input": "HDMI 2", "mode": "cec"}, "speakers": {"input": "TV/ARC", "mode": "cec"}}
+    assert audio == {"devices": ["speakers"], "cables": [2], "direct": [], "inputs": {"speakers": {"input": "NET", "mode": "bmp"}}}
+
+
+async def test_central_entry_and_rooms_by_name(hass, home, hass_ws_client):
+    await setup_hub(hass)
+    await setup_room(hass)
+    await setup_kitchen(hass)
+    result = await _get(hass_ws_client)
+    assert result["central"]["follow_player"] == "media_player.all_players_follow"
+    assert {s["key"] for s in result["central"]["settings"]} >= {"default_volume", "hide_delay"}
+    assert [r["name"] for r in result["rooms"]] == ["Kitchen", "Living Room"]
+
+
+def test_route_of_a_draft_with_passive_devices():
+    """The user's living room: Kodi's picture to the TV, its sound and the music
+    through a mixer, a splitter feeds speakers and subwoofer."""
+    sources = [{"id": "video", "needs": ["picture", "sound"]}, {"id": "audio", "needs": ["sound"]}]
+    devices = [
+        {"id": "tv", "kind": "display"},
+        {"id": "mix", "kind": "mixer"},
+        {"id": "split", "kind": "splitter"},
+        {"id": "spk", "kind": "speakers"},
+        {"id": "sub", "kind": "subwoofer"},
+    ]
+    cables = [
+        {"from": "video", "to": "tv", "signals": ["picture"]},
+        {"from": "video", "to": "mix", "signals": ["sound"]},
+        {"from": "audio", "to": "mix", "signals": ["sound"]},
+        {"from": "mix", "to": "split", "signals": ["sound"]},
+        {"from": "split", "to": "spk", "signals": ["sound"]},
+        {"from": "split", "to": "sub", "signals": ["sound"]},
+        {"from": "gone", "to": "spk", "signals": ["sound"]},  # an end that no longer exists
+    ]
+    routes = routes_of(sources, devices, cables)
+    assert routes["video"]["devices"] == ["mix", "spk", "split", "sub", "tv"]
+    assert routes["video"]["cables"] == [0, 1, 3, 4, 5] and routes["video"]["direct"] == []
+    assert routes["audio"]["devices"] == ["mix", "spk", "split", "sub"]  # the TV stays off
+    assert routes["audio"]["cables"] == [2, 3, 4, 5]
+
+
+async def test_route_command(hass, hass_ws_client):
+    assert await async_setup_component(hass, DOMAIN, {})
+    client = await hass_ws_client()
+    await client.send_json_auto_id(
+        {
+            "type": "better_media_player/route",
+            "sources": [{"id": "audio", "needs": ["sound"]}],
+            "devices": [{"id": "spk", "kind": "speakers"}, {"id": "tv", "kind": "display"}],
+            "cables": [],
+        }
+    )
+    msg = await client.receive_json()
+    assert msg["success"]
+    assert msg["result"]["routes"]["audio"] == {"devices": ["spk"], "cables": [], "direct": ["spk"], "inputs": {}}
+
+
+async def test_layout_is_kept_in_the_room(hass, home, hass_ws_client, hass_storage):
+    entry = await setup_room(hass)
+    client = await hass_ws_client()
+    await client.send_json_auto_id(
+        {"type": "better_media_player/layout/save", "entry_id": entry.entry_id, "layout": {"display": [360.4, 120]}}
+    )
+    assert (await client.receive_json())["success"]
+    await hass.async_block_till_done()
+    assert hass_storage[f"better_media_player.{entry.entry_id}"]["data"]["layout"] == {"display": [360, 120]}
+    (room,) = (await _get(hass_ws_client))["rooms"]
+    assert room["layout"] == {"display": [360, 120]}
+    # empty: arranged automatically again
+    await client.send_json_auto_id({"type": "better_media_player/layout/save", "entry_id": entry.entry_id, "layout": {}})
+    assert (await client.receive_json())["success"]
+    assert (await _get(hass_ws_client))["rooms"][0]["layout"] == {}
+
+
+async def test_layout_of_a_room_not_loaded(hass, hass_ws_client):
+    assert await async_setup_component(hass, DOMAIN, {})
+    client = await hass_ws_client()
+    await client.send_json_auto_id({"type": "better_media_player/layout/save", "entry_id": "nope", "layout": {}})
+    msg = await client.receive_json()
+    assert not msg["success"] and msg["error"]["code"] == "not_loaded"
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        {"type": "better_media_player/config/get"},
+        {"type": "better_media_player/route", "sources": [], "devices": [], "cables": []},
+        {"type": "better_media_player/layout/save", "entry_id": "x", "layout": {}},
+    ],
+)
+async def test_admins_only(hass, home, hass_ws_client, hass_admin_user, message):
+    await setup_room(hass)
+    hass_admin_user.groups = []
+    client = await hass_ws_client()
+    await client.send_json_auto_id(message)
+    msg = await client.receive_json()
+    assert not msg["success"] and msg["error"]["code"] == "unauthorized"
+
+
+async def test_panel_registered_where_the_frontend_runs(hass):
+    hass.config.components.add("frontend")
+    hass.http = MagicMock(async_register_static_paths=AsyncMock())
+    with patch("homeassistant.components.panel_custom.async_register_panel", AsyncMock()) as register:
+        await async_setup_panel(hass, "1.4.0")
+    (paths,), _ = hass.http.async_register_static_paths.call_args
+    assert paths[0].url_path == "/better_media_player_panel/1.4.0" and paths[0].cache_headers is True
+    assert paths[0].path.endswith("better_media_player/frontend")
+    kw = register.call_args.kwargs
+    assert kw["frontend_url_path"] == PANEL_URL and kw["require_admin"] is True
+    assert kw["module_url"] == "/better_media_player_panel/1.4.0/bmp-panel.js"
+    # view only: the integration's gear still opens its options (no config panel)
+    assert "config_panel_domain" not in kw
+
+
+async def test_no_panel_without_the_frontend(hass):
+    hass.http = MagicMock(async_register_static_paths=AsyncMock())
+    with patch("homeassistant.components.panel_custom.async_register_panel", AsyncMock()) as register:
+        await async_setup_panel(hass, "1.4.0")
+    register.assert_not_called()
+    hass.http.async_register_static_paths.assert_not_called()
+
+
+def test_panel_texts_exist_in_every_language():
+    """Every text the panel uses is in English, and German has the same keys."""
+    import json
+    import re
+    from pathlib import Path
+
+    front = Path(__file__).parent.parent / "custom_components" / "better_media_player" / "frontend"
+    en = json.loads((front / "i18n" / "en.json").read_text())
+    de = json.loads((front / "i18n" / "de.json").read_text())
+    assert set(de) == set(en)
+    code = (front / "bmp-panel.js").read_text()
+    used = set(re.findall(r'\bt\("([a-z_.]+)"', code))
+    used |= {f"count.{w}{s}" for w in re.findall(r'_count\("(\w+)"', code) for s in ("", "_one")}
+    # built keys: kinds, sources, signals and modes by their values
+    for prefix, values in {
+        "kind": ("player", "display", "speakers", "subwoofer", "receiver", "amp", "mixer", "splitter", "switch"),
+        "source": ("video", "audio"),
+        "legend": ("picture", "sound"),
+        "mode": ("bmp", "cec", "never"),
+        "tab": ("wiring", "settings"),
+    }.items():
+        used |= {f"{prefix}.{v}" for v in values}
+    assert used - set(en) == set()
+    for key, text in en.items():  # same placeholders in both languages
+        assert set(re.findall(r"\{(\w+)\}", text)) == set(re.findall(r"\{(\w+)\}", de[key])), key
