@@ -43,8 +43,8 @@ class NodeOwner(Protocol):
     async def call(self, domain: str, service: str, data: dict) -> bool:
         """Call an action (in a context of the owner's)."""
 
-    async def run_action(self, entity_id: str, on: bool) -> None:
-        """Run one of a node's own on/off actions."""
+    async def run_action(self, action: str, on: bool) -> None:
+        """Run one of a node's own on/off actions (a script, button, scene …)."""
 
     def assumed(self, entity_id: str) -> bool:
         """What was last sent to an own on/off action (no feedback)."""

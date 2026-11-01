@@ -143,8 +143,8 @@ class RoomPower:
     async def call(self, domain: str, service: str, data: dict) -> bool:
         return await self.ctrl._call(domain, service, data)
 
-    async def run_action(self, entity_id: str, on: bool) -> None:
-        await self.ctrl._run_action(entity_id, on)
+    async def run_action(self, action: str, on: bool) -> None:
+        await self.ctrl._run_action(action, on)
 
     def assumed(self, entity_id: str) -> bool:
         return bool(self.ctrl.data.get("assumed", {}).get(entity_id))

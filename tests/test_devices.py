@@ -22,6 +22,8 @@ def test_the_device_layer_imports_nothing_of_the_integration():
                 outside.append(f"{path.name}: {'.' * node.level}{node.module or ''}")
             if isinstance(node, ast.ImportFrom) and node.level == 0 and (node.module or "").startswith("custom_components"):
                 outside.append(f"{path.name}: {node.module}")
+            if isinstance(node, ast.Import):
+                outside += [f"{path.name}: {a.name}" for a in node.names if a.name.startswith("custom_components")]
     assert outside == []
 
 
