@@ -92,7 +92,8 @@ from .volume import RoomVolume
 from .wake import PHASE_STARTING, REASON_ROOM_OFF as WAKE_ROOM_OFF, WakeAlarm
 from .follow import RoomFollow
 from .handover import RoomHandover
-from .power import GROUP_ACTIVE_STATES, NOT_AVAILABLE, POWERED_STATES, RoomPower
+from ..devices.const import NOT_AVAILABLE, POWERED_STATES
+from .power import GROUP_ACTIVE_STATES, OFF_ORDER, RoomPower
 from .sequence import PowerSequence
 from .. import clock
 
@@ -220,7 +221,7 @@ class RoomController:
         tracked: list[str] = [s.player for s in self.sources.values()]
         if self.volume_device is not None:
             tracked.append(self.volume_device.id)
-        tracked += self.power.entities
+        tracked += self.power.devices.entities
         for role in self.power.roles.values():
             tracked += role.power or []
         self._unsubs.append(
@@ -263,6 +264,7 @@ class RoomController:
         for src in self.sources.values():
             src.backend.async_stop()
         self.source_watch.async_stop()
+        self.power.unregister()
         seq = self.sequence.task
         self.sequence.cancel()
         if seq is not None:
@@ -363,11 +365,11 @@ class RoomController:
                 if self.error:
                     self.error = None
 
-        if self._started and entity_id in self.power.entities and new is not None and old is not None:
-            was_on, is_on = self.power.state_on(entity_id, old), self.power.state_on(entity_id, new)
+        if self._started and entity_id in self.power.devices.entities and new is not None and old is not None:
+            was_on, is_on = self.power.devices.state_on(entity_id, old), self.power.devices.state_on(entity_id, new)
             if (
                 # a device may be gone while off (behind its plug, deep standby)
-                (old.state not in NOT_AVAILABLE or self.power.kind(entity_id) == "device")
+                (old.state not in NOT_AVAILABLE or self.power.devices.kind(entity_id) == "device")
                 and new.state not in NOT_AVAILABLE
                 and was_on != is_on
                 and not self.power.is_own_change(entity_id, new)
@@ -537,7 +539,7 @@ class RoomController:
     def room_on(self) -> bool:
         return (
             self.sequence.running
-            or any(self.power.is_on(e) for e in self.power.entities)
+            or any(self.power.devices.is_on(e) for e in self.power.devices.entities)
             or any(self.source_active(s) for s in self.sources.values())
         )
 
@@ -556,7 +558,7 @@ class RoomController:
                     # first look (e.g. after a restart): start the run-down now
                     role.last_demand = now
 
-            if self.manual and not any(self.power.is_on(e) for e in self.power.entities):
+            if self.manual and not any(self.power.devices.is_on(e) for e in self.power.devices.entities):
                 # manual mode ends when everything is off; what is still active
                 # must not switch the room straight back on
                 self.manual = False
@@ -565,9 +567,9 @@ class RoomController:
                         src.suppressed = True
 
             if not self.sequence.running and not self.manual:
-                if self.auto_power and self.power.missing():
+                if self.auto_power and self.power.devices.missing():
                     self.sequence.start(None)
-                await self.power.async_auto_off(now)
+                await self.power.devices.async_auto_off(now, OFF_ORDER)
             self._update_status()
             # the room comes on: one of its players is used (plugs alone, e.g. follow
             # me's prewarm or a plug switched by hand, are no "on"; the player's start
@@ -663,8 +665,8 @@ class RoomController:
             or self._just_turned_on(src)
             or src.backend.groups_of(src.player)
             # not yet reported (e.g. after a restart): no "off" to follow
-            or not all(self.power.is_available(e) for r in audio_roles for e in r.entities if self.power.kind(e) == "plug")
-            or any(self.power.role_on(r) or self.power.role_demand(r) for r in audio_roles)
+            or not all(self.power.devices.is_available(e) for r in audio_roles for e in r.entities if self.power.devices.kind(e) == "plug")
+            or any(self.power.devices.node_on(r) or self.power.role_demand(r) for r in audio_roles)
         ):
             return
         _LOGGER.info("%s: %s goes off with its speakers", self.entry.title, src.player)
@@ -678,7 +680,7 @@ class RoomController:
             self.status = STATUS_ERROR
         elif self.manual:
             self.status = STATUS_MANUAL
-        elif any(r.stop_since is not None and self.power.role_on(r) for r in self.power.roles.values()):
+        elif any(r.stop_since is not None and self.power.devices.node_on(r) for r in self.power.roles.values()):
             self.status = STATUS_STOPPING
         elif not self.auto_power:
             self.status = STATUS_DISABLED
@@ -688,7 +690,7 @@ class RoomController:
             self.source_active(s) for s in self.sources.values()
         ):
             self.status = STATUS_ON
-        elif any(self.power.is_on(e) for e in self.power.entities):
+        elif any(self.power.devices.is_on(e) for e in self.power.devices.entities):
             self.status = STATUS_RUN_DOWN
         else:
             self.status = STATUS_OFF
@@ -822,7 +824,7 @@ class RoomController:
             not src.suppressed
             and self.source_ready(src)
             and all(
-                self.power.role_fully_on(r)
+                self.power.devices.node_fully_on(r)
                 for r in self.power.roles.values()
                 if key in r.sources and self.night.role_enabled(r.key)
             )
@@ -929,14 +931,14 @@ class RoomController:
             if self.source_active_raw(src) or src.backend.groups_of(src.player):
                 src.suppressed = True
         for role in self.power.roles.values():
-            if self.power.role_on(role):
+            if self.power.devices.node_on(role):
                 role.force_off = True
         for src in self.sources.values():
             await self._source_off(src)
         # after the stop: a fade's volume comes back only once the player is quiet
         await self.sleep.async_cancel(REASON_ROOM_OFF)
         for role in self.power.roles.values():
-            if self.power.role_on(role):
+            if self.power.devices.node_on(role):
                 role.force_off = True
         self.sequence.cancel()
         await self.async_update("turn_off")
@@ -952,7 +954,7 @@ class RoomController:
                 await hub.async_update("quiet")
             for key in (ROLE_BASS, ROLE_AUDIO):
                 role = self.power.roles.get(key)
-                if role is not None and self.power.role_on(role):
+                if role is not None and self.power.devices.node_on(role):
                     role.force_off = True  # honoured once nothing else needs the speakers
         elif (hub := get_hub(self.hass)) is not None:
             hub.async_schedule("quiet")

@@ -123,7 +123,7 @@ class NightMode:
             self._cancel_ramps()
             ctrl.data.pop("night_fade_back", None)
             bass = ctrl.power.roles.get(ROLE_BASS)
-            if bass is not None and ctrl.auto_power and not ctrl.manual and ctrl.power.role_on(bass):
+            if bass is not None and ctrl.auto_power and not ctrl.manual and ctrl.power.devices.node_on(bass):
                 bass.force_off = True  # no run-down
             for out, src in self._outputs():
                 await self._clamp(out, src)

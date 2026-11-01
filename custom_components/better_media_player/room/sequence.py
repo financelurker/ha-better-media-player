@@ -16,7 +16,8 @@ from homeassistant.core import callback
 
 from ..const import CONF_START_TIMEOUT, DOMAIN, ROLE_AUDIO_HOST, ROLE_DISPLAY, ROLE_VIDEO_HOST
 from .. import clock
-from .power import ON_ORDER, Role
+from ..devices import Node
+from .power import ON_ORDER
 
 if TYPE_CHECKING:
     from .controller import RoomController
@@ -63,15 +64,11 @@ class PowerSequence:
         ctrl._update_status()
         ctrl._notify()
 
-    async def _sleep(self, seconds: float) -> None:
-        if seconds > 0:
-            await asyncio.sleep(seconds)
-
     async def _run(self, source: str | None) -> None:
         """Power the room up in a safe order."""
         ctrl = self.ctrl
         power = ctrl.power
-        switched: list[Role] = []
+        switched: list[Node] = []
         src = ctrl.sources.get(source) if source else None
         try:
             if src is not None:
@@ -90,15 +87,7 @@ class PowerSequence:
             before_player = [r for r in roles if r.key in (ROLE_VIDEO_HOST, ROLE_AUDIO_HOST, ROLE_DISPLAY)]
             after_player = [r for r in roles if r not in before_player]
 
-            for role in before_player:
-                if not ctrl.night.role_enabled(role.key):
-                    continue
-                if not power.role_fully_on(role):
-                    switched.append(role)
-                    await power.async_role_up(role)
-                    await self._sleep(power.role_on_wait(role))
-                else:
-                    role.last_demand = clock.now()
+            await power.devices.async_bring_up(before_player, switched)
 
             if src is not None and src.key in needed_sources:
                 # one deadline for the whole player start
@@ -112,22 +101,13 @@ class PowerSequence:
                     if not await ctrl._wait_until(lambda: ctrl.source_ready(src), deadline - clock.now()):
                         raise _StartFailed(f"{src.player} did not start")
 
-            for role in after_player:
-                if not ctrl.night.role_enabled(role.key):
-                    continue  # night mode switched on during the start
-                if not power.role_fully_on(role):
-                    switched.append(role)
-                    await power.async_role_up(role)
-                    await self._sleep(power.role_on_wait(role))
-                else:
-                    role.last_demand = clock.now()
+            # (a role the night mode switched off during the start is left out)
+            await power.devices.async_bring_up(after_player, switched)
             ctrl.error = None
         except _StartFailed as err:
             _LOGGER.warning("%s: start failed: %s", ctrl.entry.title, err)
             ctrl.error = str(err)
-            for role in reversed(switched):
-                role.force_off = True  # retried by async_auto_off until really off
-                await power.async_switch_role(role, False, force=True)
+            await power.devices.async_take_down(switched)
         finally:
             if asyncio.current_task() is self.task:
                 self.task = None
