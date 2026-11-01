@@ -2,16 +2,21 @@
   "domain": "better_media_player",
   "name": "Better Media Player",
   "after_dependencies": [
+    "frontend",
+    "http",
     "kodi",
     "media_source",
     "music_assistant",
+    "panel_custom",
     "tts"
   ],
   "codeowners": [
     "@financelurker"
   ],
   "config_flow": true,
-  "dependencies": [],
+  "dependencies": [
+    "websocket_api"
+  ],
   "documentation": "https://github.com/financelurker/ha-better-media-player",
   "integration_type": "device",
   "iot_class": "calculated",

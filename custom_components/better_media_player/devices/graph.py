@@ -22,21 +22,26 @@ class Route:
 
     nodes: frozenset[str]
     inputs: Mapping[str, tuple[str, Mode]]  # node -> (input, who chooses it)
+    edges: frozenset[int] = frozenset()  # the connections it uses (index in the edges given)
+    direct: frozenset[str] = frozenset()  # nodes fed directly for a signal (no connection brings it)
 
 
 def route(source: str, needs: Iterable[Signal], nodes: Mapping[str, Node], edges: Iterable[Edge]) -> Route:
     """The route of source for the signals it needs."""
     edges = list(edges)
     reached: set[str] = set()
+    used: set[int] = set()
+    direct: set[str] = set()
     inputs: dict[str, tuple[str, Mode]] = {}
     for signal in needs:
         seen = {source}
         todo = [source]
         while todo:
             at = todo.pop(0)
-            for edge in edges:
+            for i, edge in enumerate(edges):
                 if edge.source != at or signal not in edge.signals or edge.target not in nodes:
                     continue
+                used.add(i)
                 if edge.input is not None:
                     inputs.setdefault(edge.target, (edge.input, edge.mode))
                 if edge.target not in seen:
@@ -44,9 +49,11 @@ def route(source: str, needs: Iterable[Signal], nodes: Mapping[str, Node], edges
                     todo.append(edge.target)
         seen.discard(source)
         reached |= seen
-        # what the connections do not reach is fed directly
-        reached |= {k for k, n in nodes.items() if signal in n.gives and k != source}
-    return Route(frozenset(reached), inputs)
+        # what the connections do not reach is fed directly (for this signal)
+        fed = {k for k, n in nodes.items() if signal in n.gives and k != source and k not in seen}
+        reached |= fed
+        direct |= fed
+    return Route(frozenset(reached), inputs, frozenset(used), frozenset(direct))
 
 
 def cycles(edges: Iterable[Edge]) -> list[tuple[Signal, list[str]]]:

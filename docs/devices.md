@@ -4,7 +4,7 @@
 
 Optional: tell the room how its players and devices are cabled, and it switches TV and AV receiver to the right inputs for what plays – or leaves that to HDMI-CEC and only waits for it. Without cabling the room works as before: it switches the devices on and off and chooses no inputs.
 
-Set it up via **Configure** → **Cabling (inputs, CEC)**.
+Set it up via **Configure** → **Cabling (inputs, CEC)**. The [panel](designer.md) shows the result as a drawing, with the route of each player.
 
 ## Connections
 

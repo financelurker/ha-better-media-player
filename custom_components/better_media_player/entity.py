@@ -21,6 +21,7 @@ from .const import (
     ENTRY_TYPE_HUB,
     HUB_ENTITY_DEFAULTS,
     NAME,
+    PANEL_URL,
     SOURCE_AUDIO,
     SOURCE_VIDEO,
 )
@@ -64,6 +65,7 @@ class BetterMediaPlayerEntity(Entity):
             model=_model(controller),
             sw_version=integration_version(controller.hass),
             suggested_area=area_name,
+            configuration_url=f"homeassistant://{PANEL_URL}/{entry.entry_id}",  # the room in the panel
         )
 
     async def async_added_to_hass(self) -> None:
@@ -230,6 +232,7 @@ class HubEntity(Entity):
             manufacturer=NAME,
             model="Central settings",
             sw_version=integration_version(hub.hass),
+            configuration_url=f"homeassistant://{PANEL_URL}",
         )
 
     async def async_added_to_hass(self) -> None:

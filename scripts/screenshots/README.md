@@ -30,7 +30,13 @@ Home Assistant instance (2026.10.3, English, light theme) with the demo integrat
    entity id starts with the area's name (`media_player.family_room_family_room` for a room named like its
    area), and the docs show the room's entities as `<domain>.<room>_...`.
 
-3. Take the screenshots (Playwright with Chromium):
+3. For the panel's screenshots, describe the Family Room's cabling (through the real options flow):
+
+   ```bash
+   python cable_demo.py
+   ```
+
+4. Take the screenshots (Playwright with Chromium):
 
    ```bash
    python scene.py movie                                 # Kodi plays
@@ -44,7 +50,7 @@ Home Assistant instance (2026.10.3, English, light theme) with the demo integrat
    so the names are not cut). `announce.png` is the action in the developer tools (filled in YAML mode,
    shown in UI mode).
 
-4. Update the image versions in the README (its image URLs carry a hash of the file, so a changed image is not
+5. Update the image versions in the README (its image URLs carry a hash of the file, so a changed image is not
    shown from a cache; a test fails while they are out of date):
 
    ```bash

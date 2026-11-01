@@ -38,6 +38,12 @@ It is a custom integration in the spirit of Better Thermostat: you tell it what 
 - **[Announcements in several rooms](https://github.com/financelurker/ha-better-media-player/blob/main/docs/announcements.md):** rooms that play together as a group get it once, through the group, in step; quiet rooms are left out.
 - **[Central settings](https://github.com/financelurker/ha-better-media-player/blob/main/docs/setup.md):** the follow-me player and the dynamic controls for all rooms.
 
+## The panel
+
+A page of its own in Home Assistant's sidebar shows every room as a drawing: its players, its devices, how they are cabled, and what each player needs when it starts. In this release it only shows; rooms are still set up in the integration's options. [More about the panel](https://github.com/financelurker/ha-better-media-player/blob/main/docs/designer.md).
+
+![The panel: a room's devices and cables, the film's route highlighted](https://raw.githubusercontent.com/financelurker/ha-better-media-player/main/docs/images/panel.png?v=77c128b57d)
+
 ## Is it for you?
 
 **It fits if**
@@ -93,6 +99,7 @@ Without the button: HACS → ⋮ → **Custom repositories** → add `https://gi
 | [Setup](https://github.com/financelurker/ha-better-media-player/blob/main/docs/setup.md) | what the setup asks, examples, the settings on the room's device |
 | [How the room behaves](https://github.com/financelurker/ha-better-media-player/blob/main/docs/room.md) | power button and sources, order, run-downs, devices instead of plugs, standby, switched by hand |
 | [Cabling and inputs](https://github.com/financelurker/ha-better-media-player/blob/main/docs/devices.md) | connections, inputs, CEC, supported setups |
+| [The panel](https://github.com/financelurker/ha-better-media-player/blob/main/docs/designer.md) | the rooms as drawings: devices, cables, routes, settings |
 | [Room volume](https://github.com/financelurker/ha-better-media-player/blob/main/docs/volume.md) | one volume per room, on an own device, presets |
 | [Night mode, sleep timer and wake up](https://github.com/financelurker/ha-better-media-player/blob/main/docs/night-sleep-wake.md) | the night's limit, the sleep timer's fade-out, waking with a fade (also with follow me) |
 | [Follow me](https://github.com/financelurker/ha-better-media-player/blob/main/docs/follow-me.md) | the music moves with you from room to room |

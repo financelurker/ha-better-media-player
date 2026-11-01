@@ -81,7 +81,7 @@ def edges_of(options: dict) -> list[Edge]:
     ]
 
 
-def _inputs(options: dict, conf: str) -> Inputs | None:
+def role_inputs(options: dict, conf: str) -> Inputs | None:
     entity = options.get(role_conf(conf, "inputs"))
     actions = dict(options.get(role_conf(conf, "input_actions")) or {})
     if not entity and not actions:
@@ -89,7 +89,7 @@ def _inputs(options: dict, conf: str) -> Inputs | None:
     return Inputs(entity=entity, actions=actions, pause=float(options.get(role_conf(conf, "input_pause")) or 0))
 
 
-def _control(options: dict, conf: str) -> Control:
+def role_control(options: dict, conf: str) -> Control:
     return Control(
         on=Mode(options.get(role_conf(conf, "power_on")) or Mode.BMP),
         off=Mode(options.get(role_conf(conf, "power_off")) or Mode.BMP),
@@ -140,8 +140,8 @@ class RoomPower:
                     power=list(o.get(power) or []) if power else None,
                     actions=actions,
                     gives=GIVES[conf],
-                    inputs=_inputs(o, conf) if conf in INPUT_ROLES else None,
-                    control=_control(o, conf) if conf in INPUT_ROLES else Control(),
+                    inputs=role_inputs(o, conf) if conf in INPUT_ROLES else None,
+                    control=role_control(o, conf) if conf in INPUT_ROLES else Control(),
                 )
         # what each source needs: its route through the connections
         self.routes: dict[str, Route] = {}

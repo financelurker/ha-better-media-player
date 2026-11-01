@@ -33,6 +33,7 @@ from .room.controller import RoomController
 from .follow.manager import FollowManager
 from .room import get_rooms
 from .issues import async_setup_issues, get_checker
+from .panel import async_setup_panel
 
 type BetterMediaPlayerConfigEntry = ConfigEntry[RoomController | FollowManager]
 
@@ -47,6 +48,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.data.setdefault(DOMAIN, {}).setdefault("rooms", {})
     async_setup_services(hass)
     async_setup_issues(hass)
+    version = str((await async_get_integration(hass, DOMAIN)).version)
+    hass.data[DOMAIN]["version"] = version
+    await async_setup_panel(hass, version)
 
     @callback
     def _entry_changed(change: ConfigEntryChange, entry: ConfigEntry) -> None:
@@ -100,8 +104,6 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: BetterMediaPlayerConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {}).setdefault("rooms", {})
-    if "version" not in hass.data[DOMAIN]:
-        hass.data[DOMAIN]["version"] = str((await async_get_integration(hass, DOMAIN)).version)
     if is_hub(entry):
         hub = FollowManager(hass, entry)
         hass.data[DOMAIN]["hub"] = hub
