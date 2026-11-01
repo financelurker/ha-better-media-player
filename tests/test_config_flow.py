@@ -117,7 +117,7 @@ async def test_options_flow(hass, home):
     entry = await setup_room(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
     assert result["type"] is FlowResultType.MENU
-    assert result["menu_options"] == ["room", "players", "devices", "save"]
+    assert result["menu_options"] == ["room", "players", "devices", "cabling", "save"]
     result = await hass.config_entries.options.async_configure(result["flow_id"], {"next_step_id": "devices"})
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {CONF_DISPLAY: [TV], CONF_SPEAKERS: [SPEAKERS], "actions": {}, "standby": {}, "follow": {"occupancy": [LIVING_OCC]}}

@@ -141,6 +141,7 @@
           "room": "Raum",
           "players": "Media Player",
           "devices": "Geräte und Lautstärke",
+          "cabling": "Verkabelung (Eingänge, CEC)",
           "save": "Speichern"
         },
         "data": {
@@ -239,6 +240,100 @@
             }
           }
         }
+      },
+      "cabling": {
+        "title": "Verkabelung",
+        "description": "Optional. Welcher Player bzw. welches Gerät an welchem hängt, mit Bild und/oder Ton, an welchem Eingang – damit der Raum TV und Receiver auf die richtigen Eingänge stellt. Ohne Verbindungen arbeitet der Raum wie bisher (es werden keine Eingänge gewählt).",
+        "menu_options": {
+          "connection_add": "Verbindung hinzufügen",
+          "connection_edit": "Verbindung bearbeiten",
+          "connection_remove": "Verbindungen entfernen",
+          "control_display": "Display: Eingänge und Schalten",
+          "control_speakers": "Lautsprecher: Eingänge und Schalten",
+          "init": "Zurück"
+        }
+      },
+      "connection": {
+        "title": "Verbindung",
+        "description": "Was woran hängt (wie verkabelt: ein HDMI-Kabel; ARC vom TV zurück zum Receiver ist eine eigene Verbindung).",
+        "data": {
+          "from": "Von",
+          "to": "Nach",
+          "signals": "Überträgt"
+        },
+        "data_description": {
+          "from": "Ein Player oder ein Gerät, das das Signal weitergibt (z. B. der TV, der seinen Ton per ARC an den Receiver schickt).",
+          "to": "Das Gerät, an dem es angesteckt ist.",
+          "signals": "Bild, Ton oder beides."
+        }
+      },
+      "connection_input": {
+        "title": "Eingang",
+        "description": "Der Eingang von {target}, an dem diese Verbindung ankommt, und wer ihn wählt.",
+        "data": {
+          "input": "Eingang",
+          "mode": "Gewählt von"
+        },
+        "data_description": {
+          "input": "Leer: nichts zu wählen (das Gerät hat nur diesen Eingang).",
+          "mode": "BMP: der Raum wählt ihn. CEC: der Player macht es über HDMI-CEC, der Raum wartet nur darauf (und wählt ihn nach dem Timeout selbst, falls beim Schalten des Geräts eingestellt). Nie: bleibt unberührt."
+        }
+      },
+      "connection_edit": {
+        "title": "Verbindung bearbeiten",
+        "data": {
+          "connection": "Verbindung"
+        }
+      },
+      "connection_remove": {
+        "title": "Verbindungen entfernen",
+        "data": {
+          "connections": "Verbindungen"
+        }
+      },
+      "control_display": {
+        "title": "Display: Eingänge und Schalten",
+        "description": "Wie dieses Gerät seinen Eingang wählt und wer es ein- und ausschaltet.",
+        "data": {
+          "inputs": "Eingänge über",
+          "input_actions": "Eingangs-Aktionen",
+          "input_pause": "Pause nach einer Eingangswahl",
+          "power_on": "Eingeschaltet von",
+          "power_off": "Ausgeschaltet von",
+          "cec_fallback": "Rückfall auf BMP",
+          "cec_timeout": "CEC-Timeout"
+        },
+        "data_description": {
+          "inputs": "Ein Media Player mit Quellenliste (select_source), meist das Gerät selbst.",
+          "input_actions": "Für Geräte ohne Quellenliste (IR): eine Aktion je Eingang, z. B. {\"HDMI 1\": \"script.tv_hdmi1\"}.",
+          "input_pause": "Vor dem nächsten Befehl (IR-Geräte brauchen manchmal einen Moment).",
+          "power_on": "BMP: der Raum schaltet es ein. CEC: ein Player schaltet es über HDMI-CEC ein, der Raum wartet darauf. Nie: bleibt unberührt. Steckdosen schaltet immer der Raum.",
+          "power_off": "Wie oben, fürs Ausschalten (nach der Nachlaufzeit).",
+          "cec_fallback": "Passiert das von CEC Erwartete nicht innerhalb des Timeouts, macht es der Raum selbst.",
+          "cec_timeout": "Wie lange der Raum auf das wartet, was CEC tun soll."
+        }
+      },
+      "control_speakers": {
+        "title": "Lautsprecher: Eingänge und Schalten",
+        "description": "Wie dieses Gerät seinen Eingang wählt und wer es ein- und ausschaltet.",
+        "data": {
+          "inputs": "Eingänge über",
+          "input_actions": "Eingangs-Aktionen",
+          "input_pause": "Pause nach einer Eingangswahl",
+          "power_on": "Eingeschaltet von",
+          "power_off": "Ausgeschaltet von",
+          "cec_fallback": "Rückfall auf BMP",
+          "cec_timeout": "CEC-Timeout"
+        },
+        "data_description": {
+          "inputs": "Ein Media Player mit Quellenliste (select_source), meist das Gerät selbst.",
+          "input_actions": "Für Geräte ohne Quellenliste (IR): eine Aktion je Eingang, z. B. {\"HDMI 1\": \"script.tv_hdmi1\"}.",
+          "input_pause": "Vor dem nächsten Befehl (IR-Geräte brauchen manchmal einen Moment).",
+          "power_on": "BMP: der Raum schaltet es ein. CEC: ein Player schaltet es über HDMI-CEC ein, der Raum wartet darauf. Nie: bleibt unberührt. Steckdosen schaltet immer der Raum.",
+          "power_off": "Wie oben, fürs Ausschalten (nach der Nachlaufzeit).",
+          "cec_fallback": "Passiert das von CEC Erwartete nicht innerhalb des Timeouts, macht es der Raum selbst.",
+          "cec_timeout": "Wie lange der Raum auf das wartet, was CEC tun soll."
+        }
       }
     },
     "error": {
@@ -255,7 +350,13 @@
       "volume_is_room": "Ein Better-Media-Player-Raum kann nicht das Lautstärke-Gerät sein.",
       "needs_both_actions": "Bitte Ein- und Aus-Aktion wählen.",
       "device_is_player": "Ein Gerät darf keiner der Player des Raums sein.",
-      "device_is_room": "Ein Better-Media-Player-Raum kann kein Gerät einer Rolle sein."
+      "device_is_room": "Ein Better-Media-Player-Raum kann kein Gerät einer Rolle sein.",
+      "connection_to_itself": "Eine Verbindung kann nicht dorthin gehen, wo sie herkommt.",
+      "connection_end_missing": "Eine Verbindung hat ein Ende, das in diesem Raum nicht eingerichtet ist.",
+      "connection_no_signal": "Eine Verbindung überträgt Bild, Ton oder beides.",
+      "connection_cycle": "Die Verbindungen laufen für ein Signal im Kreis.",
+      "input_conflict": "Eine Quelle bräuchte am selben Gerät zwei verschiedene Eingänge.",
+      "unknown_input": "Das Gerät bietet diesen Eingang nicht an."
     },
     "abort": {
       "invalid_config": "Die Einstellungen passen nicht zusammen. Bitte Media Player und Stromgeräte prüfen."
@@ -686,6 +787,28 @@
         "normal": "Normal",
         "loud": "Laut",
         "party": "Party"
+      }
+    },
+    "connection_end": {
+      "options": {
+        "video_player": "Video-Player",
+        "audio_player": "Musik-Player",
+        "display": "Display",
+        "speakers": "Lautsprecher",
+        "bass": "Subwoofer"
+      }
+    },
+    "signal": {
+      "options": {
+        "picture": "Bild",
+        "sound": "Ton"
+      }
+    },
+    "mode": {
+      "options": {
+        "bmp": "BMP",
+        "cec": "CEC (automatisch)",
+        "never": "Nie"
       }
     }
   },

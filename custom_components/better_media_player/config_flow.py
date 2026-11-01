@@ -48,6 +48,7 @@ from .const import (
     VOLUME_ENTITY_DOMAINS,
     VOLUME_PLAYERS,
 )
+from .flow_cabling import CablingSteps, prune, validate_connections
 from .players import is_group, suggested_role
 from .players.music_assistant import MusicAssistant
 
@@ -384,8 +385,8 @@ class BetterMediaPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
         return BetterMediaPlayerOptionsFlow()
 
 
-class BetterMediaPlayerOptionsFlow(OptionsFlow):
-    """Menu: each section on its own, then save."""
+class BetterMediaPlayerOptionsFlow(CablingSteps, OptionsFlow):
+    """Menu: each section on its own (and the cabling), then save."""
 
     def __init__(self) -> None:
         self._options: dict[str, Any] | None = None
@@ -397,10 +398,11 @@ class BetterMediaPlayerOptionsFlow(OptionsFlow):
         return self._options
 
     async def async_step_init(self, user_input=None) -> ConfigFlowResult:
-        return self.async_show_menu(step_id="init", menu_options=[*STEPS, "save"])
+        return self.async_show_menu(step_id="init", menu_options=[*STEPS, "cabling", "save"])
 
     async def async_step_save(self, user_input=None) -> ConfigFlowResult:
-        errors = _validate(self.hass, self.options)
+        self._options = prune(self.options)  # a player or role removed: its connections go with it
+        errors = _validate(self.hass, self.options) or validate_connections(self.hass, self.options)
         if errors:
             return self.async_abort(reason="invalid_config")
         return self.async_create_entry(data=self.options)
