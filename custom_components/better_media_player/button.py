@@ -35,7 +35,7 @@ class AllOffButton(ControlEntity, ButtonEntity):
 
     @property
     def usable(self) -> bool:
-        return self.ctrl.room_active or self.ctrl.power.has_power
+        return self.ctrl.room_active or self.ctrl.power.devices.has_power
 
     async def async_press(self) -> None:
         await self.ctrl.async_turn_off()

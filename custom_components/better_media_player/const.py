@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from homeassistant.const import Platform
 
+from .devices.const import DEVICE_DOMAINS, SWITCH_DOMAINS
+
 DOMAIN = "better_media_player"
 NAME = "Better Media Player"
 
@@ -183,7 +185,6 @@ CONF_AUDIO_POWER = "audio_power"
 CONF_AUDIO_STANDBY = "audio_standby"
 CONF_AUDIO_STANDBY_W = "audio_standby_w"
 CONF_AUDIO_STANDBY_MAX = "audio_standby_max"  # min
-STANDBY_HOLD_SECONDS = 30
 
 # set on the room device (number entities), not in the options; first values
 ENTITY_DEFAULTS: dict = {
@@ -255,8 +256,6 @@ STATUSES = [
 ]
 
 # Domains that can be switched as power devices
-SWITCH_DOMAINS = ["switch", "light", "input_boolean"]
-DEVICE_DOMAINS = ["media_player", "remote"]  # devices that turn themselves on/off
 ROLE_DOMAINS = [*SWITCH_DOMAINS, *DEVICE_DOMAINS]
 # Domains usable as a custom on/off action
 ACTION_DOMAINS = ["script", "button", "input_button", "switch", "scene", "automation"]

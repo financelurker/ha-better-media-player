@@ -53,6 +53,27 @@ async def test_start_timeout_rolls_back(hass, home, freezer):
     assert hass.states.get("sensor.living_room_status").state == "error"
 
 
+async def test_a_failed_start_restarts_the_run_down_of_what_was_on(hass, home, freezer):
+    """The TV was still running down; a start that fails leaves it on for a full
+    run-down from the start (it was wanted again), not for the rest of the old one."""
+    await setup_room(hass)
+    home.kodi("playing")
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 5)
+    home.kodi("off")  # film over: the TV runs down (10 min)
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 8 * 60, step=30)
+    assert home.on(TV)
+    await hass.services.async_call("media_player", "turn_on", {"entity_id": ROOM}, blocking=True)
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 100)  # Kodi never answers (timeout 90 s)
+    assert hass.states.get("sensor.living_room_status").state == "error"
+    await tick(hass, freezer, 3 * 60, step=30)  # the old run-down would be over by now
+    assert home.on(TV)
+    await tick(hass, freezer, 7 * 60, step=30)
+    assert not home.on(TV)
+
+
 async def test_turn_on_music_only_switches_speakers(hass, home):
     entry = await setup_room(hass)
     entry.runtime_data.data["last_source"] = "audio"
