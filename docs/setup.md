@@ -23,7 +23,7 @@ The setup only asks what is connected:
 
 Since Home Assistant 2026.6, new entity ids start with the area's name: a room named like its area gets e.g. `media_player.living_room_living_room` (rename it in the entity's settings if you like). These pages write `<room>` for the room's part.
 
-Everything can be changed later via **Configure**. How the room behaves is set on its device (below).
+Everything can be changed later via **Configure**; there, **Cabling (inputs, CEC)** tells the room how its players and devices are connected, so it chooses the right inputs ([Cabling and inputs](devices.md)). How the room behaves is set on its device (below).
 
 | Menu | Media players | Devices and volume |
 |---|---|---|
