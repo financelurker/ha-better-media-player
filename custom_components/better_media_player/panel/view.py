@@ -50,7 +50,7 @@ from ..const import (
 from ..devices.const import SWITCH_DOMAINS
 from ..devices.graph import route
 from ..devices.model import Edge, Mode, Node, Signal
-from ..room.power import role_control, role_inputs
+from ..room.power import NEEDS, role_control, role_inputs
 
 # a device kind puts out (picture / sound); the route ends there unless a cable goes on
 KIND_GIVES: dict[str, frozenset[Signal]] = {
@@ -60,11 +60,10 @@ KIND_GIVES: dict[str, frozenset[Signal]] = {
     "speakers": frozenset({Signal.SOUND}),
     "subwoofer": frozenset({Signal.SOUND}),
 }
-NEEDS = {SOURCE_VIDEO: (Signal.PICTURE, Signal.SOUND), SOURCE_AUDIO: (Signal.SOUND,)}
 
-# today's option keys as ids in the panel
-ROLE_DEVICES = ((CONF_DISPLAY, "display", CONF_DISPLAY_POWER), (CONF_SPEAKERS, "speakers", CONF_AUDIO_POWER), (CONF_BASS, "subwoofer", None))
+# today's option keys as ids in the panel (a role's id is its device kind)
 ID_OF = {CONF_VIDEO_PLAYER: SOURCE_VIDEO, CONF_AUDIO_PLAYER: SOURCE_AUDIO, CONF_DISPLAY: "display", CONF_SPEAKERS: "speakers", CONF_BASS: "subwoofer"}
+ROLE_POWER = {CONF_DISPLAY: CONF_DISPLAY_POWER, CONF_SPEAKERS: CONF_AUDIO_POWER, CONF_BASS: None}  # its power sensors
 
 
 def _name(hass: HomeAssistant, entity_id: str | None) -> str | None:
@@ -152,7 +151,7 @@ def room_view(hass: HomeAssistant, entry: ConfigEntry, layout: dict | None = Non
                 }
             )
     devices = []
-    for conf, kind, power_k in ROLE_DEVICES:
+    for conf, power_k in ROLE_POWER.items():
         entities = list(o.get(conf) or [])
         on_k, off_k = ROLE_ACTIONS[conf]
         actions = [o[on_k], o[off_k]] if o.get(on_k) and o.get(off_k) else None
@@ -160,7 +159,7 @@ def room_view(hass: HomeAssistant, entry: ConfigEntry, layout: dict | None = Non
             continue
         device: dict[str, Any] = {
             "id": ID_OF[conf],
-            "kind": kind,
+            "kind": ID_OF[conf],
             "power": {
                 "plugs": [e for e in entities if e.split(".")[0] in SWITCH_DOMAINS],
                 "devices": [e for e in entities if e.split(".")[0] not in SWITCH_DOMAINS],

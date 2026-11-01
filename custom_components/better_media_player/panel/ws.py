@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant, callback
 
 from ..const import CONF_ENTRY_TYPE, DOMAIN, ENTRY_TYPE_HUB
 from ..room import get_rooms
-from .view import KIND_GIVES, central_view, room_view, routes_of
+from .view import central_view, room_view, routes_of
 
 WS_CONFIG_GET = f"{DOMAIN}/config/get"
 WS_ROUTE = f"{DOMAIN}/route"
@@ -45,10 +45,7 @@ def ws_config_get(hass: HomeAssistant, connection: websocket_api.ActiveConnectio
         else:
             rooms.append(room_view(hass, entry, _layout(hass, entry.entry_id)))
     rooms.sort(key=lambda r: r["name"].casefold())
-    connection.send_result(
-        msg["id"],
-        {"version": hass.data.get(DOMAIN, {}).get("version"), "central": central, "rooms": rooms},
-    )
+    connection.send_result(msg["id"], {"central": central, "rooms": rooms})
 
 
 _SOURCE = vol.Schema(
@@ -79,7 +76,7 @@ _CABLE = vol.Schema(
 @callback
 def ws_route(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
     """The routes of a room's draft (sources, devices, cables as config/get gives them)."""
-    connection.send_result(msg["id"], {"routes": routes_of(msg["sources"], msg["devices"], msg["cables"]), "gives": {k: sorted(v) for k, v in KIND_GIVES.items()}})
+    connection.send_result(msg["id"], {"routes": routes_of(msg["sources"], msg["devices"], msg["cables"])})
 
 
 @websocket_api.require_admin
@@ -87,7 +84,9 @@ def ws_route(hass: HomeAssistant, connection: websocket_api.ActiveConnection, ms
     {
         vol.Required("type"): WS_LAYOUT_SAVE,
         vol.Required("entry_id"): str,
-        vol.Required("layout"): {str: vol.All([vol.Coerce(float)], vol.Length(min=2, max=2))},
+        vol.Required("layout"): {
+            str: vol.All([vol.All(vol.Coerce(float), vol.Range(min=-1e6, max=1e6))], vol.Length(min=2, max=2))
+        },
     }
 )
 @callback

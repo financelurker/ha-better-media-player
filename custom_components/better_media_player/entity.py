@@ -13,7 +13,6 @@ from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_call_later
 
 from .const import (
-    PANEL_URL,
     CONF_AREA,
     CONF_DYNAMIC_CONTROLS,
     CONF_ENTRY_TYPE,
@@ -22,6 +21,7 @@ from .const import (
     ENTRY_TYPE_HUB,
     HUB_ENTITY_DEFAULTS,
     NAME,
+    PANEL_URL,
     SOURCE_AUDIO,
     SOURCE_VIDEO,
 )

@@ -8,16 +8,15 @@ import { translator } from "./i18n.js";
 import { W, H, PASSIVE, SINKS, nodesOf, arrange, curve, labelSpot, bounds, iconPath } from "./diagram.js";
 
 const PANEL_URL = "better-media-player";
-const SIGNAL_CLASS = { picture: "picture", sound: "sound" };
 
 class BmpPanel extends LitElement {
   static properties = {
     hass: { attribute: false },
     narrow: { type: Boolean, reflect: true },
     route: { attribute: false },
-    panel: { attribute: false },
     _config: { state: true },
     _error: { state: true },
+    _notice: { state: true },
     _page: { state: true },
     _roomId: { state: true },
     _tab: { state: true },
@@ -29,7 +28,8 @@ class BmpPanel extends LitElement {
   constructor() {
     super();
     this._config = null;
-    this._error = null;
+    this._error = null; // loading failed: the panel cannot show anything
+    this._notice = null; // something else failed: shown above the drawing
     this._page = "room";
     this._tab = "wiring";
     this._roomId = null;
@@ -58,13 +58,17 @@ class BmpPanel extends LitElement {
     super.disconnectedCallback();
   }
 
-  async willUpdate(changed) {
-    if (changed.has("hass") && this.hass && this.hass.language !== this._lang) {
-      this._lang = this.hass.language;
-      this._t = await translator(this._lang);
-      this.requestUpdate();
-    }
-    if (changed.has("hass") && this.hass && !this._config && !this._loading) this._load();
+  willUpdate(changed) {
+    if (!changed.has("hass") || !this.hass) return;
+    if (this.hass.language !== this._lang) this._loadTexts(this.hass.language);
+    if (!this._config && !this._loading && !this._error) this._load(); // after a failure: only on "Retry"
+  }
+
+  async _loadTexts(language) {
+    this._lang = language;
+    this._t = await translator(language);
+    this._nodes = {};  // the tiles' names (kinds) in the language
+    this.requestUpdate();
   }
 
   async _load() {
@@ -132,16 +136,19 @@ class BmpPanel extends LitElement {
 
   render() {
     const t = this._t;
-    if (this._error) return html`<div class="message">${t("error", { error: this._error })}</div>`;
+    if (this._error)
+      return html`<div class="message">${t("error", { error: this._error })}
+        <button class="chip" @click=${() => { this._error = null; this._load(); }}>${t("retry")}</button></div>`;
     if (!this._config) return html`<div class="message">${t("loading")}</div>`;
     const room = this._room;
     return html`
       <div class="app">
         <header class="toolbar">
-          ${this.narrow ? html`<ha-menu-button .hass=${this.hass} .narrow=${this.narrow}></ha-menu-button>` : nothing}
+          <ha-menu-button .hass=${this.hass} .narrow=${this.narrow}></ha-menu-button>
           <h1>${t("title")}</h1>
         </header>
         <div class="viewonly">${t("view_only")}</div>
+        ${this._notice ? html`<div class="notice" role="alert">${this._notice}<button class="chip" @click=${() => { this._notice = null; }}>${t("dismiss")}</button></div>` : nothing}
         <div class="main">
           ${this._renderNav()}
           ${this._page === "central"
@@ -185,7 +192,7 @@ class BmpPanel extends LitElement {
           ? html`<div class="page">${this._renderSettings(room)}</div>`
           : html`${this._renderSources(room)}${this._renderDiagram(room)}${this._renderRoute(room)}`}
       </section>
-      <section class="inspector">${this._tab === "settings" ? this._renderSettingsAside(room) : this._renderInspector(room)}</section>
+      <section class="inspector">${this._tab === "settings" ? html`<h2>${room.name}</h2><div class="kind">${t("tab.settings")}</div>` : this._renderInspector(room)}</section>
     `;
   }
 
@@ -227,7 +234,7 @@ class BmpPanel extends LitElement {
       const dim = route && !route.cables.includes(i);
       const sel = this._selected?.type === "cable" && this._selected.index === i;
       const both = c.signals.length === 2;
-      const cls = `cable ${both ? "picture" : SIGNAL_CLASS[c.signals[0]] || ""}${dim ? " dim" : ""}${sel ? " sel" : ""}`;
+      const cls = `cable ${both ? "picture" : c.signals[0]}${dim ? " dim" : ""}${sel ? " sel" : ""}`;
       if (c.input || c.mode === "cec") {
         const text = (c.input ?? "") + (c.mode === "cec" ? (c.input ? " · CEC" : "CEC") : "");
         const w = text.length * 7 + 14;
@@ -259,7 +266,7 @@ class BmpPanel extends LitElement {
         <div class="pct">${Math.round(v.k * 100)}%</div>
         <button title=${t("zoom.fit")} aria-label=${t("zoom.fit")} @click=${() => this._fit()}><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
         <button title=${t("zoom.actual")} aria-label=${t("zoom.actual")} @click=${() => this._zoomBy(1 / v.k)}><svg viewBox="0 0 24 24"><path d="M7 8v8M11 9.5v.01M11 14.5v.01M15 8v8"/></svg></button>
-        <button title=${t("zoom.arrange")} aria-label=${t("zoom.arrange")} @click=${() => this._rearrange(room)}><svg viewBox="0 0 24 24"><path d="M4 5h6v5H4zM14 14h6v5h-6zM10 7.5h3a2 2 0 0 1 2 2V14"/></svg></button>
+        <button title=${t("zoom.arrange")} aria-label=${t("zoom.arrange")} ?disabled=${!room.loaded} @click=${() => this._rearrange(room)}><svg viewBox="0 0 24 24"><path d="M4 5h6v5H4zM14 14h6v5h-6zM10 7.5h3a2 2 0 0 1 2 2V14"/></svg></button>
       </div>
       <div class="navhint">${t("nav_hint")}</div>
     </div>`;
@@ -342,7 +349,7 @@ class BmpPanel extends LitElement {
       ${p.devices?.length ? this._entities(t("insp.devices"), p.devices) : nothing}
       ${p.actions ? this._entities(t("insp.actions"), p.actions) : nothing}
       ${p.sensors?.length ? this._entities(t("insp.sensors"), p.sensors) : nothing}
-      ${none ? this._field(t("insp.plugs"), t("insp.no_power")) : nothing}
+      ${none ? this._field(t("insp.power"), t("insp.no_power")) : nothing}
       ${d.control && p.devices?.length
         ? html`${this._field(t("insp.on_by"), t(`mode.${d.control.on}`))}${this._field(t("insp.off_by"), t(`mode.${d.control.off}`))}
           ${(d.control.on === "cec" || d.control.off === "cec") && d.control.fallback ? html`<p class="muted">${t("insp.fallback", { timeout: d.control.timeout })}</p>` : nothing}`
@@ -396,11 +403,6 @@ class BmpPanel extends LitElement {
       </div>`;
   }
 
-  _renderSettingsAside(room) {
-    const t = this._t;
-    return html`<h2>${room.name}</h2><div class="kind">${t("tab.settings")}</div>`;
-  }
-
   _renderCentral() {
     const t = this._t;
     const c = this._config.central;
@@ -441,7 +443,7 @@ class BmpPanel extends LitElement {
   }
 
   _onDragStart(e, n) {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || !e.isPrimary || !this._room?.loaded) return;
     e.preventDefault();
     e.stopPropagation();
     this._focusDrawing();
@@ -454,7 +456,7 @@ class BmpPanel extends LitElement {
   }
 
   _onPanStart(e) {
-    if (e.button !== 0 || e.target.id !== "canvas") return;
+    if (e.button !== 0 || !e.isPrimary || e.target.id !== "canvas") return;
     e.preventDefault();
     this._focusDrawing();
     const v = this._view();
@@ -561,7 +563,7 @@ class BmpPanel extends LitElement {
     try {
       await this.hass.callWS({ type: "better_media_player/layout/save", entry_id: room.entry_id, layout });
     } catch (err) {
-      this._error = this._t("save_failed", { error: err?.message || String(err) });
+      this._notice = this._t("save_failed", { error: err?.message || String(err) });
     }
   }
 
@@ -574,7 +576,7 @@ class BmpPanel extends LitElement {
     try {
       await this.hass.callWS({ type: "better_media_player/layout/save", entry_id: room.entry_id, layout: {} });
     } catch (err) {
-      this._error = this._t("save_failed", { error: err?.message || String(err) });
+      this._notice = this._t("save_failed", { error: err?.message || String(err) });
     }
   }
 
@@ -596,7 +598,7 @@ class BmpPanel extends LitElement {
       --bmp-chip: var(--secondary-background-color, #eef3f7);
       background: var(--bmp-bg);
       color: var(--bmp-text);
-      font-family: var(--paper-font-body1_-_font-family, Roboto, "Noto Sans", system-ui, sans-serif);
+      font-family: var(--ha-font-family-body, Roboto, "Noto Sans", system-ui, sans-serif);
       font-size: 14px;
     }
     * { box-sizing: border-box; }
@@ -605,6 +607,8 @@ class BmpPanel extends LitElement {
     .app { display: grid; grid-template-rows: var(--header-height, 56px) auto 1fr; height: 100%; }
     .toolbar { display: flex; align-items: center; gap: 8px; padding: 0 16px; background: var(--app-header-background-color, var(--bmp-primary)); color: var(--app-header-text-color, #fff); }
     .toolbar h1 { font-size: 20px; font-weight: 400; margin: 0; }
+    .notice { display: flex; align-items: center; gap: 12px; justify-content: space-between; padding: 8px 16px; background: var(--warning-color, #f9a825); color: #000; }
+    .zoombar button:disabled { opacity: .4; cursor: default; }
     .viewonly { padding: 8px 16px; background: var(--bmp-card); border-bottom: 1px solid var(--bmp-line); color: var(--bmp-muted); font-size: 13px; }
     .main { display: grid; grid-template-columns: 220px 1fr 320px; min-height: 0; }
     aside, .inspector { background: var(--bmp-card); overflow: auto; }

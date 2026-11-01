@@ -8,15 +8,12 @@ ws.py. It is registered only where Home Assistant's frontend runs; without it
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 
 from homeassistant.core import HomeAssistant
 
 from ..const import DOMAIN, PANEL_URL
 from .ws import async_setup_ws
-
-_LOGGER = logging.getLogger(__name__)
 
 PANEL_TITLE = "Better Media Player"
 PANEL_ICON = "mdi:speaker-multiple"
@@ -45,5 +42,4 @@ async def async_setup_panel(hass: HomeAssistant, version: str) -> None:
         require_admin=True,
         # no config_panel_domain while the panel only shows: the integration's
         # gear would lead here instead of to its options
-        config={"version": version, "base": base},
     )

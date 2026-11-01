@@ -44,6 +44,7 @@
   "insp.entity": "Player",
   "insp.host": "Steckdose seiner Hardware",
   "insp.actions": "Eigene Aktionen (an / aus)",
+  "insp.power": "Strom",
   "insp.plugs": "Steckdosen",
   "insp.devices": "Schaltet sich selbst",
   "insp.sensors": "Leistungssensoren",
@@ -84,5 +85,7 @@
   "count.devices_one": "{n} Gerät",
   "count.devices": "{n} Geräte",
   "count.cables_one": "{n} Kabel",
-  "count.cables": "{n} Kabel"
+  "count.cables": "{n} Kabel",
+  "retry": "Erneut versuchen",
+  "dismiss": "Schließen"
 }

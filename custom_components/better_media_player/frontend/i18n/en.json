@@ -44,6 +44,7 @@
   "insp.entity": "Player",
   "insp.host": "Plug of its hardware",
   "insp.actions": "Own actions (on / off)",
+  "insp.power": "Power",
   "insp.plugs": "Plugs",
   "insp.devices": "Switches itself",
   "insp.sensors": "Power sensors",
@@ -84,5 +85,7 @@
   "count.devices_one": "{n} device",
   "count.devices": "{n} devices",
   "count.cables_one": "{n} cable",
-  "count.cables": "{n} cables"
+  "count.cables": "{n} cables",
+  "retry": "Retry",
+  "dismiss": "Dismiss"
 }

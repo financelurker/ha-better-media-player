@@ -30,8 +30,8 @@ The routes are worked out by the integration, with the same calculation that swi
 ## Moving around
 
 - **Pan:** drag empty space, or scroll with the wheel.
-- **Zoom:** Ctrl + wheel (or pinch), or the buttons. With the drawing focused (click into it), also the keys + and −; **0** fits the drawing to the screen, **1** shows it at its actual size.
-- **Arrange:** drag a tile to another place; the room keeps the arrangement (it changes nothing in how the room works). *Arrange automatically* places everything anew.
+- **Zoom:** Ctrl + wheel (or a trackpad pinch), or the buttons. With the drawing focused (click into it), also the keys + and −; **0** fits the drawing to the screen, **1** shows it at its actual size.
+- **Arrange:** drag a tile to another place; the room keeps the arrangement (it changes nothing in how the room works). *Arrange automatically* places everything anew. Only for a room that is loaded (one that is not shows its devices from its setup).
 
 ## Room & behaviour
 

@@ -104,8 +104,6 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: BetterMediaPlayerConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {}).setdefault("rooms", {})
-    if "version" not in hass.data[DOMAIN]:  # set up without async_setup (tests)
-        hass.data[DOMAIN]["version"] = str((await async_get_integration(hass, DOMAIN)).version)
     if is_hub(entry):
         hub = FollowManager(hass, entry)
         hass.data[DOMAIN]["hub"] = hub

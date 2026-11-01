@@ -2,17 +2,30 @@
 
 from __future__ import annotations
 
+import json
+import re
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import device_registry as dr
 from homeassistant.setup import async_setup_component
 
-from custom_components.better_media_player.const import CONF_CONNECTIONS, CONF_DISPLAY, CONF_SPEAKERS, DOMAIN
+from custom_components.better_media_player.const import (
+    CONF_CONNECTIONS,
+    CONF_DISPLAY,
+    CONF_ENTRY_TYPE,
+    CONF_SPEAKERS,
+    DOMAIN,
+    ENTRY_TYPE_ROOM,
+)
 from custom_components.better_media_player.panel import PANEL_URL, async_setup_panel
 from custom_components.better_media_player.panel.view import routes_of
 
-from .conftest import AVR, BASS, KODI, LG, MUSIC, SPEAKERS, TV, TV_POWER, setup_hub, setup_kitchen, setup_room
+from .conftest import AVR, BASS, KODI, LG, MUSIC, SPEAKERS, TV, TV_POWER, room_options, setup_hub, setup_kitchen, setup_room
 
 CEC_ROOM = {
     CONF_DISPLAY: [LG],
@@ -217,10 +230,6 @@ async def test_no_panel_without_the_frontend(hass):
 
 def test_panel_texts_exist_in_every_language():
     """Every text the panel uses is in English, and German has the same keys."""
-    import json
-    import re
-    from pathlib import Path
-
     front = Path(__file__).parent.parent / "custom_components" / "better_media_player" / "frontend"
     en = json.loads((front / "i18n" / "en.json").read_text())
     de = json.loads((front / "i18n" / "de.json").read_text())
@@ -250,9 +259,6 @@ async def test_settings_named_without_the_room(hass, home, hass_ws_client):
 
 
 async def test_area_of_the_room_s_device_else_the_one_chosen(hass, home, hass_ws_client):
-    from homeassistant.helpers import area_registry as ar
-    from homeassistant.helpers import device_registry as dr
-
     areas = ar.async_get(hass)
     lounge, den = areas.async_create("Lounge"), areas.async_create("Den")
     entry = await setup_room(hass, area=den.id)
@@ -263,12 +269,6 @@ async def test_area_of_the_room_s_device_else_the_one_chosen(hass, home, hass_ws
 
 
 async def test_a_room_not_loaded_is_shown_from_its_options(hass, home, hass_ws_client):
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
-
-    from custom_components.better_media_player.const import CONF_ENTRY_TYPE, ENTRY_TYPE_ROOM
-
-    from .conftest import room_options
-
     assert await async_setup_component(hass, DOMAIN, {})
     MockConfigEntry(domain=DOMAIN, title="Attic", data={CONF_ENTRY_TYPE: ENTRY_TYPE_ROOM}, options=room_options(), version=3).add_to_hass(hass)
     (room,) = (await _get(hass_ws_client))["rooms"]
@@ -303,8 +303,6 @@ async def test_where_the_room_volume_is(hass, home, hass_ws_client, options, exp
 
 
 async def test_devices_link_to_the_panel(hass, home):
-    from homeassistant.helpers import device_registry as dr
-
     entry = await setup_room(hass)
     hub = await setup_hub(hass)
     devices = dr.async_get(hass)
@@ -312,3 +310,22 @@ async def test_devices_link_to_the_panel(hass, home):
     central = devices.async_get_device(identifiers={(DOMAIN, hub.entry_id)})
     assert room.configuration_url == f"homeassistant://better-media-player/{entry.entry_id}"
     assert central.configuration_url == "homeassistant://better-media-player"
+
+
+def test_fed_directly_for_the_signal_no_cable_brings():
+    """A cable carries only the sound to the display: the picture still comes directly."""
+    routes = routes_of(
+        [{"id": "video", "needs": ["picture", "sound"]}],
+        [{"id": "tv", "kind": "display"}, {"id": "spk", "kind": "speakers"}],
+        [{"from": "video", "to": "tv", "signals": ["sound"]}],
+    )
+    assert routes["video"]["direct"] == ["spk", "tv"] and routes["video"]["cables"] == [0]
+
+
+@pytest.mark.parametrize("place", [["nan", 1], ["1e400", 0], [1, 2, 3]])
+async def test_layout_places_are_checked(hass, home, hass_ws_client, place):
+    entry = await setup_room(hass)
+    client = await hass_ws_client()
+    await client.send_json_auto_id({"type": "better_media_player/layout/save", "entry_id": entry.entry_id, "layout": {"display": place}})
+    msg = await client.receive_json()
+    assert not msg["success"] and msg["error"]["code"] == "invalid_format"
