@@ -240,3 +240,75 @@ def test_panel_texts_exist_in_every_language():
     assert used - set(en) == set()
     for key, text in en.items():  # same placeholders in both languages
         assert set(re.findall(r"\{(\w+)\}", text)) == set(re.findall(r"\{(\w+)\}", de[key])), key
+
+
+async def test_settings_named_without_the_room(hass, home, hass_ws_client):
+    await setup_room(hass)
+    (room,) = (await _get(hass_ws_client))["rooms"]
+    names = {s["key"]: s["name"] for s in room["settings"]}
+    assert names["display_run_down"] == "Display run-down"  # not "Living Room Display run-down"
+
+
+async def test_area_of_the_room_s_device_else_the_one_chosen(hass, home, hass_ws_client):
+    from homeassistant.helpers import area_registry as ar
+    from homeassistant.helpers import device_registry as dr
+
+    areas = ar.async_get(hass)
+    lounge, den = areas.async_create("Lounge"), areas.async_create("Den")
+    entry = await setup_room(hass, area=den.id)
+    assert (await _get(hass_ws_client))["rooms"][0]["area"] == "Den"
+    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, entry.entry_id)})
+    dr.async_get(hass).async_update_device(device.id, area_id=lounge.id)  # moved in Home Assistant
+    assert (await _get(hass_ws_client))["rooms"][0]["area"] == "Lounge"
+
+
+async def test_a_room_not_loaded_is_shown_from_its_options(hass, home, hass_ws_client):
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.better_media_player.const import CONF_ENTRY_TYPE, ENTRY_TYPE_ROOM
+
+    from .conftest import room_options
+
+    assert await async_setup_component(hass, DOMAIN, {})
+    MockConfigEntry(domain=DOMAIN, title="Attic", data={CONF_ENTRY_TYPE: ENTRY_TYPE_ROOM}, options=room_options(), version=3).add_to_hass(hass)
+    (room,) = (await _get(hass_ws_client))["rooms"]
+    assert room["loaded"] is False and room["layout"] == {}
+    assert [d["id"] for d in room["devices"]] == ["display", "speakers", "subwoofer"]
+
+
+async def test_cables_to_a_device_the_room_no_longer_has(hass, home, hass_ws_client):
+    await setup_room(
+        hass,
+        bass=None,
+        connections=[
+            {"from": "video_player", "to": "display", "signals": ["picture"]},
+            {"from": "speakers", "to": "bass", "signals": ["sound"]},  # no subwoofer any more
+        ],
+    )
+    (room,) = (await _get(hass_ws_client))["rooms"]
+    assert [(c["from"], c["to"]) for c in room["cables"]] == [("video", "display")]
+    assert room["routes"]["video"]["cables"] == [0]
+
+
+@pytest.mark.parametrize(
+    ("options", "expected"),
+    [
+        ({"volume_control": "device", "volume_entity": AVR}, {"where": "device", "entity": AVR}),
+        ({"volume_control": "players", "volume_entity": AVR}, {"where": "players"}),  # an entity left over
+    ],
+)
+async def test_where_the_room_volume_is(hass, home, hass_ws_client, options, expected):
+    await setup_room(hass, **options)
+    assert (await _get(hass_ws_client))["rooms"][0]["volume"] == expected
+
+
+async def test_devices_link_to_the_panel(hass, home):
+    from homeassistant.helpers import device_registry as dr
+
+    entry = await setup_room(hass)
+    hub = await setup_hub(hass)
+    devices = dr.async_get(hass)
+    room = devices.async_get_device(identifiers={(DOMAIN, entry.entry_id)})
+    central = devices.async_get_device(identifiers={(DOMAIN, hub.entry_id)})
+    assert room.configuration_url == f"homeassistant://better-media-player/{entry.entry_id}"
+    assert central.configuration_url == "homeassistant://better-media-player"
