@@ -141,6 +141,7 @@
           "room": "Room",
           "players": "Media players",
           "devices": "Devices and volume",
+          "cabling": "Cabling (inputs, CEC)",
           "save": "Save"
         },
         "data": {
@@ -239,6 +240,100 @@
             }
           }
         }
+      },
+      "cabling": {
+        "title": "Cabling",
+        "description": "Optional. Which player or device feeds which, with picture and/or sound, on which input – so the room switches TV and receiver to the right inputs. Without connections the room works as before (no inputs are chosen).",
+        "menu_options": {
+          "connection_add": "Add connection",
+          "connection_edit": "Edit connection",
+          "connection_remove": "Remove connections",
+          "control_display": "Display: inputs and switching",
+          "control_speakers": "Speakers: inputs and switching",
+          "init": "Back"
+        }
+      },
+      "connection": {
+        "title": "Connection",
+        "description": "What feeds what (as cabled: an HDMI cable, ARC back from the TV to the receiver is a connection of its own).",
+        "data": {
+          "from": "From",
+          "to": "To",
+          "signals": "Carries"
+        },
+        "data_description": {
+          "from": "A player, or a device passing the signal on (e.g. the TV sending its sound to the receiver over ARC).",
+          "to": "The device it is plugged into.",
+          "signals": "Picture, sound or both."
+        }
+      },
+      "connection_input": {
+        "title": "Input",
+        "description": "The input of {target} this connection arrives on, and who chooses it.",
+        "data": {
+          "input": "Input",
+          "mode": "Chosen by"
+        },
+        "data_description": {
+          "input": "Empty: nothing to choose (the device has only this input).",
+          "mode": "BMP: the room chooses it. CEC: the player does it over HDMI-CEC, the room only waits for it (and chooses it itself after the timeout, if set under the device's switching). Never: left alone."
+        }
+      },
+      "connection_edit": {
+        "title": "Edit connection",
+        "data": {
+          "connection": "Connection"
+        }
+      },
+      "connection_remove": {
+        "title": "Remove connections",
+        "data": {
+          "connections": "Connections"
+        }
+      },
+      "control_display": {
+        "title": "Display: inputs and switching",
+        "description": "How this device chooses its input, and who switches it on and off.",
+        "data": {
+          "inputs": "Inputs via",
+          "input_actions": "Input actions",
+          "input_pause": "Pause after choosing an input",
+          "power_on": "Switched on by",
+          "power_off": "Switched off by",
+          "cec_fallback": "Fall back to BMP",
+          "cec_timeout": "CEC timeout"
+        },
+        "data_description": {
+          "inputs": "A media player with a list of sources (select_source), usually the device itself.",
+          "input_actions": "For devices without a source list (IR): an action per input, one per line, e.g. HDMI 1: script.tv_hdmi1.",
+          "input_pause": "Before the next command (IR devices may need a moment).",
+          "power_on": "BMP: the room switches it on. CEC: a player switches it on over HDMI-CEC, the room waits for it. Never: left alone. Plugs are always switched by the room.",
+          "power_off": "As above, for switching off (after the run-down).",
+          "cec_fallback": "If what is expected from CEC does not happen within the timeout, the room does it itself.",
+          "cec_timeout": "How long the room waits for what CEC should do."
+        }
+      },
+      "control_speakers": {
+        "title": "Speakers: inputs and switching",
+        "description": "How this device chooses its input, and who switches it on and off.",
+        "data": {
+          "inputs": "Inputs via",
+          "input_actions": "Input actions",
+          "input_pause": "Pause after choosing an input",
+          "power_on": "Switched on by",
+          "power_off": "Switched off by",
+          "cec_fallback": "Fall back to BMP",
+          "cec_timeout": "CEC timeout"
+        },
+        "data_description": {
+          "inputs": "A media player with a list of sources (select_source), usually the device itself.",
+          "input_actions": "For devices without a source list (IR): an action per input, one per line, e.g. HDMI 1: script.tv_hdmi1.",
+          "input_pause": "Before the next command (IR devices may need a moment).",
+          "power_on": "BMP: the room switches it on. CEC: a player switches it on over HDMI-CEC, the room waits for it. Never: left alone. Plugs are always switched by the room.",
+          "power_off": "As above, for switching off (after the run-down).",
+          "cec_fallback": "If what is expected from CEC does not happen within the timeout, the room does it itself.",
+          "cec_timeout": "How long the room waits for what CEC should do."
+        }
       }
     },
     "error": {
@@ -255,10 +350,19 @@
       "volume_is_room": "A Better Media Player room cannot be the volume device.",
       "needs_both_actions": "Choose both the on and the off action.",
       "device_is_player": "A device must not be one of the room's players.",
-      "device_is_room": "A Better Media Player room cannot be a device of a role."
+      "device_is_room": "A Better Media Player room cannot be a device of a role.",
+      "connection_to_itself": "A connection cannot go to where it comes from.",
+      "connection_end_missing": "A connection has an end that is not set up in this room.",
+      "connection_no_signal": "A connection carries picture, sound or both.",
+      "connection_cycle": "The connections run in a circle for one signal.",
+      "input_conflict": "A source would need two different inputs on the same device.",
+      "unknown_input": "The device does not offer this input.",
+      "no_input_control": "This device has no way to choose inputs yet: set it up under its inputs and switching first (or leave the input empty).",
+      "invalid_input_actions": "Input actions are a mapping of input to action, e.g. HDMI 1: script.tv_hdmi1 (scripts, buttons, scenes …)."
     },
     "abort": {
-      "invalid_config": "The settings are not consistent. Check media players and power devices."
+      "invalid_config": "The settings are not consistent. Check media players and power devices.",
+      "invalid_cabling": "The cabling is not consistent. Check its connections and the devices' input actions."
     }
   },
   "entity": {
@@ -686,6 +790,28 @@
         "normal": "Normal",
         "loud": "Loud",
         "party": "Party"
+      }
+    },
+    "connection_end": {
+      "options": {
+        "video_player": "Video player",
+        "audio_player": "Music player",
+        "display": "Display",
+        "speakers": "Speakers",
+        "bass": "Subwoofer"
+      }
+    },
+    "signal": {
+      "options": {
+        "picture": "Picture",
+        "sound": "Sound"
+      }
+    },
+    "mode": {
+      "options": {
+        "bmp": "BMP",
+        "cec": "CEC (automatic)",
+        "never": "Never"
       }
     }
   },

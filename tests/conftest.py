@@ -138,6 +138,7 @@ class FakeHome:
     clock_skew: float = 0.0  # s the clock of Music Assistant's server is ahead of HA's
     lg_on_plug: bool = False  # the LG TV hangs on the TV plug (unavailable without power)
     lg_obeys: bool = True  # the LG TV follows turn_on / turn_off
+    inputs_obey: bool = True  # the LG TV and the AVR follow select_source
     volume_lag: float = 0.0  # s a player reports a volume it was set to (in order)
     ma_power: bool = False  # the music players have Music Assistant's (fake) power control
     ma_announce: bool = False  # the music players announce (Music Assistant)
@@ -275,7 +276,7 @@ class FakeHome:
         if domain in ("number", "input_number") and service == "set_value":
             self.set(entity_id, str(float(data["value"])))
             return True
-        if entity_id == AVR:
+        if entity_id == AVR and service != "select_source":
             vol = st.attributes.get("volume_level") or 0
             if service == "volume_set":
                 v = data["volume_level"]
@@ -286,6 +287,10 @@ class FakeHome:
                 self.set(AVR, st.state, volume_level=round(min(1, max(0, vol + (0.05 if service == "volume_up" else -0.05))), 3))
             elif service == "volume_mute":
                 self.set(AVR, st.state, is_volume_muted=data["is_volume_muted"])
+            return True
+        if entity_id in (LG, AVR) and service == "select_source":
+            if self.inputs_obey:
+                self.set(entity_id, st.state, source=data["source"])
             return True
         if entity_id in (LG, HARMONY) and service in ("turn_on", "turn_off"):
             if self.lg_obeys or entity_id != LG:
@@ -409,7 +414,7 @@ def home(hass: HomeAssistant):
         if isinstance(ids, str) and ids.split(".")[1] in {
             "tv_plug", "speaker_plug", "bass_plug", "kodi", "office_player", "kodi_box_plug", "wol",
             "all_players", "all_players_follow", "kitchen_player", "kitchen_speakers", "avr", "amp_volume",
-            "lg_tv", "harmony", "ir_sub_on", "ir_sub_off", "kodi_bedroom", "bedroom_tv",
+            "lg_tv", "harmony", "ir_sub_on", "ir_sub_off", "avr_net", "kodi_bedroom", "bedroom_tv",
         }:
             if service in ("browse_media", "search_media", "get_queue"):
                 return fake.respond(service, ids, service_data or {})

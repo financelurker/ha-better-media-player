@@ -224,6 +224,8 @@ class RoomController:
         tracked += self.power.devices.entities
         for role in self.power.roles.values():
             tracked += role.power or []
+            if role.inputs is not None and role.inputs.entity:
+                tracked.append(role.inputs.entity)  # its input: checked and watched for changes by hand
         self._unsubs.append(
             async_track_state_change_event(self.hass, list(dict.fromkeys(tracked)), self._on_state_event)
         )
@@ -536,6 +538,14 @@ class RoomController:
         return last or next(iter(self.sources.values()))
 
     @property
+    def input_source(self) -> str | None:
+        """The source whose inputs are wanted: the one starting, else the one in use."""
+        if self.sequence.running and self.sequence.source is not None:
+            return self.sequence.source
+        src = self.active_source
+        return src.key if src is not None and self.source_active(src) else None
+
+    @property
     def room_on(self) -> bool:
         return (
             self.sequence.running
@@ -548,6 +558,7 @@ class RoomController:
     async def async_update(self, reason: str = "") -> None:
         async with self._lock:
             now = clock.now()
+            self.power.devices.settle()
             self._update_sources(now)
             for role in self.power.roles.values():
                 if self.power.role_demand(role):
@@ -570,6 +581,11 @@ class RoomController:
                 if self.auto_power and self.power.devices.missing():
                     self.sequence.start(None)
                 await self.power.devices.async_auto_off(now, OFF_ORDER)
+            if not self.manual:
+                # the inputs follow the source in use (chosen outside the lock: an
+                # input's pause must not hold the room up)
+                self.power.want_inputs(self.input_source)
+                self._spawn(self.power.devices.async_apply_inputs())
             self._update_status()
             # the room comes on: one of its players is used (plugs alone, e.g. follow
             # me's prewarm or a plug switched by hand, are no "on"; the player's start

@@ -149,6 +149,32 @@ ROLE_ACTIONS = {
     CONF_BASS: (CONF_BASS_ON_ACTION, CONF_BASS_OFF_ACTION),
 }
 
+# --- Cabling -----------------------------------------------------------------
+# connections between the room's players and devices: what feeds what, with which
+# signals, on which input (a list of dicts with these keys)
+CONF_CONNECTIONS = "connections"
+CONN_FROM = "from"
+CONN_TO = "to"
+CONN_SIGNALS = "signals"
+CONN_INPUT = "input"
+CONN_MODE = "mode"  # who chooses the input: bmp / cec / never
+# the ends of a connection: the players and the roles (option keys)
+CONN_SOURCES = (CONF_VIDEO_PLAYER, CONF_AUDIO_PLAYER)
+CONN_TARGETS = (CONF_DISPLAY, CONF_SPEAKERS, CONF_BASS)
+CONN_ENDS = (*CONN_SOURCES, *CONN_TARGETS)
+# how a role with inputs and its own power is controlled (display, speakers):
+# "{role}_inputs" entity with select_source, "{role}_input_actions" {input: action},
+# "{role}_power_on" / "{role}_power_off" mode, "{role}_cec_fallback", "{role}_cec_timeout"
+INPUT_ROLES = (CONF_DISPLAY, CONF_SPEAKERS)
+MODES = ["bmp", "cec", "never"]
+SIGNALS = ["picture", "sound"]
+
+
+def role_conf(role: str, key: str) -> str:
+    """Option key of a role's control ("display", "inputs" -> "display_inputs")."""
+    return f"{role}_{key}"
+
+
 # --- Timing ------------------------------------------------------------------
 CONF_DISPLAY_RUN_DOWN = "display_run_down"  # min
 CONF_AUDIO_RUN_DOWN = "audio_run_down"  # min

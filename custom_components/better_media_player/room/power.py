@@ -21,12 +21,21 @@ from homeassistant.components.media_player import MediaPlayerState
 from homeassistant.core import State, callback
 
 from ..const import (
+    CONF_AUDIO_PLAYER,
     CONF_AUDIO_POWER,
     CONF_BASS,
+    CONF_CONNECTIONS,
     CONF_DISPLAY,
     CONF_DISPLAY_POWER,
     CONF_SPEAKERS,
     CONF_START_TIMEOUT,
+    CONF_VIDEO_PLAYER,
+    CONN_FROM,
+    CONN_INPUT,
+    CONN_MODE,
+    CONN_SIGNALS,
+    CONN_TO,
+    INPUT_ROLES,
     ROLE_ACTIONS,
     ROLE_AUDIO,
     ROLE_AUDIO_HOST,
@@ -35,9 +44,12 @@ from ..const import (
     ROLE_VIDEO_HOST,
     SOURCE_AUDIO,
     SOURCE_VIDEO,
+    role_conf,
 )
 from ..devices import DeviceGroup, Node, Standby, get_control
 from ..devices.const import ACTION_ID
+from ..devices.graph import Route, route
+from ..devices.model import Control, Edge, Inputs, Mode, Signal
 
 if TYPE_CHECKING:
     from .controller import RoomController
@@ -47,6 +59,44 @@ _LOGGER = logging.getLogger(__name__)
 # Order in which roles are switched on / off
 ON_ORDER = (ROLE_VIDEO_HOST, ROLE_AUDIO_HOST, ROLE_DISPLAY, ROLE_AUDIO, ROLE_BASS)
 OFF_ORDER = (ROLE_BASS, ROLE_AUDIO, ROLE_DISPLAY, ROLE_VIDEO_HOST, ROLE_AUDIO_HOST)
+
+# the ends of a connection (option keys) as nodes of the room
+ROLE_OF = {CONF_DISPLAY: ROLE_DISPLAY, CONF_SPEAKERS: ROLE_AUDIO, CONF_BASS: ROLE_BASS}
+SOURCE_OF = {CONF_VIDEO_PLAYER: SOURCE_VIDEO, CONF_AUDIO_PLAYER: SOURCE_AUDIO}
+NEEDS = {SOURCE_VIDEO: (Signal.PICTURE, Signal.SOUND), SOURCE_AUDIO: (Signal.SOUND,)}
+GIVES = {CONF_DISPLAY: frozenset({Signal.PICTURE}), CONF_SPEAKERS: frozenset({Signal.SOUND}), CONF_BASS: frozenset({Signal.SOUND})}
+
+
+def edges_of(options: dict) -> list[Edge]:
+    """The room's connections (ends as option keys)."""
+    return [
+        Edge(
+            source=c[CONN_FROM],
+            target=c[CONN_TO],
+            signals=frozenset(Signal(x) for x in c.get(CONN_SIGNALS) or ()),
+            input=c.get(CONN_INPUT) or None,
+            mode=Mode(c.get(CONN_MODE) or Mode.BMP),
+        )
+        for c in options.get(CONF_CONNECTIONS) or []
+    ]
+
+
+def _inputs(options: dict, conf: str) -> Inputs | None:
+    entity = options.get(role_conf(conf, "inputs"))
+    actions = dict(options.get(role_conf(conf, "input_actions")) or {})
+    if not entity and not actions:
+        return None
+    return Inputs(entity=entity, actions=actions, pause=float(options.get(role_conf(conf, "input_pause")) or 0))
+
+
+def _control(options: dict, conf: str) -> Control:
+    return Control(
+        on=Mode(options.get(role_conf(conf, "power_on")) or Mode.BMP),
+        off=Mode(options.get(role_conf(conf, "power_off")) or Mode.BMP),
+        fallback=bool(options.get(role_conf(conf, "cec_fallback"))),
+        timeout=float(options.get(role_conf(conf, "cec_timeout")) or Control().timeout),
+    )
+
 
 # playing or paused: in use (also what a group shares, and what can be handed over)
 GROUP_ACTIVE_STATES = {MediaPlayerState.PLAYING, MediaPlayerState.PAUSED, MediaPlayerState.BUFFERING}
@@ -68,11 +118,10 @@ class RoomPower:
         self.name = ctrl.entry.title
         o = ctrl.opts
         self.roles: dict[str, Role] = {}
-        both = tuple(s for s in (SOURCE_VIDEO, SOURCE_AUDIO) if s in ctrl.sources)
-        for conf, role_key, sources, run_down, prefix, power in (
-            (CONF_DISPLAY, ROLE_DISPLAY, (SOURCE_VIDEO,), "display_run_down", "display", CONF_DISPLAY_POWER),
-            (CONF_SPEAKERS, ROLE_AUDIO, both, "audio_run_down", "audio", CONF_AUDIO_POWER),
-            (CONF_BASS, ROLE_BASS, both, "audio_run_down", None, None),
+        for conf, role_key, run_down, prefix, power in (
+            (CONF_DISPLAY, ROLE_DISPLAY, "display_run_down", "display", CONF_DISPLAY_POWER),
+            (CONF_SPEAKERS, ROLE_AUDIO, "audio_run_down", "audio", CONF_AUDIO_POWER),
+            (CONF_BASS, ROLE_BASS, "audio_run_down", None, None),
         ):
             # plugs and devices; own on/off actions count as one more device (assumed state)
             entities = list(o.get(conf) or [])
@@ -85,12 +134,28 @@ class RoomPower:
                 self.roles[role_key] = Role(
                     key=role_key,
                     entities=entities,
-                    sources=sources,
+                    sources=(),  # from the routes, below
                     run_down_key=run_down,
                     prefix=prefix,
                     power=list(o.get(power) or []) if power else None,
                     actions=actions,
+                    gives=GIVES[conf],
+                    inputs=_inputs(o, conf) if conf in INPUT_ROLES else None,
+                    control=_control(o, conf) if conf in INPUT_ROLES else Control(),
                 )
+        # what each source needs: its route through the connections
+        self.routes: dict[str, Route] = {}
+        ends = {conf: self.roles[key] for conf, key in ROLE_OF.items() if key in self.roles}
+        edges = edges_of(o)
+        for conf, src_key in SOURCE_OF.items():
+            if src_key in ctrl.sources:
+                r = route(conf, NEEDS[src_key], ends, edges)
+                self.routes[src_key] = Route(
+                    frozenset(ROLE_OF[c] for c in r.nodes),
+                    {ROLE_OF[c]: wish for c, wish in r.inputs.items()},
+                )
+        for role in self.roles.values():
+            role.sources = tuple(s for s, r in self.routes.items() if role.key in r.nodes)
         for role_key, src_key in ((ROLE_VIDEO_HOST, SOURCE_VIDEO), (ROLE_AUDIO_HOST, SOURCE_AUDIO)):
             src = ctrl.sources.get(src_key)
             if src is not None and src.host:
@@ -155,6 +220,13 @@ class RoomPower:
 
     async def wait_until(self, cond: Callable[[], bool], timeout: float) -> bool:
         return await self.ctrl._wait_until(cond, timeout)
+
+    # ----------------------------------------------------------------- inputs
+
+    def want_inputs(self, source: str | None) -> None:
+        """The inputs of source's route are wanted (None: no source, no wishes)."""
+        r = self.routes.get(source) if source else None
+        self.devices.want_inputs(source if r else None, r.inputs if r else {})
 
     # ---------------------------------------------------------------- reading
 
@@ -237,6 +309,8 @@ class RoomPower:
             return
         if kind == "device" and not on:
             return
+        if kind == "device" and self.devices.control_of(entity_id).on is not Mode.BMP:
+            return  # switched on by CEC or by hand, as set up: no manual change
         _LOGGER.info(
             "%s: %s switched %s from outside, switching to manual mode",
             ctrl.entry.title,
