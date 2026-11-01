@@ -35,6 +35,7 @@ class PowerSequence:
     def __init__(self, ctrl: RoomController) -> None:
         self.ctrl = ctrl
         self.task: asyncio.Task | None = None
+        self.source: str | None = None  # the source an explicit start is for
 
     @property
     def running(self) -> bool:
@@ -57,6 +58,7 @@ class PowerSequence:
             if source is None:
                 return
             self.cancel()
+        self.source = source
         # background task: may wait for a slow player, must not block HA
         self.task = ctrl.hass.async_create_background_task(
             self._run(source), f"{DOMAIN}_{ctrl.entry.entry_id}_start", eager_start=False
@@ -70,6 +72,7 @@ class PowerSequence:
         power = ctrl.power
         switched: list[Node] = []
         src = ctrl.sources.get(source) if source else None
+        power.want_inputs(source or ctrl.input_source)
         try:
             if src is not None:
                 needed_sources = {src.key}

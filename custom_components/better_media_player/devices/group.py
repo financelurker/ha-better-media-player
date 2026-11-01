@@ -9,6 +9,8 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections import deque
+from collections.abc import Mapping
+from dataclasses import dataclass
 from collections.abc import Iterable
 
 from homeassistant.const import ATTR_ENTITY_ID, SERVICE_TURN_OFF, SERVICE_TURN_ON, STATE_ON
@@ -27,13 +29,29 @@ from .const import (
     STANDBY_HOLD_SECONDS,
     SWITCH_DOMAINS,
 )
-from .model import Node
+from .model import Control, Mode, Node
 
 _LOGGER = logging.getLogger(__name__)
 
 
 def _now() -> float:
     return dt_util.utcnow().timestamp()
+
+
+INPUT_VERIFY_SECONDS = 5  # after choosing an input: when it is checked (and chosen once more)
+
+
+@dataclass
+class _Input:
+    """The input wanted on a node, and how far choosing it got."""
+
+    target: str
+    mode: Mode
+    sent_at: float | None = None  # chosen (or, CEC: expected since)
+    tries: int = 0
+    done: bool = False  # it was there
+    manual: bool = False  # changed by hand afterwards: left alone until the next wish
+    failed: bool = False
 
 
 def _float(state: State | None) -> float | None:
@@ -58,6 +76,9 @@ class DeviceGroup:
         self._last_command: dict[str, tuple[bool, float]] = {}
         # recent commands per entity, to recognise late device reports as our own
         self._recent_commands: dict[str, deque[tuple[bool, float]]] = {}
+        # CEC: power states expected from someone else, since when
+        self._expected: dict[str, tuple[bool, float]] = {}
+        self._inputs: dict[str, _Input] = {}
 
     # ---------------------------------------------------------------- reading
 
@@ -106,9 +127,23 @@ class DeviceGroup:
         return any(self.is_on(e) or self._pending_on(e) for e in node.entities)
 
     def _pending_on(self, entity_id: str) -> bool:
-        """Turn-on was sent recently; slow devices (Zigbee & co.) report later."""
+        """Turn-on was sent recently (slow devices, Zigbee & co., report later), or
+        is expected from someone else (CEC)."""
+        now = _now()
         last = self._last_command.get(entity_id)
-        return last is not None and last[0] and _now() - last[1] < COMMAND_RETRY_SECONDS
+        if last is not None and last[0] and now - last[1] < COMMAND_RETRY_SECONDS:
+            return True
+        expected = self._expected.get(entity_id)
+        return expected is not None and expected[0] and now - expected[1] < self._control(entity_id).timeout
+
+    def _control(self, entity_id: str) -> Control:
+        """How the entity is switched (only devices have a mode; plugs and own
+        actions are always switched by BMP)."""
+        if self.kind(entity_id) == "device":
+            for node in self.nodes.values():
+                if entity_id in node.entities:
+                    return node.control
+        return Control()
 
     def plugs_of(self, node: Node) -> list[str]:
         """The node's plugs, and those of other nodes that feed one of its devices
@@ -130,7 +165,7 @@ class DeviceGroup:
             or e in self.held
             or (not self.is_available(e) and not (plugs and self.kind(e) == "device"))
             for e in node.entities
-            if self.kind(e) != "plug"
+            if self.kind(e) != "plug" and self._control(e).on is not Mode.NEVER  # not BMP's to switch on
         )
 
     def devices_on(self, node: Node) -> bool:
@@ -241,8 +276,30 @@ class DeviceGroup:
         if not self.is_available(entity_id):
             return
         if self.is_on(entity_id) == on and not (not on and self._pending_on(entity_id)):
+            self._expected.pop(entity_id, None)
             return
         now = _now()
+        control = self._control(entity_id)
+        mode = control.on if on else control.off
+        if mode is Mode.NEVER:
+            return
+        if mode is Mode.CEC:
+            expected = self._expected.get(entity_id)
+            if expected is None or expected[0] != on:
+                self._expected[entity_id] = (on, now)  # someone else does it
+                return
+            if now - expected[1] < control.timeout:
+                return
+            del self._expected[entity_id]
+            if not control.fallback:
+                if on:
+                    _LOGGER.warning(
+                        "%s: %s was not switched on over CEC, left off until the next start", self.owner.name, entity_id
+                    )
+                    self.held.add(entity_id)
+                return
+            _LOGGER.info("%s: %s not switched over CEC, switching it %s", self.owner.name, entity_id, "on" if on else "off")
+            force = True
         last = self._last_command.get(entity_id)
         if not force and last is not None and last[0] == on and now - last[1] < COMMAND_RETRY_SECONDS:
             return
@@ -314,6 +371,7 @@ class DeviceGroup:
             await self.async_node_up(node)
             if (wait := self.owner.on_wait(node)) > 0:
                 await asyncio.sleep(wait)
+            await self._apply_input(node)
 
     async def async_take_down(self, nodes: Iterable[Node]) -> None:
         """Switch the nodes off again (in reverse), retried until really off."""
@@ -334,3 +392,86 @@ class DeviceGroup:
         for entity_id in node.entities:
             if self.kind(entity_id) == "plug" and entity_id not in needed:
                 await self._switch(entity_id, False, force)
+
+    # ----------------------------------------------------------------- inputs
+
+    def want_inputs(self, wanted: Mapping[str, tuple[str, Mode]]) -> None:
+        """The input each node should be on (node -> input, who chooses it); a node
+        not listed has no wish. A new wish ends a change by hand."""
+        for key in list(self._inputs):
+            if key not in wanted:
+                del self._inputs[key]
+        for key, (target, mode) in wanted.items():
+            current = self._inputs.get(key)
+            if current is None or (current.target, current.mode) != (target, mode):
+                self._inputs[key] = _Input(target, mode)
+
+    def input_of(self, node: Node) -> str | None:
+        """The input the node reports (None: it does not tell)."""
+        entity = node.inputs.entity if node.inputs else None
+        state = self.hass.states.get(entity) if entity else None
+        return state.attributes.get("source") if state is not None else None
+
+    def reports_input(self, node: Node) -> bool:
+        """The node tells its input (a media player with a list of sources)."""
+        entity = node.inputs.entity if node.inputs else None
+        state = self.hass.states.get(entity) if entity else None
+        return state is not None and ("source_list" in state.attributes or "source" in state.attributes)
+
+    def input_manual(self, node: Node) -> bool:
+        """The node's input was changed by hand (left alone until the next wish)."""
+        wish = self._inputs.get(node.key)
+        return wish is not None and wish.manual
+
+    async def async_apply_inputs(self) -> None:
+        """Choose the wanted inputs on the nodes that are on."""
+        for key in list(self._inputs):
+            if (node := self.nodes.get(key)) is not None:
+                await self._apply_input(node)
+
+    async def _apply_input(self, node: Node) -> None:
+        wish = self._inputs.get(node.key)
+        inputs = node.inputs
+        if wish is None or inputs is None or wish.manual or wish.failed or wish.mode is Mode.NEVER:
+            return
+        device = inputs.entity
+        if not (self.is_on(device) and self.is_available(device)) if device else not self.node_on(node):
+            return  # chosen once the device is on (a TV ignores it while starting)
+        current = self.input_of(node)
+        if current == wish.target:
+            wish.done = True
+            wish.sent_at = None
+            return
+        if wish.done:
+            if current is not None:
+                _LOGGER.info("%s: input of %s changed by hand to %s, left so", self.owner.name, node.key, current)
+                wish.manual = True
+            return
+        now = _now()
+        if wish.mode is Mode.CEC and wish.tries == 0:
+            if wish.sent_at is None:
+                wish.sent_at = now  # someone else chooses it
+                return
+            if now - wish.sent_at < node.control.timeout:
+                return
+            if not node.control.fallback:
+                _LOGGER.warning("%s: %s did not get input %s over CEC", self.owner.name, node.key, wish.target)
+                wish.failed = True
+                return
+        elif wish.sent_at is not None and now - wish.sent_at < INPUT_VERIFY_SECONDS:
+            return
+        if wish.tries and not self.reports_input(node):
+            wish.done = True  # it does not tell: what was chosen counts
+            return
+        if wish.tries >= 2:
+            _LOGGER.warning("%s: %s did not take input %s (is %s)", self.owner.name, node.key, wish.target, current)
+            wish.failed = True
+            return
+        wish.tries += 1
+        wish.sent_at = now
+        if (action := inputs.actions.get(wish.target)) is not None:
+            await self.owner.run_action(action, True)
+        elif device:
+            await self.owner.call("media_player", "select_source", {ATTR_ENTITY_ID: device, "source": wish.target})
+        if inputs.pause > 0:
+            await asyncio.sleep(inputs.pause)

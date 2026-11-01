@@ -536,6 +536,14 @@ class RoomController:
         return last or next(iter(self.sources.values()))
 
     @property
+    def input_source(self) -> str | None:
+        """The source whose inputs are wanted: the one starting, else the one in use."""
+        if self.sequence.running and self.sequence.source is not None:
+            return self.sequence.source
+        src = self.active_source
+        return src.key if src is not None and self.source_active(src) else None
+
+    @property
     def room_on(self) -> bool:
         return (
             self.sequence.running
@@ -570,6 +578,10 @@ class RoomController:
                 if self.auto_power and self.power.devices.missing():
                     self.sequence.start(None)
                 await self.power.devices.async_auto_off(now, OFF_ORDER)
+            if not self.manual:
+                # the inputs follow the source in use
+                self.power.want_inputs(self.input_source)
+                await self.power.devices.async_apply_inputs()
             self._update_status()
             # the room comes on: one of its players is used (plugs alone, e.g. follow
             # me's prewarm or a plug switched by hand, are no "on"; the player's start
