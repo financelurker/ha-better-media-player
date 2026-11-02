@@ -40,9 +40,9 @@ It is a custom integration in the spirit of Better Thermostat: you tell it what 
 
 ## The panel
 
-A page of its own in Home Assistant's sidebar shows every room as a drawing: its players, its devices, how they are cabled, and what each player needs when it starts. In this release it only shows; rooms are still set up in the integration's options. [More about the panel](https://github.com/financelurker/ha-better-media-player/blob/main/docs/designer.md).
+A page of its own in Home Assistant's sidebar, where the rooms are set up: every room as a drawing – its players, its devices, how they are cabled, and what each player needs when it starts – with the details of each device and the room's settings, checked before they are saved. [More about the panel](https://github.com/financelurker/ha-better-media-player/blob/main/docs/designer.md).
 
-![The panel: a room's devices and cables, the film's route highlighted](https://raw.githubusercontent.com/financelurker/ha-better-media-player/main/docs/images/panel.png?v=2bd3baa7b8)
+![The panel: a room's devices and cables, the film's route highlighted](https://raw.githubusercontent.com/financelurker/ha-better-media-player/main/docs/images/panel.png?v=83674e8877)
 
 ## Is it for you?
 
@@ -88,18 +88,18 @@ Without the button: HACS → ⋮ → **Custom repositories** → add `https://gi
 [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=better_media_player)
 
 1. Read [Before you start](https://github.com/financelurker/ha-better-media-player/blob/main/docs/setup.md): every plug and device belongs to exactly one controller.
-2. Settings → Devices & services → Add integration → **Better Media Player** → **A room**, once per room: its media players, its devices and where its volume is set.
-3. Use the room player `media_player.<room>` like any media player: press play and the room powers up. How the room behaves (times, night mode, presets, …) are its settings, shown in the panel and set with the action `better_media_player.set_setting`; the defaults are a good start.
-4. For follow me, or to change the dynamic controls, add **Central settings** once as well.
+2. Settings → Devices & services → Add integration → **Better Media Player** (once; the follow-me player is optional).
+3. In the panel **Better Media Player** (sidebar): **+ Add room**, its players and devices, **Save** – once per room ([Setup](https://github.com/financelurker/ha-better-media-player/blob/main/docs/setup.md)).
+4. Use the room player `media_player.<room>` like any media player: press play and the room powers up. How the room behaves (times, night mode, presets, …) are its settings, in the panel or with the action `better_media_player.set_setting`; the defaults are a good start.
 
 ## Documentation
 
 | Page | Content |
 |---|---|
-| [Setup](https://github.com/financelurker/ha-better-media-player/blob/main/docs/setup.md) | what the setup asks, examples, the room's device and its settings |
+| [Setup](https://github.com/financelurker/ha-better-media-player/blob/main/docs/setup.md) | adding the integration and the rooms, examples, the room's device and its settings |
 | [How the room behaves](https://github.com/financelurker/ha-better-media-player/blob/main/docs/room.md) | power button and sources, order, run-downs, devices instead of plugs, standby, switched by hand |
 | [Cabling and inputs](https://github.com/financelurker/ha-better-media-player/blob/main/docs/devices.md) | connections, inputs, CEC, supported setups |
-| [The panel](https://github.com/financelurker/ha-better-media-player/blob/main/docs/designer.md) | the rooms as drawings: devices, cables, routes, settings |
+| [The panel](https://github.com/financelurker/ha-better-media-player/blob/main/docs/designer.md) | where rooms are set up: devices, cables, routes, settings, saving |
 | [Room volume](https://github.com/financelurker/ha-better-media-player/blob/main/docs/volume.md) | one volume per room, on an own device, presets |
 | [Night mode, sleep timer and wake up](https://github.com/financelurker/ha-better-media-player/blob/main/docs/night-sleep-wake.md) | the night's limit, the sleep timer's fade-out, waking with a fade (also with follow me) |
 | [Follow me](https://github.com/financelurker/ha-better-media-player/blob/main/docs/follow-me.md) | the music moves with you from room to room |

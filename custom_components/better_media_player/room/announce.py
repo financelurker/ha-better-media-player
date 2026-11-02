@@ -388,7 +388,7 @@ class RoomAnnouncer:
                 lambda: not ctrl.sequence.running and all(ctrl.power.devices.node_fully_on(r) for r in wanted), timeout
             ):
                 _LOGGER.warning("%s: devices not up for the announcement, announcing anyway", ctrl.entry.title)
-        if ctrl.player_state(src) in _NOT_READY and ctrl.player_supports(src, MediaPlayerEntityFeature.TURN_ON):
+        if ctrl.player_state(src) in _NOT_READY and ctrl.switched_by(src, True) == "player":
             self._woken.add(src.key)
             await ctrl._source_on(src)
             await ctrl._wait_until(lambda: ctrl.player_state(src) not in _NOT_READY, timeout)

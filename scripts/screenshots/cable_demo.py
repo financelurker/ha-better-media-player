@@ -1,7 +1,7 @@
-"""Describe the Family Room's cabling through the real options flow (for the panel's screenshots).
+"""Describe the Family Room's cabling as the panel does (room/save; for the panel's screenshots).
 
 Kodi's picture to the display, Kodi's and the music player's sound to the speakers,
-the speakers on to the subwoofer. Connections set before are replaced.
+the speakers on to the subwoofer (its sub out). Cables described before are replaced.
 """
 
 import asyncio
@@ -11,38 +11,33 @@ import aiohttp
 
 BASE = "http://127.0.0.1:8123"
 CABLES = [
-    {"from": "video_player", "to": "display", "signals": ["picture"]},
-    {"from": "video_player", "to": "speakers", "signals": ["sound"]},
-    {"from": "audio_player", "to": "speakers", "signals": ["sound"]},
-    {"from": "speakers", "to": "bass", "signals": ["sound"]},
+    {"from": "video", "to": "display", "signals": ["picture"]},
+    {"from": "video", "to": "speakers", "signals": ["sound"]},
+    {"from": "audio", "to": "speakers", "signals": ["sound"]},
+    {"from": "speakers", "to": "subwoofer", "signals": ["sound"]},
 ]
 
 
 async def main() -> None:
     session = json.load(open("session.json"))
-    h = {"Authorization": f"Bearer {session['token']}"}
-    async with aiohttp.ClientSession(headers=h) as s:
-        r = await s.post(f"{BASE}/api/config/config_entries/options/flow", json={"handler": session["entry_id"]})
-        flow = await r.json()
-        url = f"{BASE}/api/config/config_entries/options/flow/{flow['flow_id']}"
-
-        async def step(data):
-            res = await (await s.post(url, json=data)).json()
-            print(res.get("step_id") or res.get("type"), res.get("errors") or "")
-            return res
-
-        res = await step({"next_step_id": "cabling"})
-        if "connection_remove" in res.get("menu_options", []):
-            form = await step({"next_step_id": "connection_remove"})
-            options = form["data_schema"][0]["selector"]["select"]["options"]
-            await step({"connections": [o["value"] for o in options]})
-        for cable in CABLES:
-            await step({"next_step_id": "connection_add"})
-            res = await step(cable)
-            if res.get("step_id") == "connection_input":
-                res = await step({"mode": "bmp"})
-        await step({"next_step_id": "init"})
-        await step({"next_step_id": "save"})
+    async with aiohttp.ClientSession() as s:
+        ws = await s.ws_connect(f"{BASE}/api/websocket")
+        await ws.receive_json()
+        await ws.send_json({"type": "auth", "access_token": session["token"]})
+        await ws.receive_json()
+        await ws.send_json({"id": 1, "type": "better_media_player/config/get"})
+        config = (await ws.receive_json())["result"]
+        room = next(r for r in config["rooms"] if r["entry_id"] == session["entry_id"])
+        setup = {
+            "sources": [{k: s.get(k) for k in ("id", "player", "host", "onoff", "on_action", "off_action")} for s in room["sources"]],
+            "devices": [{k: v for k, v in d.items() if k != "settings"} | {"inputs": None} for d in room["devices"]],
+            "cables": CABLES,
+            "volume": room["volume"],
+            "occupancy": room["occupancy"],
+        }
+        await ws.send_json({"id": 2, "type": "better_media_player/room/save", "entry_id": room["entry_id"],
+                            "version": room["version"], "name": room["name"], "area_id": room["area_id"], "setup": setup})
+        print(await ws.receive_json())
 
 
 asyncio.run(main())

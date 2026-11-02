@@ -13,8 +13,9 @@ from pytest_homeassistant_custom_component.common import async_fire_time_changed
 from homeassistant.util import dt as dt_util
 
 from custom_components.better_media_player.const import DOMAIN
-from custom_components.better_media_player.model import merge_v3, options_v3
+from custom_components.better_media_player.model import options_v4
 
+from .roles import options_v3
 from .conftest import BASS, FOLLOW, KITCHEN, KITCHEN_OCC, KITCHEN_SPK, LIVING_OCC, MUSIC, SPEAKERS, setup_room
 
 # the room of setup_room ("Living Room") and the kitchen of setup_kitchen
@@ -228,5 +229,5 @@ def roles(entry) -> dict:
 
 async def change_room(hass, entry, **changes) -> None:
     """Change a room's setup the way the setup dialog does (roles)."""
-    hass.config_entries.async_update_entry(entry, options=merge_v3(entry.options, {**options_v3(entry.options), **changes}))
+    hass.config_entries.async_update_entry(entry, options=options_v4({**options_v3(entry.options), **changes}))
     await hass.async_block_till_done()

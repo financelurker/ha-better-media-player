@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from homeassistant.const import Platform
 
-from .devices.const import DEVICE_DOMAINS, SWITCH_DOMAINS
-
 DOMAIN = "better_media_player"
 NAME = "Better Media Player"
 
@@ -127,10 +125,7 @@ SOURCE_CONF = {
     SOURCE_AUDIO: (CONF_AUDIO_PLAYER, CONF_AUDIO_ON_ACTION, CONF_AUDIO_OFF_ACTION, CONF_AUDIO_HOST),
 }
 
-# --- Power roles -------------------------------------------------------------
-ROLE_DISPLAY = "display"
-ROLE_AUDIO = "audio"
-ROLE_BASS = "bass"
+# --- The nodes of the players' hardware plugs -----------------------------------
 ROLE_VIDEO_HOST = "video_host"
 ROLE_AUDIO_HOST = "audio_host"
 
@@ -159,10 +154,6 @@ CONN_TO = "to"
 CONN_SIGNALS = "signals"
 CONN_INPUT = "input"
 CONN_MODE = "mode"  # who chooses the input: bmp / cec / never
-# the ends of a connection: the players and the roles (option keys)
-CONN_SOURCES = (CONF_VIDEO_PLAYER, CONF_AUDIO_PLAYER)
-CONN_TARGETS = (CONF_DISPLAY, CONF_SPEAKERS, CONF_BASS)
-CONN_ENDS = (*CONN_SOURCES, *CONN_TARGETS)
 # how a role with inputs and its own power is controlled (display, speakers):
 # "{role}_inputs" entity with select_source, "{role}_input_actions" {input: action},
 # "{role}_power_on" / "{role}_power_off" mode, "{role}_cec_fallback", "{role}_cec_timeout"
@@ -283,8 +274,6 @@ STATUSES = [
     STATUS_DISABLED,
 ]
 
-# Domains that can be switched as power devices
-ROLE_DOMAINS = [*SWITCH_DOMAINS, *DEVICE_DOMAINS]
 # Domains usable as a custom on/off action
 ACTION_DOMAINS = ["script", "button", "input_button", "switch", "scene", "automation"]
 

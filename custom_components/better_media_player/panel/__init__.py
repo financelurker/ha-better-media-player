@@ -2,7 +2,7 @@
 
 The panel is a web component (frontend/, Lit shipped with the integration: it
 works without internet). It reads and writes through the websocket commands in
-ws.py. It is registered only where Home Assistant's frontend runs; without it
+ws.py, where rooms are also set up and changed. It is registered only where Home Assistant's frontend runs; without it
 (tests) there is nothing to show, and the integration works the same.
 """
 
@@ -40,6 +40,5 @@ async def async_setup_panel(hass: HomeAssistant, version: str) -> None:
         sidebar_icon=PANEL_ICON,
         module_url=f"{base}/{COMPONENT}.js",
         require_admin=True,
-        # no config_panel_domain while the panel only shows: the integration's
-        # gear would lead here instead of to its options
+        config_panel_domain=DOMAIN,  # "Configure" of an entry opens the panel (?config_entry=<id>)
     )

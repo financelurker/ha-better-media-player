@@ -17,8 +17,6 @@ from custom_components.better_media_player.issues import START_DELAY
 from custom_components.better_media_player.model import (
     REMOVED_CENTRAL_ENTITIES,
     REMOVED_ROOM_ENTITIES,
-    merge_v3,
-    options_v3,
     options_v4,
 )
 
@@ -109,14 +107,6 @@ def test_a_players_only_room_gets_a_device_for_its_volume():
                                   volume_control="device", volume_entity=AMP))
     assert [(d["id"], d["kind"], d["volume"]) for d in new["devices"]] == [("volume", "amp", AMP)]
     assert new["volume"] == {"where": "device", "device": "volume"}
-
-
-def test_the_setup_dialog_round_trip():
-    """Until the panel edits, the setup dialog works on the roles' view of the devices."""
-    new = options_v4(LIVING_V3)
-    assert options_v4(options_v3(new)) == new
-    named = {**new, "devices": [{**d, "name": "TV" if d["id"] == "display" else d["name"]} for d in new["devices"]]}
-    assert merge_v3(named, options_v3(named))["devices"][0]["name"] == "TV", "what only the devices know is kept"
 
 
 async def test_a_room_is_migrated(hass, home, hass_storage):
@@ -220,21 +210,3 @@ async def test_a_receiver_that_passes_the_picture_on_stays_one_for_the_sound(has
     assert power.on_order == ["display", "speakers", "subwoofer"]
     assert [n.key for n in power.sound_nodes()] == ["speakers", "subwoofer"]
     assert power.prewarms(power.nodes["speakers"])
-
-
-def test_taking_the_room_volume_away_in_the_dialog_takes_it_off_the_device():
-    new = options_v4(LIVING_V3)  # the amplifier's volume on the speakers, the room's volume
-    old = {**options_v3(new), "volume_control": "players"}
-    merged = merge_v3(new, old)
-    assert merged["volume"] == {"where": "players"}
-    assert all(d["volume"] is None for d in merged["devices"]), "not left on the speakers for ever"
-
-
-def test_the_migration_note_only_while_the_guess_stands():
-    new = options_v4(LIVING_V3)
-    again = merge_v3(new, options_v3(new))
-    assert next(d for d in again["devices"] if d["id"] == "speakers")["volume_migrated"] is True
-    chosen = merge_v3(new, {**options_v3(new), "volume_entity": "number.other_amp"})  # picked in the dialog
-    assert all("volume_migrated" not in d for d in chosen["devices"])
-    fresh = merge_v3({}, LIVING_V3)  # a new room set up in the dialog
-    assert all("volume_migrated" not in d for d in fresh["devices"])

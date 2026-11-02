@@ -2,7 +2,7 @@
 
 [← Back to the overview](../README.md)
 
-Set up a room once Better Media Player is [installed](../README.md#installation): what is connected in the setup, how the room behaves on its device.
+Set up Better Media Player once it is [installed](../README.md#installation): add the integration, then the rooms in its panel – what is connected and how each room behaves.
 
 > **Before you start**
 >
@@ -11,23 +11,17 @@ Set up a room once Better Media Player is [installed](../README.md#installation)
 
 [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=better_media_player)
 
-Settings → Devices & services → Add integration → **Better Media Player** → **A room**, once per room. For follow me, or to change the [dynamic controls](dashboards.md#dynamic-controls), add **Central settings** once as well.
-
-The setup only asks what is connected:
-
-| Step | What you enter |
-|---|---|
-| **New room** | Name and area. Kodi (also Better Kodi) and Music Assistant players of the area are pre-selected in the next step. |
-| **Media players** | Video player (e.g. Kodi) and/or music player (the room's own player, not a group). *Special cases* (collapsed): on/off actions for a player that cannot turn itself on/off, plugs its hardware hangs on. |
-| **Devices and volume** | Display (TV, projector), speakers (one or more: active speakers, amplifier, AVR), subwoofer: plugs and/or [devices](room.md#devices-instead-of-plugs). Where the room's volume is set: on the players, or on an own device. *Own on/off actions* (collapsed): scripts or buttons for a device only they switch. *Wait for standby* (collapsed): power sensors. *Follow me* (collapsed): occupancy sensors; rooms without them do not take part. |
+1. **Add the integration:** Settings → Devices & services → Add integration → **Better Media Player**. It asks only for the follow-me player (optional, also later in the panel). The panel **Better Media Player** appears in the sidebar.
+2. **Add a room** in the panel (**+ Add room**, left): name and area.
+3. **Its players and devices** (Devices & cabling → **+ Add**): a video player (e.g. Kodi) and/or a music player (the room's own player, not a group) – one of the room's area is proposed; then its devices – display, AV receiver or soundbar, amplifier, speakers, subwoofer – and in each device's details what switches it: plugs and/or the [device itself](room.md#devices-instead-of-plugs) (a media player or remote), or own on/off actions (e.g. IR scripts); power sensors for [waiting for standby](room.md#wait-for-standby). A player whose hardware hangs on a plug gets that plug in its details.
+4. **Optional:** cables (inputs, CEC: [Cabling and inputs](devices.md)), where the room's volume is set, presence sensors for follow me (Room & behaviour).
+5. **Save.** The room appears as a device with its room player `media_player.<room>`.
 
 Since Home Assistant 2026.6, new entity ids start with the area's name: a room named like its area gets e.g. `media_player.living_room_living_room` (rename it in the entity's settings if you like). These pages write `<room>` for the room's part.
 
-Everything can be changed later via **Configure**; there, **Cabling (inputs, CEC)** tells the room how its players and devices are connected, so it chooses the right inputs ([Cabling and inputs](devices.md)). How the room behaves is set on its device (below).
+Everything can be changed later in the panel ([The panel](designer.md)); **Configure** of a room's entry opens it there.
 
-| Menu | Media players | Devices and volume |
-|---|---|---|
-| ![Options menu](images/options-menu.png) | ![Media players](images/options-players.png) | ![Devices and volume](images/options-devices.png) |
+![A device's details in the panel](images/panel-device.png)
 
 ## Examples
 
@@ -46,7 +40,7 @@ Each room is a device (Settings → Devices & services → Better Media Player �
 
 How the room behaves – times, waits, standby, night mode, volume presets and follow me – are the room's settings, each device of the room has its own (run-down, wait after on, standby, off at night). The [panel](designer.md) shows them; the action `better_media_player.set_setting` changes one, at once and kept ([examples](automations.md#settings)). To start, you can leave them all at their defaults. All of them, with their defaults: [Reference](reference.md#settings).
 
-The **Central settings** (follow me's default volume, dynamic controls, hide delay) are set the same way, without a room; the central entry's **Configure** only asks for the follow-me player.
+The **Central settings** (follow me's player and default volume, dynamic controls, hide delay) are on the panel's page *General*, or set with the action, without a room.
 
 ## Repairs
 
@@ -59,7 +53,7 @@ What a room is set up with is checked against Home Assistant:
   - a group player as a room's player, or a follow-me player that is no Music Assistant group player;
   - after the update from version 1.2: automations or scripts that still use a setting entity of before (they are removed; change them to the action `better_media_player.set_setting`, see [Reference](reference.md#up-to-version-12)).
 
-Fix the others under **Configure** of the room (or of the central settings).
+Fix the others in the panel.
 
 ---
 

@@ -10,24 +10,20 @@ from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, EVENT_HOMEASSISTANT
 from homeassistant.core import CoreState
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
-from homeassistant.helpers import selector as sel
 
-from custom_components.better_media_player.config_flow import _fields
 from custom_components.better_media_player.const import (
     CONF_AUDIO_PLAYER,
     CONF_BASS,
     CONF_ENTRY_TYPE,
     CONF_FOLLOW_PLAYER,
     CONF_SPEAKERS,
-    CONF_VOLUME_CONTROL,
     CONF_VOLUME_ENTITY,
     DEFAULTS,
     DOMAIN,
     ENTRY_TYPE_ROOM,
-    VOLUME_DEVICE,
 )
 from custom_components.better_media_player.issues import START_DELAY, get_checker
-from custom_components.better_media_player.model import entities_of, options_v4
+from custom_components.better_media_player.model import entities_of
 
 from .conftest import GROUP, KITCHEN, MUSIC, SPEAKERS, setup_hub, setup_room
 from .helpers import change_room, roles, tick
@@ -62,14 +58,22 @@ async def _kitchen(hass, **options) -> MockConfigEntry:
 
 
 def test_every_entity_of_the_setup_is_checked():
-    """Each entity field of the setup (as the config flow asks it) is among the room's entities after the migration."""
-    fields = {k: f for k, f in _fields().items() if isinstance(f, sel.EntitySelector)}
-    old = {k: [f"switch.e_{k}"] if f.config.get("multiple") else f"switch.e_{k}" for k, f in fields.items()}
-    old[CONF_VOLUME_CONTROL] = VOLUME_DEVICE  # (the volume's entity counts only then)
-    assert {CONF_AUDIO_PLAYER, CONF_SPEAKERS, CONF_VOLUME_ENTITY, "occupancy", "display_power"} <= set(old)
-    found = set(entities_of(options_v4(old)))
-    for k in fields:
-        assert set(old[k] if isinstance(old[k], list) else [old[k]]) <= found, k
+    """Each entity a room can be set up with is among the entities the checks follow."""
+    setup = {
+        "sources": [{"id": "video", "player": "media_player.p1", "host": "switch.h1", "on_action": "script.on", "off_action": "script.off"}],
+        "devices": [{
+            "id": "tv", "kind": "display", "volume": "number.vol",
+            "power": {"plugs": ["switch.plug"], "devices": ["media_player.tv"], "actions": ["script.a", "script.b"], "sensors": ["sensor.w"]},
+            "inputs": {"entity": "remote.r", "actions": {"HDMI 1": "script.in1"}},
+        }],
+        "cables": [],
+        "volume": {"where": "device", "device": "tv"},
+        "occupancy": ["binary_sensor.here"],
+    }
+    assert set(entities_of(setup)) == {
+        "media_player.p1", "switch.h1", "script.on", "script.off", "number.vol", "switch.plug", "media_player.tv",
+        "script.a", "script.b", "sensor.w", "remote.r", "script.in1", "binary_sensor.here",
+    }
 
 
 async def test_missing_entity_after_the_start_delay(hass, home, freezer):

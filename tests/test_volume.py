@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from homeassistant import config_entries
 from homeassistant.components.media_player import MediaPlayerEntityFeature as F
-from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.better_media_player.const import DOMAIN
 
@@ -124,31 +122,6 @@ async def test_room_volume_survives_reload(hass, home, freezer):
     assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
     assert room_volume(hass) == 0.33
-
-
-async def test_player_without_volume_gets_a_note(hass, home):
-    home.set("media_player.radio", "idle", supported_features=int(F.PLAY | F.PAUSE), friendly_name="Radio")
-    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "room"})
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"name": "Bathroom"})
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"audio_player": "media_player.radio", "special": {}}
-    )
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"actions": {}, "standby": {}, "follow": {}})
-    assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "volume_note"
-    assert result["description_placeholders"] == {"players": "Radio"}
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-
-
-async def test_player_with_volume_gets_no_note(hass, home):
-    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "room"})
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"name": "Good"})
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"audio_player": MUSIC, "special": {}})
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"actions": {}, "standby": {}, "follow": {}})
-    assert result["type"] is FlowResultType.CREATE_ENTRY
 
 
 async def test_member_reports_before_group_lists_it(hass, home, freezer):

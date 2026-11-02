@@ -112,6 +112,7 @@ class Source:
     on_action: str | None
     off_action: str | None
     host: str | None
+    onoff: str  # how the room switches it (model.SOURCE_ONOFF)
     backend: PlayerBackend  # what its system can do (players/)
     # runtime
     suppressed: bool = False
@@ -138,6 +139,7 @@ class RoomController:
                     on_action=s.get("on_action"),
                     off_action=s.get("off_action"),
                     host=s.get("host"),
+                    onoff=s.get("onoff") or "auto",
                     backend=backend_for(hass, s["player"], key),
                 )
 
@@ -310,6 +312,10 @@ class RoomController:
     def _save_now(self) -> None:
         self._store.async_delay_save(lambda: self.data, 0)
 
+    async def async_save_now(self) -> None:
+        """Written before it returns (e.g. before the room is reloaded)."""
+        await self._store.async_save(self.data)
+
     # ----------------------------------------------------------------- events
 
     @callback
@@ -435,12 +441,23 @@ class RoomController:
 
     def power_controlled(self, src: Source) -> bool:
         """A music player with an on/off of its own (e.g. Music Assistant's
-        power control, also its fake one)."""
+        power control, also its fake one) that the room switches."""
         return (
             src.key == SOURCE_AUDIO
+            and src.onoff in ("auto", "player")
             and self.player_supports(src, MediaPlayerEntityFeature.TURN_ON)
             and self.player_supports(src, MediaPlayerEntityFeature.TURN_OFF)
         )
+
+    def switched_by(self, src: Source, on: bool) -> str | None:
+        """How the room switches the player on or off: "player", "action" or None."""
+        feature = MediaPlayerEntityFeature.TURN_ON if on else MediaPlayerEntityFeature.TURN_OFF
+        action = src.on_action if on else src.off_action
+        if src.onoff == "player" or (src.onoff == "auto" and self.player_supports(src, feature)):
+            return "player" if self.player_supports(src, feature) else None
+        if src.onoff in ("auto", "actions") and action:
+            return "action"
+        return None
 
     def _just_turned_on(self, src: Source) -> bool:
         """Turned on (in Music Assistant, say) and nothing plays yet: its devices
@@ -468,6 +485,8 @@ class RoomController:
         state = self.player_state(src)
         if state in (None, *NOT_AVAILABLE):
             return False
+        if self.switched_by(src, True) is None:
+            return True  # the room does not switch it on: it is woken by playing
         if src.key == SOURCE_VIDEO or self.player_supports(src, MediaPlayerEntityFeature.TURN_ON):
             return state in POWERED_STATES
         return True
@@ -745,9 +764,10 @@ class RoomController:
         await src.backend.unjoin(src.player, ctx)
 
     async def _source_on(self, src: Source) -> None:
-        if self.player_supports(src, MediaPlayerEntityFeature.TURN_ON):
+        how = self.switched_by(src, True)
+        if how == "player":
             await self._player(src, SERVICE_TURN_ON)
-        elif src.on_action:
+        elif how == "action":
             await self._run_action(src.on_action, True)
 
     async def _source_off(self, src: Source) -> None:
@@ -768,9 +788,10 @@ class RoomController:
                     await self._player(src, "media_pause")
         if self.player_state(src) in (STATE_OFF, None, *NOT_AVAILABLE):
             return
-        if self.player_supports(src, MediaPlayerEntityFeature.TURN_OFF):
+        how = self.switched_by(src, False)
+        if how == "player":
             await self._player(src, SERVICE_TURN_OFF)
-        elif src.off_action:
+        elif how == "action":
             await self._run_action(src.off_action, False)
         elif src.key == SOURCE_VIDEO and self.source_playing(src):
             if self.player_supports(src, MediaPlayerEntityFeature.STOP):

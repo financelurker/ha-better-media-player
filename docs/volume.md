@@ -20,7 +20,7 @@ With an amplifier, AV receiver or soundbar that has its own volume, choose **Roo
 - Sleep timer fade, wake fade, night mode limit and the fade back after the night act on the device.
 - While the device is off, a volume set on the room player is remembered; the device gets the room's volume as soon as it is up again (e.g. after its plug switched on), whatever it comes back with.
 - **Groups and follow me** still set the players' volume (follow me's volume plus the room's offset): there the group decides. The night mode limits the device, not the player in the group. Started in such a room, follow me keeps its last volume (the player's own level says nothing about loudness).
-- Switching between players and a device (or to another device) in the options starts the room volume afresh: it is learned from the new output.
+- Switching between players and a device (or to another device) in the panel starts the room volume afresh: it is learned from the new output.
 - The note about players that cannot set a volume is not shown: the device sets it.
 - The volume belongs to a device of the room: the one whose media player it is (e.g. the AV receiver set up as a device), else – for a `number` or a device the room does not switch, as in a room taken over from version 1.2 – the speakers (without speakers: the display). The [panel](designer.md) marks it *Room volume* and says when it was placed there by that guess.
 

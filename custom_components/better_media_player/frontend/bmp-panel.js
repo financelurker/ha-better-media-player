@@ -1,15 +1,18 @@
-// Better Media Player: the configuration panel (this release: view only).
+// Better Media Player: the configuration panel.
 // Rooms on the left, the room as a drawing in the middle, details on the right.
-// Data from the websocket command better_media_player/config/get; the routes are
-// worked out by the integration (the same calculation that switches the room).
+// Rooms are drafts (editor.js) until saved: one bar saves or discards all changes.
+// The routes and the checks come from the integration (the same rules it works by).
 
 import { LitElement, html, svg, css, nothing } from "./vendor/lit.js";
 import { translator } from "./i18n.js";
-import { W, H, PASSIVE, SINKS, nodesOf, arrange, curve, labelSpot, bounds, iconPath } from "./diagram.js";
+import { W, H, PASSIVE, SINKS, nodesOf, arrange, unstack, curve, labelSpot, bounds, iconPath } from "./diagram.js";
+import { DEVICE_KINDS, SOURCE_KINDS, addCable, addDevice, addSource, canConnect, draftOf, newRoom, payload, same } from "./editor.js";
+import { renderInspector } from "./inspector.js";
+import { renderCentral, renderSettings } from "./settings.js";
 
 const PANEL_URL = "better-media-player";
 
-// the unit a setting's number is in (settings: set_setting / get_settings)
+// the unit a setting's number is in
 const UNITS = {
   video_idle_timeout: "min", night_video_idle_timeout: "min", night_max_volume: "%", night_fade_in: "min",
   preset_quiet: "%", preset_normal: "%", preset_loud: "%", preset_party: "%", preset_fade: "s",
@@ -18,7 +21,7 @@ const UNITS = {
   run_down: "min", night_run_down: "min", on_wait: "s", standby_w: "W", standby_max: "min",
   default_volume: "%", hide_delay: "s",
 };
-const STANDBY = ["standby", "standby_w", "standby_max"]; // only with power sensors
+const clone = (x) => JSON.parse(JSON.stringify(x));
 
 class BmpPanel extends LitElement {
   static properties = {
@@ -34,6 +37,9 @@ class BmpPanel extends LitElement {
     _selected: { state: true },
     _source: { state: true },
     _tick: { state: true },
+    _armed: { state: true },
+    _dialog: { state: true },
+    _saving: { state: true },
   };
 
   constructor() {
@@ -46,26 +52,38 @@ class BmpPanel extends LitElement {
     this._roomId = null;
     this._selected = null; // {type: "node", id} | {type: "cable", index}
     this._source = null; // null: all routes
+    this._armed = null; // a cable being drawn: from this tile
+    this._dialog = null; // {type: "add"} | {type: "delete", room}
+    this._saving = false;
     this._tick = 0;
     this._t = (k) => k;
     this._lang = null;
+    this._drafts = {}; // per room: what is being edited
+    this._base = {}; // per room: as loaded (what "unsaved" is measured against)
+    this._central = null;
+    this._centralBase = null;
     this._nodes = {}; // per room: the tiles with their places
     this._views = {}; // per room: pan and zoom
+    this._timers = {};
+    this._units = UNITS;
     this._drag = null;
     this._pan = null;
     this._onMove = this._onMove.bind(this);
     this._onUp = this._onUp.bind(this);
+    this._onBeforeUnload = (e) => { if (this._dirtyRooms().length || this._centralDirty()) e.preventDefault(); };
   }
 
   connectedCallback() {
     super.connectedCallback();
     window.addEventListener("pointermove", this._onMove);
     window.addEventListener("pointerup", this._onUp);
+    window.addEventListener("beforeunload", this._onBeforeUnload);
   }
 
   disconnectedCallback() {
     window.removeEventListener("pointermove", this._onMove);
     window.removeEventListener("pointerup", this._onUp);
+    window.removeEventListener("beforeunload", this._onBeforeUnload);
     super.disconnectedCallback();
   }
 
@@ -78,21 +96,33 @@ class BmpPanel extends LitElement {
   async _loadTexts(language) {
     this._lang = language;
     this._t = await translator(language);
-    this._nodes = {};  // the tiles' names (kinds) in the language
+    this._nodes = {}; // the tiles' names (kinds) in the language
     this.requestUpdate();
   }
 
-  async _load() {
+  async _load(select = null) {
     this._loading = true;
     try {
-      this._config = await this.hass.callWS({ type: "better_media_player/config/get" });
+      const config = await this.hass.callWS({ type: "better_media_player/config/get" });
+      this._config = config;
+      this._drafts = {};
+      this._base = {};
       this._nodes = {};
+      for (const room of config.rooms) {
+        this._base[room.entry_id] = draftOf(room);
+        this._drafts[room.entry_id] = { ...draftOf(room), routes: room.routes, problems: [] };
+        this._refresh(this._drafts[room.entry_id], 0);
+      }
+      const c = config.central;
+      this._centralBase = c ? { follow_player: c.follow_player, settings: c.settings ? clone(c.settings) : null } : null;
+      this._central = c ? { ...clone(this._centralBase), problems: [] } : null;
       // the room asked for: /better-media-player/<entry id> (a device's link) or ?config_entry=<id>
-      const wanted = (this.route?.path || "").replace(/^\//, "") || new URLSearchParams(location.search).get("config_entry") || "";
-      const rooms = this._config.rooms;
+      const wanted = select || (this.route?.path || "").replace(/^\//, "") || new URLSearchParams(location.search).get("config_entry") || "";
+      const rooms = config.rooms;
       if (wanted && rooms.some((r) => r.entry_id === wanted)) this._roomId = wanted;
       else if (!rooms.some((r) => r.entry_id === this._roomId)) this._roomId = rooms[0]?.entry_id ?? null;
       if (!rooms.length) this._page = "central";
+      this._selected = null;
       this._error = null;
     } catch (err) {
       this._error = err?.message || String(err);
@@ -101,11 +131,91 @@ class BmpPanel extends LitElement {
     }
   }
 
-  // ------------------------------------------------------------ helpers
+  // ------------------------------------------------------------ drafts
 
   get _room() {
-    return this._config?.rooms.find((r) => r.entry_id === this._roomId) ?? null;
+    return this._drafts[this._roomId] ?? null;
   }
+
+  _rooms() {
+    return Object.values(this._drafts).sort((a, b) => Number(a.isNew) - Number(b.isNew) || a.name.localeCompare(b.name));
+  }
+
+  _dirtyRooms() {
+    return Object.values(this._drafts).filter((d) => d.isNew || !this._base[d.entry_id] || !same(d, this._base[d.entry_id]));
+  }
+
+  _centralDirty() {
+    return !!this._central && JSON.stringify([this._central.follow_player, this._central.settings]) !== JSON.stringify([this._centralBase.follow_player, this._centralBase.settings]);
+  }
+
+  // a change to a room's draft: drawn at once, routes and checks follow from the integration
+  _change(d, fn) {
+    fn();
+    this._retile(d);
+    this._refresh(d);
+    this._tick++;
+  }
+
+  _centralChanged() {
+    this._central.problems = [];
+    this._tick++;
+  }
+
+  // the tiles anew, where they were (new ones below what they would cover)
+  _retile(d) {
+    const before = this._nodes[d.entry_id];
+    if (!before) return;
+    const at = Object.fromEntries(before.map((n) => [n.id, [n.x, n.y]]));
+    const placed = new Set(before.filter((n) => n.placed).map((n) => n.id));
+    const nodes = arrange(nodesOf(d, this._t), d.cables, at);
+    const fresh = new Set(nodes.filter((n) => !at[n.id]).map((n) => n.id));
+    for (const n of nodes) n.placed = placed.has(n.id);
+    this._nodes[d.entry_id] = unstack(nodes, fresh);
+  }
+
+  // routes and problems of the draft, from the integration (a moment after the last change)
+  _refresh(d, delay = 250) {
+    clearTimeout(this._timers[d.entry_id]);
+    this._timers[d.entry_id] = setTimeout(async () => {
+      const ask = (d._asked = (d._asked || 0) + 1); // a slower answer to an older draft does not count
+      const body = payload(d);
+      const local = d.sources.filter((s) => !s.player).map((s) => ({ error: true, code: "player_missing", source: s.id }));
+      body.setup.sources = body.setup.sources.filter((s) => s.player);
+      try {
+        const sources = body.setup.sources.map((s) => ({ ...s, needs: s.id === "video" ? ["picture", "sound"] : ["sound"] }));
+        const [routes, checked] = await Promise.all([
+          this.hass.callWS({ type: "better_media_player/route", sources, devices: body.setup.devices, cables: body.setup.cables }),
+          this.hass.callWS({ type: "better_media_player/validate", ...(d.isNew ? {} : { entry_id: d.entry_id }), setup: body.setup, settings: body.settings }),
+        ]);
+        if (ask !== d._asked) return;
+        d.routes = routes.routes;
+        d.problems = [...local, ...checked.problems];
+      } catch (err) {
+        if (ask !== d._asked) return;
+        d.problems = [...local, { error: true, code: "invalid", message: err?.message || String(err) }];
+      }
+      this._tick++;
+    }, delay);
+  }
+
+  _problemText(x) {
+    const d = this._room;
+    const name = (id) => {
+      const dev = d?.devices.find((v) => v.id === id);
+      if (dev) return dev.name || this._t(`kind.${dev.kind}`);
+      const s = d?.sources.find((v) => v.id === id);
+      return s ? this._sourceLabel(s) : id;
+    };
+    return this._t(`problem.${x.code}`, { ...x, device: x.device ? name(x.device) : "", source: x.source ? name(x.source) : "", message: x.message || "" });
+  }
+
+  _offersOnoff(player) {
+    const st = this.hass.states[player];
+    return st ? Boolean((st.attributes.supported_features || 0) & 128) : null; // TURN_ON
+  }
+
+  // ------------------------------------------------------------ helpers
 
   _view() {
     return (this._views[this._roomId] ??= { tx: 0, ty: 0, k: 1, fitted: false });
@@ -121,7 +231,8 @@ class BmpPanel extends LitElement {
     this._roomId = roomId;
     this._selected = null;
     this._source = null;
-    const path = page === "room" && roomId ? `/${PANEL_URL}/${roomId}` : `/${PANEL_URL}`;
+    this._armed = null;
+    const path = page === "room" && roomId && !this._drafts[roomId]?.isNew ? `/${PANEL_URL}/${roomId}` : `/${PANEL_URL}`;
     if (location.pathname !== path) history.replaceState(history.state, "", path);
   }
 
@@ -129,7 +240,6 @@ class BmpPanel extends LitElement {
     this.dispatchEvent(new CustomEvent("hass-more-info", { detail: { entityId }, bubbles: true, composed: true }));
   }
 
-  // "1 device" / "3 devices"
   _count(what, n) {
     return this._t(n === 1 ? `count.${what}_one` : `count.${what}`, { n });
   }
@@ -138,9 +248,12 @@ class BmpPanel extends LitElement {
     return { devices: this._count("devices", room.sources.length + room.devices.length), cables: this._count("cables", room.cables.length) };
   }
 
+  _sourceName(s) {
+    return s.name || (s.player ? this.hass.states[s.player]?.attributes.friendly_name || s.player : this._t(`source.${s.id}`));
+  }
+
   _sourceLabel(s) {
-    const t = this._t;
-    return s.name ? `${t(`source.${s.id}`)} · ${s.name}` : t(`source.${s.id}`);
+    return `${this._t(`source.${s.id}`)} · ${this._sourceName(s)}`;
   }
 
   // ------------------------------------------------------------ render
@@ -158,18 +271,50 @@ class BmpPanel extends LitElement {
           <ha-menu-button .hass=${this.hass} .narrow=${this.narrow}></ha-menu-button>
           <h1>${t("title")}</h1>
         </header>
-        <div class="viewonly">${t("view_only")}</div>
-        ${this._notice ? html`<div class="notice" role="alert">${this._notice}<button class="chip" @click=${() => { this._notice = null; }}>${t("dismiss")}</button></div>` : nothing}
+        ${this._renderSaveBar()}
+        ${this._notice ? html`<div class="notice" role="alert">${this._notice}<button class="chip" @click=${() => { this._notice = null; }}>${t("dismiss")}</button></div>` : html`<div></div>`}
         <div class="main ${this._page === "room" && this._tab === "wiring" && this._selected ? "details" : ""}">
           ${this._renderNav()}
           ${this._page === "central"
-            ? html`<section class="stage"><div class="page">${this._renderCentral()}</div></section>`
+            ? html`<section class="stage"><div class="page">${renderCentral(this)}</div></section>`
             : room
               ? this._renderRoom(room)
               : html`<section class="stage"><div class="message">${t("no_rooms")}</div></section>`}
         </div>
       </div>
+      ${this._renderDialog()}
     `;
+  }
+
+  _renderSaveBar() {
+    const t = this._t;
+    const dirty = this._dirtyRooms();
+    const central = this._centralDirty();
+    if (!dirty.length && !central) return html`<div class="savebar idle">${t("save.idle")}</div>`;
+    const errors = dirty.flatMap((d) => (d.problems || []).filter((x) => x.error).map((x) => ({ d, x })));
+    // a room whose setup changed is set up again: one that plays says so
+    const restart = dirty.filter((d) => !d.isNew && this._setupChanged(d) && d.sources.some((s) => this.hass.states[s.player]?.state === "playing"));
+    return html`<div class="savebar" role="region" aria-label=${t("save.label")}>
+      <span class="msg">${errors.length
+        ? html`<b class="err">${t(errors.length === 1 ? "save.errors_one" : "save.errors", { n: errors.length })}</b> ${errors[0].d.name}: ${this._problemTextIn(errors[0].d, errors[0].x)}`
+        : t("save.unsaved")}</span>
+      ${restart.length ? html`<span class="savewarn">${t("save.restart", { room: restart.map((d) => d.name).join(", ") })}</span>` : nothing}
+      <button class="btn" ?disabled=${this._saving} @click=${() => this._discard()}>${t("save.discard")}</button>
+      <button class="btn primary" ?disabled=${this._saving || errors.length > 0} @click=${() => this._save()}>${this._saving ? t("save.saving") : t("save.save")}</button>
+    </div>`;
+  }
+
+  _problemTextIn(d, x) {
+    const keep = this._roomId;
+    this._roomId = d.entry_id;
+    const text = this._problemText(x);
+    this._roomId = keep;
+    return text;
+  }
+
+  _setupChanged(d) {
+    const a = payload(d), b = payload(this._base[d.entry_id]);
+    return JSON.stringify([a.name, a.setup]) !== JSON.stringify([b.name, b.setup]); // (the area alone: no restart)
   }
 
   _renderNav() {
@@ -180,12 +325,15 @@ class BmpPanel extends LitElement {
         <b>${t("nav.general")}</b><small>${t("nav.general_sub")}</small>
       </button>
       <div class="side-title">${t("nav.rooms")}</div>
-      ${this._config.rooms.map(
-        (r) => html`<button class="nav ${this._page === "room" && r.entry_id === this._roomId ? "active" : ""}" @click=${() => this._go("room", r.entry_id)}>
-          <b>${r.name}</b>
-          <small>${t("nav.room_sub", this._counts(r))}${r.loaded ? "" : html` · <span class="warn">${t("nav.not_loaded")}</span>`}</small>
-        </button>`
-      )}
+      ${this._rooms().map((r) => {
+        const errors = (r.problems || []).filter((x) => x.error).length;
+        const dirty = r.isNew || !same(r, this._base[r.entry_id]);
+        return html`<button class="nav ${this._page === "room" && r.entry_id === this._roomId ? "active" : ""}" @click=${() => this._go("room", r.entry_id)}>
+          <b>${r.name}${dirty ? html` <span class="dot" title=${t("save.unsaved")}>•</span>` : nothing}</b>
+          <small>${t("nav.room_sub", this._counts(r))}${r.loaded ? "" : html` · <span class="warn">${t("nav.not_loaded")}</span>`}${errors ? html` · <span class="err">${this._count("errors", errors)}</span>` : nothing}</small>
+        </button>`;
+      })}
+      <button class="nav add" @click=${() => this._addRoom()}><b>+ ${t("nav.add_room")}</b></button>
     </aside>`;
   }
 
@@ -195,27 +343,34 @@ class BmpPanel extends LitElement {
       <section class="stage ${this._tab}">
         <div class="tabs" role="tablist">
           ${["wiring", "settings"].map(
-            (tab) => html`<button role="tab" aria-selected=${String(this._tab === tab)} @click=${() => { this._tab = tab; this._selected = null; }}>${t(`tab.${tab}`)}</button>`
+            (tab) => html`<button role="tab" aria-selected=${String(this._tab === tab)} @click=${() => { this._tab = tab; this._selected = null; this._armed = null; }}>${t(`tab.${tab}`)}</button>`
           )}
         </div>
         ${this._tab === "settings"
-          ? html`<div class="page">${this._renderSettings(room)}</div>`
-          : html`${this._renderSources(room)}${this._renderDiagram(room)}${this._renderRoute(room)}`}
+          ? html`<div class="page">${renderSettings(this, room)}</div>`
+          : html`${this._renderSources(room)}${this._renderProblems(room)}${this._renderDiagram(room)}${this._renderRoute(room)}`}
       </section>
       ${this._tab === "wiring" && this._selected ? html`<section class="inspector">
         <button class="close" title=${t("close")} aria-label=${t("close")} @click=${() => { this._selected = null; }}>×</button>
-        ${this._renderInspector(room)}</section>` : nothing}
+        ${renderInspector(this, room)}</section>` : nothing}
     `;
+  }
+
+  _renderProblems(room) {
+    const list = room.problems || [];
+    if (!list.length) return html`<div></div>`; // (keeps the drawing in its row)
+    return html`<div class="problems strip">${list.map((x) => html`<div class=${x.error ? "err" : ""}>${x.error ? "● " : "○ "}${this._problemText(x)}</div>`)}</div>`;
   }
 
   _renderSources(room) {
     const t = this._t;
     return html`<div class="sources">
       <span class="lbl">${t("routes.label")}</span>
-      ${room.sources.map(
+      ${room.sources.filter((s) => s.player).map(
         (s) => html`<button class="chip" aria-pressed=${String(this._source === s.id)} @click=${() => { this._source = s.id; }}>${this._sourceLabel(s)}</button>`
       )}
       <button class="chip" aria-pressed=${String(!this._source)} @click=${() => { this._source = null; }}>${t("routes.all")}</button>
+      <button class="btn small add" @click=${() => { this._dialog = { type: "add" }; }}>+ ${t("add.button")}</button>
       <span class="legend">
         <span><i class="picture"></i>${t("legend.picture")}</span>
         <span><i class="sound"></i>${t("legend.sound")}</span>
@@ -228,14 +383,14 @@ class BmpPanel extends LitElement {
     const t = this._t;
     const nodes = this._tiles(room);
     const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
-    const route = this._source ? room.routes[this._source] : null;
+    const route = this._source ? room.routes?.[this._source] : null;
     const onRoute = route ? new Set([this._source, ...route.devices]) : null;
     const v = this._view();
     // direct feeds: a source to a device no cable reaches
     const directs = new Map();
     for (const s of room.sources) {
       if (this._source && s.id !== this._source) continue;
-      for (const d of room.routes[s.id]?.direct || []) directs.set(`${s.id}>${d}`, [s.id, d]);
+      for (const d of room.routes?.[s.id]?.direct || []) directs.set(`${s.id}>${d}`, [s.id, d]);
     }
     const taken = nodes.map((n) => [n.x - 8, n.y - 10, n.x + W + 8, n.y + H + 4]);
     const labels = [];
@@ -262,14 +417,14 @@ class BmpPanel extends LitElement {
           @click=${(e) => this._select(e, { type: "cable", index: i })}
           @keydown=${(e) => e.key === "Enter" && this._select(e, { type: "cable", index: i })}></path>`;
     });
-    return html`<div class="canvas-wrap" tabindex="0" @wheel=${this._onWheel} @keydown=${this._onKey}>
+    return html`<div class="canvas-wrap ${this._armed ? "armed" : ""}" tabindex="0" @wheel=${this._onWheel} @keydown=${this._onKey}>
       <svg id="canvas" @pointerdown=${this._onPanStart} @click=${this._onCanvasClick} aria-label=${t("tab.wiring")}>
         <g id="world" transform="translate(${v.tx} ${v.ty}) scale(${v.k})">
           <g>${[...directs.values()].map(([from, to]) => {
             const a = byId[from], b = byId[to];
             return a && b ? svg`<path class="cable direct" d=${curve(a.x + W, a.y + H / 2, b.x, b.y + H / 2)}></path>` : nothing;
           })}${cables}</g>
-          <g>${nodes.map((n) => this._renderTile(n, onRoute && !onRoute.has(n.id), feeding.has(n.id)))}</g>
+          <g>${nodes.map((n) => this._renderTile(room, n, onRoute && !onRoute.has(n.id), feeding.has(n.id)))}</g>
           <g>${labels}</g>
         </g>
       </svg>
@@ -279,173 +434,215 @@ class BmpPanel extends LitElement {
         <div class="pct">${Math.round(v.k * 100)}%</div>
         <button title=${t("zoom.fit")} aria-label=${t("zoom.fit")} @click=${() => this._fit()}><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
         <button title=${t("zoom.actual")} aria-label=${t("zoom.actual")} @click=${() => this._zoomBy(1 / v.k)}><svg viewBox="0 0 24 24"><path d="M7 8v8M11 9.5v.01M11 14.5v.01M15 8v8"/></svg></button>
-        <button title=${t("zoom.arrange")} aria-label=${t("zoom.arrange")} ?disabled=${!room.loaded} @click=${() => this._rearrange(room)}><svg viewBox="0 0 24 24"><path d="M4 5h6v5H4zM14 14h6v5h-6zM10 7.5h3a2 2 0 0 1 2 2V14"/></svg></button>
+        <button title=${t("zoom.arrange")} aria-label=${t("zoom.arrange")} @click=${() => this._rearrange(room)}><svg viewBox="0 0 24 24"><path d="M4 5h6v5H4zM14 14h6v5h-6zM10 7.5h3a2 2 0 0 1 2 2V14"/></svg></button>
       </div>
-      <div class="navhint">${t("nav_hint")}</div>
+      <div class="navhint">${this._armed ? t("cable.armed") : t("nav_hint")}</div>
     </div>`;
   }
 
-  _renderTile(n, dim, feeds) {
+  _renderTile(room, n, dim, feeds) {
     const sel = this._selected?.type === "node" && this._selected.id === n.id;
-    const passive = PASSIVE.includes(n.kind);
+    const passive = PASSIVE.includes(n.kind) || (n.device && !n.device.power);
     const name = n.name.length > 19 ? `${n.name.slice(0, 18)}…` : n.name;
     const sub = n.sub.length > 23 ? `${n.sub.slice(0, 22)}…` : n.sub;
-    const cec = n.device?.control?.on === "cec";
-    return svg`<g class="node${sel ? " sel" : ""}${dim ? " dim" : ""}${passive ? " passive" : ""}" transform="translate(${n.x} ${n.y})"
+    const cec = n.device?.control?.on === "cec" && n.device.power?.devices?.length;
+    const roomVolume = room.volume.where === "device" && room.volume.device === n.id && n.device?.volume;
+    const armed = this._armed === n.id;
+    const target = this._armed && canConnect(room, this._armed, n.id);
+    const errors = (room.problems || []).some((x) => x.error && (x.device === n.id || x.source === n.id));
+    return svg`<g class="node${sel ? " sel" : ""}${dim ? " dim" : ""}${passive ? " passive" : ""}${target ? " target" : ""}${errors ? " bad" : ""}" transform="translate(${n.x} ${n.y})"
         tabindex="0" role="button" aria-label=${n.name}
         @pointerdown=${(e) => this._onDragStart(e, n)}
-        @click=${(e) => this._select(e, { type: "node", id: n.id })}
-        @keydown=${(e) => e.key === "Enter" && this._select(e, { type: "node", id: n.id })}>
+        @click=${(e) => this._tileClick(e, room, n)}
+        @keydown=${(e) => e.key === "Enter" && this._tileClick(e, room, n)}>
       <rect class="box" width=${W} height=${H} rx="10"></rect>
       <path class="icon" d=${iconPath(n.kind)} transform="translate(12 20)"></path>
       <text x="46" y="27" class="name">${name}</text>
       <text x="46" y="46" class="sub">${sub}</text>
       ${cec ? svg`<g class="badge" transform="translate(${W - 44} -8)"><rect width="36" height="16" rx="7"></rect><text x="18" y="11.5" text-anchor="middle">CEC</text></g>` : nothing}
+      ${roomVolume ? svg`<g class="badge vol" transform="translate(8 -8)"><rect width="84" height="16" rx="7"></rect><text x="42" y="11.5" text-anchor="middle">${this._t("insp.room_volume")}</text></g>` : nothing}
       ${n.kind !== "player" ? svg`<circle class="port" cx="0" cy=${H / 2} r="6"></circle>` : nothing}
-      ${feeds || !SINKS.includes(n.kind) ? svg`<circle class="port" cx=${W} cy=${H / 2} r="6"></circle>` : nothing}
+      ${feeds || !SINKS.includes(n.kind) || armed
+        ? svg`<circle class="port out${armed ? " armed" : ""}" cx=${W} cy=${H / 2} r="7" tabindex="0" role="button" aria-label=${this._t("cable.from", { device: n.name })}
+            @pointerdown=${(e) => e.stopPropagation()} @click=${(e) => this._arm(e, n)}><title>${this._t("cable.from", { device: n.name })}</title></circle>`
+        : svg`<circle class="port out faint" cx=${W} cy=${H / 2} r="6" tabindex="0" role="button" aria-label=${this._t("cable.from", { device: n.name })}
+            @pointerdown=${(e) => e.stopPropagation()} @click=${(e) => this._arm(e, n)}><title>${this._t("cable.from", { device: n.name })}</title></circle>`}
     </g>`;
   }
 
   _renderRoute(room) {
     const t = this._t;
     const src = room.sources.find((s) => s.id === this._source);
-    if (!src)
+    if (this._armed) return html`<div class="route">${t("cable.armed")}</div>`;
+    if (!src || !room.routes?.[src.id])
       return html`<div class="route">${!room.cables.length && room.devices.length ? html`${t("insp.migrated")} ` : nothing}${t("route.pick")} ${t("insp.click")}</div>`;
     const r = room.routes[src.id];
-    const devices = r.order.map((id) => room.devices.find((d) => d.id === id)).filter(Boolean);
+    const devices = (r.order || []).map((id) => room.devices.find((d) => d.id === id)).filter(Boolean);
     const name = (d) => d.name || t(`kind.${d.kind}`);
     const step = (d) => {
       const inp = r.inputs[d.id];
-      return html`<span class="step"><b>${name(d)}</b>${d.control?.on === "cec" ? html` <span class="tag cec">${t("route.on_cec")}</span>` : nothing}${inp
+      return html`<span class="step"><b>${name(d)}</b>${d.control?.on === "cec" && d.power?.devices?.length ? html` <span class="tag cec">${t("route.on_cec")}</span>` : nothing}${inp
         ? html` <span class="tag in">${inp.input}${inp.mode === "cec" ? " · CEC" : ""}</span>`
         : r.direct.includes(d.id) ? html` <span class="tag">${t("route.direct")}</span>` : nothing}</span>`;
     };
     return html`<div class="route"><b>${t("route.starts", { source: this._sourceLabel(src) })}</b>
       ${devices.filter((d) => r.picture.includes(d.id)).map(step)}
-      <span class="step"><b>${src.name || src.player}</b> <span class="tag">${t("route.woken")}</span></span>
+      <span class="step"><b>${this._sourceName(src)}</b> <span class="tag">${t("route.woken")}</span></span>
       ${devices.filter((d) => !r.picture.includes(d.id)).map(step)}</div>`;
   }
 
-  _renderInspector(room) {
+  _renderDialog() {
     const t = this._t;
-    const sel = this._selected;
-    if (sel.type === "cable") {
-      const c = room.cables[sel.index];
-      if (!c) return nothing;
-      const nodes = this._tiles(room);
-      const a = nodes.find((n) => n.id === c.from), b = nodes.find((n) => n.id === c.to);
-      return html`<h2>${a?.name} → ${b?.name}</h2><div class="kind">${t("insp.cable")}</div>
-        ${this._field(t("insp.carries"), c.signals.map((s) => t(`legend.${s}`)).join(" + "))}
-        ${this._field(t("insp.input_on", { device: b?.name }), c.input || t("insp.no_input"))}
-        ${c.input ? this._field(t("insp.chosen_by"), t(`mode.${c.mode}`)) : nothing}`;
+    const dlg = this._dialog;
+    if (!dlg) return nothing;
+    const close = () => { this._dialog = null; };
+    if (dlg.type === "delete") {
+      return html`<div class="dlg-back" @click=${(e) => e.target === e.currentTarget && close()}><div class="dlg" role="dialog" aria-modal="true" aria-labelledby="dlg-t">
+        <h3 id="dlg-t">${t("delete.title", { room: dlg.room.name })}</h3>
+        <p>${dlg.room.isNew ? t("delete.new") : t("delete.text")}</p>
+        <div class="actions"><button class="btn" @click=${close}>${t("delete.cancel")}</button>
+          <button class="btn danger" @click=${() => this._delete(dlg.room)}>${t("delete.confirm")}</button></div></div></div>`;
     }
-    const n = this._tiles(room).find((x) => x.id === sel.id);
-    if (!n) return nothing;
-    if (n.source) {
-      const s = n.source;
-      return html`<h2>${n.name}</h2><div class="kind">${t("kind.player")} · ${t(`source.${s.id}`)}</div>
-        ${this._entities(t("insp.entity"), [s.player])}
-        ${s.host ? this._entities(t("insp.host"), [s.host]) : nothing}
-        ${s.on_action ? this._entities(t("insp.actions"), [s.on_action, s.off_action].filter(Boolean)) : nothing}
-        ${s.settings ? html`<div class="field"><span class="lbl">${t("insp.host_settings")}</span>${this._settingsList(s.settings)}</div>` : nothing}`;
+    const d = this._room;
+    const missing = SOURCE_KINDS.filter((k) => !d.sources.some((s) => s.id === k));
+    const pick = (fn) => { this._change(d, fn); close(); };
+    return html`<div class="dlg-back" @click=${(e) => e.target === e.currentTarget && close()}><div class="dlg" role="dialog" aria-modal="true" aria-labelledby="dlg-t">
+      <h3 id="dlg-t">${t("add.title")}</h3>
+      <div class="pick-list">
+        ${missing.length ? html`<div class="side-title">${t("add.players")}</div>
+          ${missing.map((k) => html`<button @click=${() => pick(() => { const s = addSource(d, k, this._config.suggested?.[d.area_id]?.[k] || null); s.offers_onoff = s.player ? this._offersOnoff(s.player) : null; this._selected = { type: "node", id: k }; })}>
+            <b>${t(`source.${k}`)}</b><small>${t(`add.player_${k}`)}</small></button>`)}` : nothing}
+        <div class="side-title">${t("add.devices")}</div>
+        ${DEVICE_KINDS.map((k) => html`<button @click=${() => pick(() => { const dev = addDevice(d, k, this._config.defaults); this._selected = { type: "node", id: dev.id }; })}>
+          <b>${t(`kind.${k}`)}</b><small>${t(`add.kind_${k}`)}</small></button>`)}
+        <button @click=${() => pick(() => { const dev = addDevice(d, "speakers", this._config.defaults, { passive: true }); this._selected = { type: "node", id: dev.id }; })}>
+          <b>${t("add.passive_speakers")}</b><small>${t("add.kind_passive_speakers")}</small></button>
+      </div>
+      <div class="actions"><button class="btn" @click=${close}>${t("delete.cancel")}</button></div></div></div>`;
+  }
+
+  // ------------------------------------------------------------ editing
+
+  _tileClick(e, room, n) {
+    e.stopPropagation();
+    if (this._justDragged) return;
+    if (this._armed) {
+      if (canConnect(room, this._armed, n.id)) {
+        const from = this._armed;
+        this._armed = null;
+        this._change(room, () => { this._selected = { type: "cable", index: addCable(room, from, n.id) }; });
+      } else this._armed = null;
+      return;
     }
-    const d = n.device;
-    const p = d.power || {};
-    const routes = room.sources.filter((s) => room.routes[s.id]?.devices.includes(d.id));
-    const none = !p.plugs?.length && !p.devices?.length && !p.actions;
-    return html`<h2>${n.name}</h2><div class="kind">${t(`kind.${d.kind}`)}</div>
-      ${p.plugs?.length ? this._entities(t("insp.plugs"), p.plugs) : nothing}
-      ${p.devices?.length ? this._entities(t("insp.devices"), p.devices) : nothing}
-      ${p.actions ? this._entities(t("insp.actions"), p.actions) : nothing}
-      ${p.sensors?.length ? this._entities(t("insp.sensors"), p.sensors) : nothing}
-      ${none ? this._field(t("insp.power"), t("insp.no_power")) : nothing}
-      ${d.control && p.devices?.length
-        ? html`${this._field(t("insp.on_by"), t(`mode.${d.control.on}`))}${this._field(t("insp.off_by"), t(`mode.${d.control.off}`))}
-          ${(d.control.on === "cec" || d.control.off === "cec") && d.control.fallback ? html`<p class="muted">${t("insp.fallback", { timeout: d.control.timeout })}</p>` : nothing}`
-        : nothing}
-      ${d.control
-        ? d.inputs
-          ? html`<div class="field"><span class="lbl">${t("insp.inputs")} ${d.inputs.entity ? t("insp.inputs_via", { entity: d.inputs.entity }) : t("insp.inputs_actions")}</span>
-              <div class="inputs">${d.inputs.list.map((i) => html`<span>${i}</span>`)}</div></div>`
-          : this._field(t("insp.inputs"), t("insp.no_inputs"))
-        : nothing}
-      ${d.volume
-        ? html`<div class="field"><span class="lbl">${t("insp.volume")}${room.volume.where === "device" && room.volume.device === d.id ? html` <span class="tag room">${t("insp.room_volume")}</span>` : nothing}</span>
-            <button class="ent" @click=${() => this._moreInfo(d.volume)}>${d.volume}</button>
-            ${d.volume_migrated ? html`<p class="muted">${t("insp.volume_migrated", { entity: d.volume, device: n.name })}</p>` : nothing}</div>`
-        : nothing}
-      ${this._field(t("insp.on_routes"), routes.map((s) => this._sourceLabel(s)).join(", ") || "–")}
-      ${d.settings && !none
-        ? html`<div class="field"><span class="lbl">${t("insp.settings")}</span>${this._settingsList(
-            Object.fromEntries(Object.entries(d.settings).filter(([k]) => p.sensors?.length || !STANDBY.includes(k)))
-          )}</div>`
-        : nothing}`;
+    this._selected = { type: "node", id: n.id };
   }
 
-  _field(label, value) {
-    return html`<div class="field"><span class="lbl">${label}</span><div>${value}</div></div>`;
+  _arm(e, n) {
+    e.stopPropagation();
+    this._armed = this._armed === n.id ? null : n.id;
+    this._focusDrawing();
   }
 
-  _entities(label, ids) {
-    return html`<div class="field"><span class="lbl">${label}</span>${ids.map(
-      (id) => html`<button class="ent" @click=${() => this._moreInfo(id)}>${id}</button>`
-    )}</div>`;
+  _addRoom() {
+    const d = newRoom(this._t("nav.new_room"), this._config.defaults.room);
+    this._drafts[d.entry_id] = d;
+    this._go("room", d.entry_id);
+    this._tab = "settings";
   }
 
-  // settings by key: names and values (changed with the action set_setting)
-  _settingsList(settings) {
-    return html`<div class="settings">${Object.entries(settings).map(
-      ([k, v]) => html`<div class="row" title=${k}><span>${this._t(`setting.${k}`)}</span><b>${this._value(k, v)}</b></div>`
-    )}</div>`;
+  _askDelete(d) {
+    this._dialog = { type: "delete", room: d };
   }
 
-  _value(key, v) {
-    const t = this._t;
-    if (v === null || v === undefined) return key === "night_run_down" ? t("value.as_by_day") : "–";
-    if (typeof v === "boolean") return t(v ? "value.on" : "value.off");
-    if (typeof v === "string") return t(`choice.${v}`);
-    const num = this.hass?.locale ? Number(v).toLocaleString(this.hass.locale.language) : String(v);
-    return UNITS[key] ? `${num} ${UNITS[key]}` : num;
+  async _delete(d) {
+    this._dialog = null;
+    if (d.isNew) {
+      delete this._drafts[d.entry_id];
+      this._go(this._rooms().length ? "room" : "central", this._rooms()[0]?.entry_id ?? null);
+      return;
+    }
+    try {
+      await this.hass.callWS({ type: "better_media_player/room/delete", entry_id: d.entry_id });
+      // the other rooms' unsaved changes stay (and are checked anew: a plug of the deleted room is free now)
+      const keep = this._dirtyRooms().filter((x) => x.entry_id !== d.entry_id);
+      await this._reloadKeeping(keep, this._centralDirty() ? this._central : null);
+      if (keep.length) this._notice = this._t("delete.others_kept");
+      this._tab = "wiring";
+    } catch (err) {
+      this._notice = this._t("delete.failed", { error: err?.message || String(err) });
+    }
   }
 
-  _renderSettings(room) {
-    const t = this._t;
-    const name = (id) => this.hass.states[id]?.attributes.friendly_name || id;
-    return html`
-      <div class="card"><h3>${t("settings.room")}</h3>
-        ${this._field(t("settings.area"), room.area || "–")}
-        ${this._field(t("settings.volume"), this._roomVolume(room))}
-        <div class="field"><span class="lbl">${t("settings.presence")}</span>
-          ${room.occupancy.length ? room.occupancy.map((id) => html`<button class="ent" @click=${() => this._moreInfo(id)}>${name(id)}</button>`) : html`<div>${t("settings.none")}</div>`}
-        </div>
-      </div>
-      <div class="card"><h3>${t("settings.behaviour")}</h3>
-        ${room.settings ? html`<p class="muted">${t("settings.behaviour_hint")} ${t("settings.change_hint")}</p>${this._settingsList(room.settings)}` : html`<p class="muted">${t("settings.not_loaded")}</p>`}
-      </div>`;
+  _discard() {
+    for (const id of Object.keys(this._drafts)) {
+      if (this._drafts[id].isNew) delete this._drafts[id];
+      else this._drafts[id] = { ...clone(this._base[id]), routes: this._drafts[id].routes, problems: [] };
+      if (this._drafts[id]) this._refresh(this._drafts[id], 0);
+    }
+    if (this._central) this._central = { ...clone(this._centralBase), problems: [] };
+    this._nodes = {};
+    this._selected = null;
+    this._armed = null;
+    if (!this._drafts[this._roomId]) this._go(this._rooms().length ? "room" : "central", this._rooms()[0]?.entry_id ?? null);
+    this._tick++;
   }
 
-  _roomVolume(room) {
-    const t = this._t;
-    if (room.volume.where !== "device") return t("settings.volume_players");
-    const d = room.devices.find((x) => x.id === room.volume.device);
-    if (!d?.volume) return "–";
-    return html`${t("settings.volume_device", { device: d.name || t(`kind.${d.kind}`), entity: d.volume })}
-      ${d.volume_migrated ? html`<p class="muted">${t("insp.volume_migrated", { entity: d.volume, device: d.name || t(`kind.${d.kind}`) })}</p>` : nothing}`;
+  async _save() {
+    this._saving = true;
+    let select = this._drafts[this._roomId]?.isNew ? null : this._roomId;
+    const pending = this._dirtyRooms();
+    let central = this._centralDirty() ? this._central : null;
+    let notice = null;
+    try {
+      while (pending.length) {
+        const d = pending[0];
+        const body = payload(d, this._base[d.entry_id]);
+        const res = d.isNew
+          ? await this.hass.callWS({ type: "better_media_player/room/create", name: body.name, area_id: body.area_id, setup: body.setup, settings: body.settings })
+          : await this.hass.callWS({ type: "better_media_player/room/save", entry_id: d.entry_id, version: d.version, ...body });
+        if (!res.saved) {
+          d.problems = res.problems;
+          notice = this._t("save.refused", { room: d.name });
+          break;
+        }
+        pending.shift();
+        if (d.isNew && d.entry_id === this._roomId) select = res.entry_id;
+      }
+      if (!notice && central) {
+        const res = await this.hass.callWS({
+          type: "better_media_player/central/save",
+          follow_player: central.follow_player || null,
+          // only what was changed here (an action may have changed others meanwhile)
+          settings: Object.fromEntries(Object.entries(central.settings || {}).filter(([k, v]) => JSON.stringify(v) !== JSON.stringify(this._centralBase.settings?.[k]))),
+        });
+        if (res.saved) central = null;
+        else {
+          central.problems = res.problems;
+          notice = this._t("save.refused", { room: this._t("nav.general") });
+        }
+      }
+    } catch (err) {
+      notice = err?.code === "changed" && pending.length
+        ? this._t("save.changed", { room: pending[0].name })
+        : this._t("save.failed", { error: err?.message || String(err) });
+    }
+    // what was saved is read back; what was not stays as it was being edited
+    await this._reloadKeeping(pending, central, select);
+    this._notice = notice;
+    this._saving = false;
   }
 
-  _renderCentral() {
-    const t = this._t;
-    const c = this._config.central;
-    if (!c) return html`<div class="card"><p class="muted">${t("central.missing")}</p></div>`;
-    const follow = c.follow_player;
-    return html`
-      <div class="card"><h3>${t("central.follow")}</h3>
-        <div class="field"><span class="lbl">${t("central.follow_player")}</span>
-          ${follow ? html`<button class="ent" @click=${() => this._moreInfo(follow)}>${this.hass.states[follow]?.attributes.friendly_name || follow}</button>` : html`<div>${t("central.off")}</div>`}
-        </div>
-      </div>
-      <div class="card"><h3>${t("central.settings")}</h3>
-        ${c.settings ? html`<p class="muted">${t("settings.change_hint")}</p>${this._settingsList(c.settings)}` : html`<p class="muted">${t("settings.not_loaded")}</p>`}</div>`;
+  // the panel read anew, with these drafts (not saved) kept as they are
+  async _reloadKeeping(drafts, central = null, select = null) {
+    await this._load(select);
+    for (const d of drafts) {
+      if (!d.isNew && !this._base[d.entry_id]) continue; // (gone meanwhile)
+      this._drafts[d.entry_id] = d;
+      this._refresh(d, 0);
+    }
+    if (central && this._central) this._central = central;
+    if (select && this._drafts[select]) this._roomId = select;
+    this._tick++;
   }
 
   // ------------------------------------------------------------ interaction
@@ -453,12 +650,14 @@ class BmpPanel extends LitElement {
   _select(e, what) {
     e.stopPropagation();
     if (this._justDragged) return;
+    this._armed = null;
     this._selected = what;
   }
 
   _onCanvasClick(e) {
     if (this._justPanned || e.target.id !== "canvas") return;
     this._selected = null;
+    this._armed = null;
   }
 
   _world() {
@@ -474,7 +673,7 @@ class BmpPanel extends LitElement {
   }
 
   _onDragStart(e, n) {
-    if (e.button !== 0 || !e.isPrimary || !this._room?.loaded) return;
+    if (e.button !== 0 || !e.isPrimary) return;
     e.preventDefault();
     e.stopPropagation();
     this._focusDrawing();
@@ -547,7 +746,10 @@ class BmpPanel extends LitElement {
     if (act) {
       e.preventDefault();
       act();
-    } else if (e.key === "Escape") this._selected = null;
+    } else if (e.key === "Escape") {
+      this._selected = null;
+      this._armed = null;
+    }
   }
 
   _setView(tx, ty, k) {
@@ -591,10 +793,13 @@ class BmpPanel extends LitElement {
     }
   }
 
+  // where the tiles sit: kept at once (only for the eye, nothing reloads); a room
+  // not saved yet or not loaded keeps it until it is
   async _saveLayout(room) {
     if (!room) return;
     const layout = Object.fromEntries(this._tiles(room).filter((n) => n.placed).map((n) => [n.id, [n.x, n.y]]));
     room.layout = layout;
+    if (room.isNew || !room.loaded) return;
     try {
       await this.hass.callWS({ type: "better_media_player/layout/save", entry_id: room.entry_id, layout });
     } catch (err) {
@@ -608,11 +813,7 @@ class BmpPanel extends LitElement {
     this._nodes[room.entry_id] = arrange(nodesOf(room, this._t), room.cables, {});
     this._tick++;
     requestAnimationFrame(() => this._fit());
-    try {
-      await this.hass.callWS({ type: "better_media_player/layout/save", entry_id: room.entry_id, layout: {} });
-    } catch (err) {
-      this._notice = this._t("save_failed", { error: err?.message || String(err) });
-    }
+    await this._saveLayout(room);
   }
 
   // ------------------------------------------------------------ styles
@@ -633,6 +834,7 @@ class BmpPanel extends LitElement {
       --bmp-muted: var(--secondary-text-color, #6b7680);
       --bmp-primary: var(--primary-color, #03a9f4);
       --bmp-chip: var(--secondary-background-color, #eef3f7);
+      --bmp-error: var(--error-color, #db4437);
       background: var(--bmp-bg);
       color: var(--bmp-text);
       font-family: var(--ha-font-family-body, Roboto, "Noto Sans", system-ui, sans-serif);
@@ -640,15 +842,29 @@ class BmpPanel extends LitElement {
     }
     * { box-sizing: border-box; }
     button { font: inherit; color: inherit; cursor: pointer; }
+    input, select { font: inherit; color: inherit; background: var(--bmp-card); border: 1px solid var(--bmp-line); border-radius: 6px; padding: 6px 8px; min-width: 0; }
+    input:focus, select:focus { outline: 2px solid var(--bmp-primary); outline-offset: -1px; }
+    input.mono { font-family: var(--code-font-family, ui-monospace, monospace); }
+    hr { border: 0; border-top: 1px solid var(--bmp-line); margin: 14px 0; }
     .message { padding: 24px; color: var(--bmp-muted); }
-    .app { display: grid; grid-template-rows: var(--header-height, 56px) auto 1fr; height: 100%; }
+    .app { display: grid; grid-template-rows: var(--header-height, 56px) auto auto 1fr; height: 100%; }
     .toolbar { display: flex; align-items: center; gap: 8px; padding: 0 16px; background: var(--app-header-background-color, var(--bmp-primary)); color: var(--app-header-text-color, #fff); }
     .toolbar h1 { font-size: 20px; font-weight: 400; margin: 0; }
     .notice { display: flex; align-items: center; gap: 12px; justify-content: space-between; padding: 8px 16px; background: var(--warning-color, #f9a825); color: #000; }
+    .savebar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; background: var(--bmp-card); border-bottom: 1px solid var(--bmp-line); flex-wrap: wrap; }
+    .savebar.idle { color: var(--bmp-muted); font-size: 13px; }
+    .savebar .msg { flex: 1; min-width: 200px; color: var(--bmp-muted); }
+    .savebar .savewarn { color: var(--warning-color, #b26a00); font-size: 13px; max-width: 520px; }
+    .btn { border: 1px solid var(--bmp-line); background: var(--bmp-card); border-radius: 18px; padding: 6px 16px; font-weight: 500; }
+    .btn.primary { background: var(--bmp-primary); border-color: var(--bmp-primary); color: #fff; }
+    .btn.danger { color: var(--bmp-error); border-color: color-mix(in srgb, var(--bmp-error) 40%, transparent); }
+    .btn.small { padding: 4px 12px; font-size: 13px; }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btnrow { display: flex; gap: 8px; flex-wrap: wrap; }
+    .err { color: var(--bmp-error); }
     .zoombar button:disabled { opacity: .4; cursor: default; }
-    .viewonly { padding: 8px 16px; background: var(--bmp-card); border-bottom: 1px solid var(--bmp-line); color: var(--bmp-muted); font-size: 13px; }
     .main { display: grid; grid-template-columns: 220px 1fr; min-height: 0; }
-    .main.details { grid-template-columns: 220px 1fr 320px; }
+    .main.details { grid-template-columns: 220px 1fr 340px; }
     .inspector { position: relative; }
     .close { position: absolute; top: 8px; right: 8px; width: 32px; height: 32px; border: 0; border-radius: 50%; background: none; font-size: 20px; color: var(--bmp-muted); }
     .close:hover { background: var(--bmp-chip); color: var(--bmp-text); }
@@ -661,20 +877,28 @@ class BmpPanel extends LitElement {
     .nav.active { border-left-color: var(--bmp-primary); background: var(--bmp-chip); }
     .nav b { font-weight: 500; }
     .nav small { color: var(--bmp-muted); }
+    .nav.add b { color: var(--bmp-primary); }
+    .nav .dot { color: var(--bmp-primary); }
     .warn { color: var(--warning-color, #f9a825); }
-    .stage { display: grid; grid-template-rows: auto auto 1fr auto; min-width: 0; min-height: 0; }
+    .stage { display: grid; grid-template-rows: auto auto auto 1fr auto; min-width: 0; min-height: 0; }
     .stage.settings { grid-template-rows: auto 1fr; }
     .tabs { display: flex; gap: 4px; padding: 0 16px; background: var(--bmp-card); border-bottom: 1px solid var(--bmp-line); }
     .tabs button { border: 0; background: none; padding: 12px 14px 10px; border-bottom: 3px solid transparent; color: var(--bmp-muted); font-weight: 500; }
     .tabs button[aria-selected="true"] { color: var(--bmp-primary); border-bottom-color: var(--bmp-primary); }
-    .page { overflow: auto; padding: 20px 16px; display: grid; gap: 16px; align-content: start; align-items: start; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
-    .card { background: var(--bmp-card); border: 1px solid var(--bmp-line); border-radius: var(--ha-card-border-radius, 12px); padding: 16px 18px; display: grid; gap: 12px; align-content: start; }
+    .page { overflow: auto; padding: 20px 16px; display: grid; gap: 16px; align-content: start; align-items: start; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+    .card { background: var(--bmp-card); border: 1px solid var(--bmp-line); border-radius: var(--ha-card-border-radius, 12px); padding: 16px 18px; display: grid; gap: 10px; align-content: start; }
+    .card.wide { grid-column: 1 / -1; }
     .card h3 { margin: 0; font-size: 16px; font-weight: 500; }
-    .settings { display: grid; gap: 2px; }
+    .card h4 { margin: 8px 0 0; font-size: 13px; font-weight: 500; color: var(--bmp-muted); text-transform: uppercase; letter-spacing: .04em; }
+    .settings { display: grid; gap: 0; }
     .row { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--bmp-line); }
     .row:last-child { border-bottom: 0; }
-    .row b { font-weight: 500; font-variant-numeric: tabular-nums; }
+    .row input[type="number"] { width: 90px; text-align: right; }
+    .num { display: inline-flex; align-items: center; gap: 6px; }
+    .unit { color: var(--bmp-muted); font-size: 12px; min-width: 24px; }
+    .toggle { width: 18px; height: 18px; }
     .sources { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--bmp-line); background: var(--bmp-card); }
+    .sources .add { margin-left: 8px; }
     .lbl { color: var(--bmp-muted); }
     .chip { border: 1px solid var(--bmp-line); background: var(--bmp-chip); border-radius: 16px; padding: 5px 12px; }
     .chip[aria-pressed="true"] { background: var(--bmp-primary); border-color: var(--bmp-primary); color: #fff; }
@@ -683,10 +907,13 @@ class BmpPanel extends LitElement {
     .legend i.picture { border-color: var(--bmp-picture); }
     .legend i.sound { border-color: var(--bmp-sound); border-top-style: dashed; }
     .legend i.direct { border-color: var(--bmp-muted); border-top-style: dotted; border-top-width: 2px; }
+    .problems { padding: 8px 12px; border-radius: 8px; background: color-mix(in srgb, var(--warning-color, #f9a825) 14%, transparent); font-size: 13px; display: grid; gap: 4px; margin-bottom: 12px; }
+    .problems.strip { margin: 0; border-radius: 0; border-bottom: 1px solid var(--bmp-line); padding: 8px 16px; max-height: 120px; overflow: auto; }
     .canvas-wrap:focus { outline: none; }
     .canvas-wrap:focus-visible:not([data-pointer]) { outline: 2px solid var(--bmp-primary); outline-offset: -2px; }
     .canvas-wrap { position: relative; overflow: hidden; min-height: 0; background-image: radial-gradient(var(--bmp-line) 1px, transparent 1px); background-size: 20px 20px; }
     svg#canvas { display: block; width: 100%; height: 100%; user-select: none; -webkit-user-select: none; touch-action: none; cursor: grab; }
+    .armed svg#canvas { cursor: crosshair; }
     .zoombar { position: absolute; right: 12px; bottom: 12px; display: flex; flex-direction: column; gap: 6px; }
     .zoombar button { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--bmp-line); background: var(--bmp-card); display: grid; place-items: center; }
     .zoombar button:hover { border-color: var(--bmp-primary); }
@@ -704,14 +931,20 @@ class BmpPanel extends LitElement {
     .node { cursor: grab; }
     .node .box { fill: var(--bmp-card); stroke: var(--bmp-line); stroke-width: 1.5; }
     .node.sel .box { stroke: var(--bmp-primary); stroke-width: 2.5; }
+    .node.bad .box { stroke: var(--bmp-error); }
+    .node.target .box { stroke: var(--bmp-primary); stroke-dasharray: 4 3; stroke-width: 2; }
     .node.dim { opacity: .3; }
     .node.passive .box { stroke-dasharray: 5 4; }
     .node .name { fill: var(--bmp-text); font-size: 14px; font-weight: 500; }
     .node .sub { fill: var(--bmp-muted); font-size: 11.5px; font-family: var(--code-font-family, ui-monospace, monospace); }
     .node .icon { fill: none; stroke: var(--bmp-muted); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
     .badge rect { fill: var(--bmp-cec); }
+    .badge.vol rect { fill: var(--bmp-primary); }
     .badge text { fill: #fff; font-size: 10.5px; font-weight: 500; }
     .port { fill: var(--bmp-card); stroke: var(--bmp-muted); stroke-width: 1.5; }
+    .port.out { cursor: crosshair; }
+    .port.out:hover, .port.armed { fill: var(--bmp-primary); stroke: var(--bmp-primary); }
+    .port.faint { opacity: .45; }
     .cable { fill: none; stroke-width: 3; }
     .cable.picture { stroke: var(--bmp-picture); }
     .cable.sound { stroke: var(--bmp-sound); stroke-dasharray: 7 5; }
@@ -724,17 +957,41 @@ class BmpPanel extends LitElement {
     .clabel text { font-size: 11.5px; font-family: var(--code-font-family, ui-monospace, monospace); fill: var(--bmp-text); }
     .clabel.cec rect { stroke: var(--bmp-cec); }
     .clabel.dim { opacity: .2; }
-    .inspector h2 { font-size: 18px; font-weight: 500; margin: 0 0 2px; }
+    .inspector h2 { font-size: 18px; font-weight: 500; margin: 0 0 2px; padding-right: 32px; }
     .kind { color: var(--bmp-muted); margin-bottom: 16px; }
     .field { display: grid; gap: 6px; margin-bottom: 14px; }
     .field > .lbl { font-size: 12px; }
+    .field small { font-size: 12px; }
+    .hint { font-size: 12.5px; margin: -6px 0 14px; }
+    .pick { display: flex; gap: 6px; align-items: center; }
+    .pick input { flex: 1; font-family: var(--code-font-family, ui-monospace, monospace); font-size: 12.5px; }
+    .x { border: 0; background: none; color: var(--bmp-muted); font-size: 18px; line-height: 1; padding: 2px 6px; border-radius: 50%; }
+    .x:hover { background: var(--bmp-chip); color: var(--bmp-text); }
+    .chipent { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--bmp-chip); border-radius: 6px; padding: 4px 4px 4px 8px; }
+    .chipent span { display: grid; min-width: 0; }
+    .chipent small { font-family: var(--code-font-family, ui-monospace, monospace); color: var(--bmp-muted); overflow-wrap: anywhere; }
+    .check { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+    .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--bmp-line); border-radius: 18px; overflow: hidden; width: fit-content; }
+    .seg button { border: 0; background: none; padding: 5px 12px; }
+    .seg button + button { border-left: 1px solid var(--bmp-line); }
+    .seg button[aria-pressed="true"] { background: var(--bmp-primary); color: #fff; }
+    .pair { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; font-size: 12.5px; }
+    .pair.add { grid-template-columns: 1fr 1.4fr auto; }
+    .pair code, .pair span { font-family: var(--code-font-family, ui-monospace, monospace); overflow-wrap: anywhere; }
     .ent { display: block; text-align: left; font-family: var(--code-font-family, ui-monospace, monospace); font-size: 12.5px; background: var(--bmp-chip); border: 0; border-radius: 6px; padding: 6px 8px; overflow-wrap: anywhere; }
-    .ent:hover { outline: 1px solid var(--bmp-primary); }
     .inputs { display: flex; flex-wrap: wrap; gap: 6px; }
     .inputs span { font-family: var(--code-font-family, ui-monospace, monospace); font-size: 12px; background: var(--bmp-chip); border-radius: 6px; padding: 3px 7px; }
     .muted { color: var(--bmp-muted); }
-    .note { margin: 0 0 12px; padding: 10px 12px; border-radius: 8px; background: var(--bmp-chip); font-size: 13px; }
-    @media (max-width: 1100px) { .main { grid-template-columns: 180px 1fr; } .main.details { grid-template-columns: 180px 1fr 280px; } }
+    .dlg-back { position: fixed; inset: 0; background: rgba(0, 0, 0, .35); display: grid; place-items: center; z-index: 10; padding: 16px; }
+    .dlg { background: var(--bmp-card); border-radius: 14px; padding: 20px; width: min(460px, 100%); max-height: 85vh; overflow: auto; box-shadow: 0 10px 40px rgba(0, 0, 0, .25); }
+    .dlg h3 { margin: 0 0 10px; font-weight: 500; }
+    .dlg .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+    .pick-list { display: grid; gap: 4px; }
+    .pick-list .side-title { padding: 8px 0 2px; }
+    .pick-list button { display: grid; text-align: left; border: 1px solid var(--bmp-line); background: none; border-radius: 8px; padding: 8px 12px; }
+    .pick-list button:hover { border-color: var(--bmp-primary); }
+    .pick-list small { color: var(--bmp-muted); }
+    @media (max-width: 1100px) { .main { grid-template-columns: 180px 1fr; } .main.details { grid-template-columns: 180px 1fr 300px; } }
     @media (max-width: 820px) {
       .main { display: block; overflow: auto; }
       aside { display: flex; gap: 8px; align-items: center; overflow-x: auto; padding: 8px 16px; border-right: 0; border-bottom: 1px solid var(--bmp-line); }
