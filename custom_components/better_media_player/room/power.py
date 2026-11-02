@@ -1,11 +1,14 @@
-"""The room's power roles: which devices it has, and when they are needed.
+"""The room's devices as power nodes: what it has, and when each is needed.
 
-role     A group of power devices with the same job: display, audio, bass and
-         the optional host plugs that power a player's own hardware.
-demand   A role is demanded while a source that needs it is active.
-run-down After the demand ends, a role stays on for its run-down time.
+node     A device of the room (model.py: display, receiver, speakers, …) or the
+         hardware plug of one of its players (video_host / audio_host).
+demand   A node is demanded while a source whose route it is on is active.
+run-down After the demand ends, a node stays on for its device's run-down.
+order    Players' plugs first, then what carries the picture, then the player,
+         then the sound devices: each group from the source on (a receiver before
+         the speakers it drives); off the other way round.
 
-The roles are nodes of the device layer (devices/), which switches them; the
+The nodes belong to the device layer (devices/), which switches them; the
 room owns them and answers what only it knows: demand, run-down, standby, and
 what a change from outside means for the room (manual mode, held devices).
 """
@@ -15,87 +18,52 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.media_player import MediaPlayerState
 from homeassistant.core import State, callback
 
-from ..const import (
-    CONF_AUDIO_PLAYER,
-    CONF_AUDIO_POWER,
-    CONF_BASS,
-    CONF_CONNECTIONS,
-    CONF_DISPLAY,
-    CONF_DISPLAY_POWER,
-    CONF_SPEAKERS,
-    CONF_START_TIMEOUT,
-    CONF_VIDEO_PLAYER,
-    CONN_FROM,
-    CONN_INPUT,
-    CONN_MODE,
-    CONN_SIGNALS,
-    CONN_TO,
-    INPUT_ROLES,
-    ROLE_ACTIONS,
-    ROLE_AUDIO,
-    ROLE_AUDIO_HOST,
-    ROLE_BASS,
-    ROLE_DISPLAY,
-    ROLE_VIDEO_HOST,
-    SOURCE_AUDIO,
-    SOURCE_VIDEO,
-    role_conf,
-)
+from ..const import CONF_START_TIMEOUT, ROLE_AUDIO_HOST, ROLE_VIDEO_HOST, SOURCE_AUDIO
 from ..devices import DeviceGroup, Node, Standby, get_control
 from ..devices.const import ACTION_ID
 from ..devices.graph import Route, route
-from ..devices.model import Control, Edge, Inputs, Mode, Signal
+from ..devices.model import Edge, Mode, Signal
+from ..model import (
+    HOST_OF,
+    KIND_GIVES,
+    NEEDS,
+    OPT_CABLES,
+    control_of,
+    device_defaults,
+    device_setting,
+    devices_of,
+    inputs_of,
+    shows_picture,
+    source_setting,
+    sources_of,
+    switch_order,
+)
 
 if TYPE_CHECKING:
     from .controller import RoomController
 
 _LOGGER = logging.getLogger(__name__)
 
-# Order in which roles are switched on / off
-ON_ORDER = (ROLE_VIDEO_HOST, ROLE_AUDIO_HOST, ROLE_DISPLAY, ROLE_AUDIO, ROLE_BASS)
-OFF_ORDER = (ROLE_BASS, ROLE_AUDIO, ROLE_DISPLAY, ROLE_VIDEO_HOST, ROLE_AUDIO_HOST)
-
-# the ends of a connection (option keys) as nodes of the room
-ROLE_OF = {CONF_DISPLAY: ROLE_DISPLAY, CONF_SPEAKERS: ROLE_AUDIO, CONF_BASS: ROLE_BASS}
-SOURCE_OF = {CONF_VIDEO_PLAYER: SOURCE_VIDEO, CONF_AUDIO_PLAYER: SOURCE_AUDIO}
-NEEDS = {SOURCE_VIDEO: (Signal.PICTURE, Signal.SOUND), SOURCE_AUDIO: (Signal.SOUND,)}
-GIVES = {CONF_DISPLAY: frozenset({Signal.PICTURE}), CONF_SPEAKERS: frozenset({Signal.SOUND}), CONF_BASS: frozenset({Signal.SOUND})}
+HOSTS = (ROLE_VIDEO_HOST, ROLE_AUDIO_HOST)
 
 
 def edges_of(options: dict) -> list[Edge]:
-    """The room's connections (ends as option keys)."""
+    """The room's cables."""
     return [
         Edge(
-            source=c[CONN_FROM],
-            target=c[CONN_TO],
-            signals=frozenset(Signal(x) for x in c.get(CONN_SIGNALS) or ()),
-            input=c.get(CONN_INPUT) or None,
-            mode=Mode(c.get(CONN_MODE) or Mode.BMP),
+            source=c["from"],
+            target=c["to"],
+            signals=frozenset(Signal(x) for x in c.get("signals") or ()),
+            input=c.get("input") or None,
+            mode=Mode(c.get("mode") or Mode.BMP),
         )
-        for c in options.get(CONF_CONNECTIONS) or []
+        for c in options.get(OPT_CABLES) or []
     ]
-
-
-def role_inputs(options: dict, conf: str) -> Inputs | None:
-    entity = options.get(role_conf(conf, "inputs"))
-    actions = dict(options.get(role_conf(conf, "input_actions")) or {})
-    if not entity and not actions:
-        return None
-    return Inputs(entity=entity, actions=actions, pause=float(options.get(role_conf(conf, "input_pause")) or 0))
-
-
-def role_control(options: dict, conf: str) -> Control:
-    return Control(
-        on=Mode(options.get(role_conf(conf, "power_on")) or Mode.BMP),
-        off=Mode(options.get(role_conf(conf, "power_off")) or Mode.BMP),
-        fallback=bool(options.get(role_conf(conf, "cec_fallback"))),
-        timeout=float(options.get(role_conf(conf, "cec_timeout")) or Control().timeout),
-    )
 
 
 # playing or paused: in use (also what a group shares, and what can be handed over)
@@ -103,70 +71,79 @@ GROUP_ACTIVE_STATES = {MediaPlayerState.PLAYING, MediaPlayerState.PAUSED, MediaP
 
 
 @dataclass
-class Role(Node):
-    """A node of the room: power devices with the same job."""
+class RoomNode(Node):
+    """A node of the room: one of its devices, or a player's hardware plug."""
 
-    run_down_key: str = ""  # key in controller.data (minutes)
-    prefix: str | None = None  # of its settings on the device ("display": display_on_wait, ...)
+    device: dict | None = None  # the device's setup (None: a player's plug)
+    picture: bool = False  # gives or carries the picture: on before the player
 
 
 class RoomPower:
-    """The room's roles: what it has, when they are needed; owner of their nodes."""
+    """The room's devices: what it has, when they are needed; owner of their nodes."""
 
     def __init__(self, ctrl: RoomController) -> None:
         self.ctrl = ctrl
         self.name = ctrl.entry.title
-        o = ctrl.opts
-        self.roles: dict[str, Role] = {}
-        for conf, role_key, run_down, prefix, power in (
-            (CONF_DISPLAY, ROLE_DISPLAY, "display_run_down", "display", CONF_DISPLAY_POWER),
-            (CONF_SPEAKERS, ROLE_AUDIO, "audio_run_down", "audio", CONF_AUDIO_POWER),
-            (CONF_BASS, ROLE_BASS, "audio_run_down", None, None),
-        ):
-            # plugs and devices; own on/off actions count as one more device (assumed state)
-            entities = list(o.get(conf) or [])
-            on_k, off_k = ROLE_ACTIONS[conf]
+        options = ctrl.opts
+        edges = edges_of(options)
+        every: dict[str, RoomNode] = {}  # also the passive devices (mixer, passive speakers): the routes pass them
+        for d in devices_of(options):
+            p = d.get("power") or {}
+            entities = [*(p.get("plugs") or []), *(p.get("devices") or [])]
             actions = {}
-            if o.get(on_k) and o.get(off_k):
-                actions[f"{ACTION_ID}.{role_key}"] = (o[on_k], o[off_k])
-                entities.append(f"{ACTION_ID}.{role_key}")
-            if entities:
-                self.roles[role_key] = Role(
-                    key=role_key,
-                    entities=entities,
-                    sources=(),  # from the routes, below
-                    run_down_key=run_down,
-                    prefix=prefix,
-                    power=list(o.get(power) or []) if power else None,
-                    actions=actions,
-                    gives=GIVES[conf],
-                    inputs=role_inputs(o, conf) if conf in INPUT_ROLES else None,
-                    control=role_control(o, conf) if conf in INPUT_ROLES else Control(),
-                )
-        # what each source needs: its route through the connections
-        self.routes: dict[str, Route] = {}
-        ends = {conf: self.roles[key] for conf, key in ROLE_OF.items() if key in self.roles}
-        edges = edges_of(o)
-        for conf, src_key in SOURCE_OF.items():
-            if src_key in ctrl.sources:
-                r = route(conf, NEEDS[src_key], ends, edges)
-                self.routes[src_key] = Route(
-                    frozenset(ROLE_OF[c] for c in r.nodes),
-                    {ROLE_OF[c]: wish for c, wish in r.inputs.items()},
-                )
-        for role in self.roles.values():
-            role.sources = tuple(s for s, r in self.routes.items() if role.key in r.nodes)
-        for role_key, src_key in ((ROLE_VIDEO_HOST, SOURCE_VIDEO), (ROLE_AUDIO_HOST, SOURCE_AUDIO)):
-            src = ctrl.sources.get(src_key)
-            if src is not None and src.host:
-                self.roles[role_key] = Role(
-                    key=role_key,
-                    entities=[src.host],
-                    sources=(src_key,),
-                    run_down_key="host_run_down",
-                    prefix="host",
-                )
-        self.devices: DeviceGroup = get_control(ctrl.hass).register(ctrl.entry.entry_id, self, list(self.roles.values()))
+            if p.get("actions"):  # own on/off actions count as one more device (assumed state)
+                actions[f"{ACTION_ID}.{d['id']}"] = tuple(p["actions"])
+                entities.append(f"{ACTION_ID}.{d['id']}")
+            gives = KIND_GIVES.get(d["kind"], frozenset())
+            every[d["id"]] = RoomNode(
+                key=d["id"],
+                entities=entities,
+                sources=(),  # from the routes, below
+                power=list(p.get("sensors") or []) or None,
+                actions=actions,
+                gives=gives,
+                inputs=inputs_of(d),
+                control=control_of(d),
+                device=d,
+                picture=shows_picture(d, options.get(OPT_CABLES) or []),
+            )
+        # what each source needs: its route through the cables
+        self.routes: dict[str, Route] = {key: route(key, NEEDS[key], every, edges) for key in ctrl.sources}
+        for node in every.values():
+            node.sources = tuple(s for s, r in self.routes.items() if node.key in r.nodes)
+        # what is switched: devices with power (plugs, devices, own actions) and the players' plugs
+        self.nodes: dict[str, RoomNode] = {k: n for k, n in every.items() if n.entities}
+        for key, src in sources_of(options).items():
+            if src.get("host") and key in ctrl.sources:
+                self.nodes[HOST_OF[key]] = RoomNode(key=HOST_OF[key], entities=[src["host"]], sources=(key,))
+        # the order to switch on: plugs, picture, sound; each from the source on
+        cables = list(options.get(OPT_CABLES) or [])
+        devs = switch_order([n.device for n in self.nodes.values() if n.device is not None], cables, list(ctrl.sources))
+        self.on_order: list[str] = [h for h in HOSTS if h in self.nodes] + devs
+        self.off_order: list[str] = list(reversed(devs)) + [h for h in HOSTS if h in self.nodes]
+        self.devices: DeviceGroup = get_control(ctrl.hass).register(ctrl.entry.entry_id, self, list(self.nodes.values()))
+
+    # ------------------------------------------------- the room's kinds of nodes
+
+    def sound_nodes(self, source: str = SOURCE_AUDIO) -> list[RoomNode]:
+        """The devices on a source's route that do not carry the picture (speakers,
+        receiver, subwoofer, …), without the player's plug."""
+        return [n for n in self.nodes.values() if n.device is not None and not n.picture and source in n.sources]
+
+    def sound_run_down(self) -> float:
+        """s the music's devices run down (the longest; a music player turned on
+        stays up at least this long)."""
+        nodes = self.sound_nodes()
+        if not nodes:  # (no devices: as long as a speaker's first run-down)
+            return float(device_defaults("speakers")["run_down"]) * 60.0
+        return max(self.run_down(n) for n in nodes)
+
+    def device_setting(self, node: RoomNode, key: str) -> Any:
+        return device_setting(self.ctrl.data, node.device, key)
+
+    def host_setting(self, node: RoomNode, key: str) -> Any:
+        """A setting of the player whose hardware plug this is."""
+        return source_setting(self.ctrl.data, node.sources[0], key)
 
     def unregister(self) -> None:
         get_control(self.ctrl.hass).unregister(self.ctrl.entry.entry_id, self.devices)
@@ -178,28 +155,32 @@ class RoomPower:
         return self.ctrl.auto_power
 
     def demanded(self, node: Node) -> bool:
-        return self.role_demand(self.roles[node.key])
+        return self.needed(self.nodes[node.key])
 
     def enabled(self, node: Node) -> bool:
-        return self.ctrl.night.role_enabled(node.key)
+        return self.ctrl.night.enabled(self.nodes[node.key])
 
     def on_wait(self, node: Node) -> float:
-        prefix = self.roles[node.key].prefix
-        return float(self.ctrl.setting(f"{prefix}_on_wait") or 0) if prefix else 0.0
+        n = self.nodes[node.key]
+        value = self.device_setting(n, "on_wait") if n.device is not None else self.host_setting(n, "on_wait")
+        return float(value or 0)
 
     def run_down(self, node: Node) -> float:
-        key = self.roles[node.key].run_down_key
-        if key == "display_run_down" and self.ctrl.night.active:
-            key = "night_display_run_down"
-        return float(self.ctrl.data.get(key, 0.0)) * 60.0
+        n = self.nodes[node.key]
+        if n.device is None:
+            return float(self.host_setting(n, "run_down") or 0) * 60.0
+        minutes = self.device_setting(n, "run_down")
+        if self.ctrl.night.active and (night := self.device_setting(n, "night_run_down")) is not None:
+            minutes = night
+        return float(minutes or 0) * 60.0
 
     def standby(self, node: Node) -> Standby | None:
-        role = self.roles[node.key]
-        if not self.role_standby(role):
+        n = self.nodes[node.key]
+        if not self.waits_for_standby(n):
             return None
         return Standby(
-            watts=float(self.ctrl.setting(f"{role.prefix}_standby_w")),
-            max_seconds=float(self.ctrl.setting(f"{role.prefix}_standby_max")) * 60,
+            watts=float(self.device_setting(n, "standby_w")),
+            max_seconds=float(self.device_setting(n, "standby_max")) * 60,
         )
 
     def start_timeout(self) -> float:
@@ -235,36 +216,41 @@ class RoomPower:
         """Devices left off until the next start."""
         return self.devices.held
 
-    def role_demand(self, role: Role) -> bool:
+    def needed(self, node: RoomNode) -> bool:
+        """Demanded right now (without its run-down)."""
         ctrl = self.ctrl
-        if not ctrl.night.role_enabled(role.key):
-            return False  # night mode: no subwoofer
-        if ctrl.wake.holds(role):
+        if not ctrl.night.enabled(node):
+            return False  # night mode: e.g. no subwoofer
+        if ctrl.wake.holds(node):
             return True  # snoozed: the room stays ready
-        if ctrl.announce.holds(role):
+        if ctrl.announce.holds(node):
             return True  # an announcement plays
-        if ctrl.follow.prewarm and role.key in (ROLE_AUDIO, ROLE_BASS, ROLE_AUDIO_HOST) and not ctrl.quiet:
+        if ctrl.follow.prewarm and not ctrl.quiet and self.prewarms(node):
             return True
         return any(
             ctrl.source_active(ctrl.sources[s]) or ctrl._just_turned_on(ctrl.sources[s])
-            for s in role.sources
+            for s in node.sources
             if s in ctrl.sources
         )
 
-    def demand(self, role_key: str) -> bool:
-        role = self.roles.get(role_key)
-        return role is not None and self.role_demand(role)
+    def prewarms(self, node: RoomNode) -> bool:
+        """Follow me prewarms the music's sound devices and the music player's plug."""
+        return node.key == ROLE_AUDIO_HOST or node in self.sound_nodes()
 
-    def role_standby(self, role: Role) -> bool:
+    def demand(self, picture: bool) -> bool:
+        """A device for the picture (else: for the sound) is demanded."""
+        return any(n.picture is picture and self.needed(n) for n in self.nodes.values() if n.device is not None)
+
+    def waits_for_standby(self, node: RoomNode) -> bool:
         """Wait for standby before its plug goes off (only with power sensors)."""
-        return self.can_standby(role) and bool(self.ctrl.setting(f"{role.prefix}_standby"))
+        return self.can_standby(node) and bool(self.device_setting(node, "standby"))
 
-    def can_standby(self, role: Role) -> bool:
-        """Power sensors and a plug to cut after the standby (display, speakers)."""
+    def can_standby(self, node: RoomNode) -> bool:
+        """Power sensors and a plug to cut after the standby."""
         return (
-            bool(role.power)
-            and role.prefix in ("display", "audio")
-            and any(self.devices.kind(e) == "plug" for e in role.entities)
+            node.device is not None
+            and bool(node.power)
+            and any(self.devices.kind(e) == "plug" for e in node.entities)
         )
 
     def fully_off(self) -> bool:
@@ -296,7 +282,7 @@ class RoomPower:
         ctrl = self.ctrl
         kind = self.devices.kind(entity_id)
         demanded = ctrl.sequence.running or any(
-            entity_id in r.entities and self.role_demand(r) for r in self.roles.values()
+            entity_id in n.entities and self.needed(n) for n in self.nodes.values()
         )
         if kind == "device" and demanded:
             # needed anyway (e.g. woken by another device over HDMI-CEC): stays automatic

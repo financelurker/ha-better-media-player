@@ -18,6 +18,8 @@ What the room does by itself: the power button and sources, the order of the dev
 | **On** | player hardware plug → display → wake the player and wait until it is ready → speakers → subwoofer |
 | **Off** | subwoofer → speakers → display → player hardware plug |
 
+In general: what shows the picture comes on before the player, the sound after it; each from the player on along the [cabling](devices.md) (a receiver before the subwoofer behind it). A device's `on_wait` holds the next one back. Off in the reverse order.
+
 If the player is not ready within the start timeout (90 s), everything switched on is switched off again and the room reports an error.
 
 ## When devices go off
@@ -27,6 +29,8 @@ If the player is not ready within the start timeout (90 s), everything switched 
 | Display | the video player is on (menu, paused, playing) | 10 min |
 | Speakers, subwoofer | the video player is on **or** music is playing | 2 min |
 | Player hardware | its player is active | 2 min |
+
+Each device has its own run-down (`run_down`, and `night_run_down` at night), so does a player's hardware plug (the player's `run_down`) ([Reference](reference.md#settings)).
 
 Paused music is not demand: the speakers switch off after the run-down and on again when playback resumes. A video player that sits idle in its menu is turned off after 30 min.
 
@@ -48,7 +52,7 @@ Display, speakers and subwoofer can also be devices that turn themselves on and 
 
 ## Wait for standby
 
-With power sensors and a plug in the role (and the device's switch *Display: wait for standby* / *Speakers: wait for standby* on), a plug is cut only after its device has drawn less than the threshold for 30 s, at most after the maximum wait. Useful for OLED TVs that run panel care in standby. A TV that never goes to standby on its own (no CEC) gains nothing from this; then only the run-down applies.
+With power sensors and a plug for the device (and its setting `standby` on), a plug is cut only after its device has drawn less than the threshold for 30 s, at most after the maximum wait. Useful for OLED TVs that run panel care in standby. A TV that never goes to standby on its own (no CEC) gains nothing from this; then only the run-down applies.
 
 ## Switched by hand
 

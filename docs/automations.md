@@ -6,7 +6,7 @@ Actions, events and device triggers of Better Media Player for your own automati
 
 ## Actions
 
-All of them target a room player (`media_player.<room>`).
+All of them target a room player (`media_player.<room>`); the settings' actions also the central settings (without a room player).
 
 | Action | What it does |
 |---|---|
@@ -17,6 +17,8 @@ All of them target a room player (`media_player.<room>`).
 | `better_media_player.start_follow` / `stop_follow` | [follow me](follow-me.md) |
 | `better_media_player.handover` | [handover](handover.md) (`destination`; optional `source`, `keep_source_playing`) |
 | `better_media_player.announce` | [announcement](announcements.md) in one or more rooms (`message` or `media_content_id`; optional `tts_entity`, `language`, `volume`, `pre_announce`, `ignore_quiet`) |
+| `better_media_player.set_setting` | change a [setting](reference.md#settings) of the room, of one of its devices (`device`) or a central one (`setting`, `value`) |
+| `better_media_player.get_settings` | the settings of the room and its devices, or the central ones (as the action's response; optional `device`) |
 | `media_player.play_media` with `extra: {night_mode: true}` | play and switch the [night mode](night-sleep-wake.md#night-mode) along |
 
 ## Examples
@@ -32,6 +34,48 @@ data:
   fade_seconds: 5           # optional; default: the room's preset fade, 0 = at once
 ```
 
+### Settings
+
+A setting of the room, one of a device (its id or its name), a central one:
+
+```yaml
+action: better_media_player.set_setting
+data:
+  entity_id: media_player.living_room
+  setting: night_max_volume
+  value: 20
+```
+
+```yaml
+action: better_media_player.set_setting
+data:
+  entity_id: media_player.living_room
+  device: display             # or its name
+  setting: run_down
+  value: 15                   # min
+```
+
+```yaml
+action: better_media_player.set_setting
+data:                          # no room player: a central setting
+  setting: hide_delay
+  value: 5
+```
+
+Read them, e.g. to put a setting back later:
+
+```yaml
+- action: better_media_player.get_settings
+  data:
+    entity_id: media_player.living_room
+  response_variable: room
+- action: notify.notify
+  data:
+    message: "Night limit {{ room.settings.night_max_volume }} %, TV run-down {{ room.devices.display.run_down }} min"
+```
+
+The response: `settings` (the room's) and `devices` (each device's, by its id); without a room player only `settings` (the central ones). A value outside the setting's range, an unknown setting or device fail the action with the reason. All settings: [Reference](reference.md#settings).
+
 ### Sleep timer
 
 ```yaml
@@ -40,7 +84,7 @@ target:
   entity_id: media_player.bedroom
 data:
   minutes: 45
-  fade_minutes: 10   # optional, default: the room's Sleep timer fade-out (5 min)
+  fade_minutes: 10   # optional, default: the room's sleep_fade (5 min)
 ```
 
 `better_media_player.cancel_sleep_timer` stops it.

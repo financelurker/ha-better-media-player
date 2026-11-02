@@ -38,22 +38,15 @@ Everything can be changed later via **Configure**; there, **Cabling (inputs, CEC
 | Living room | Kodi + Music Assistant player | TV, speakers (shared), subwoofer |
 | Home cinema | Kodi + Music Assistant player | TV (webOS, as media player; keep its [Wake-on-LAN automation](room.md#devices-instead-of-plugs)), AV receiver on a plug (plug, then the receiver) with the room volume on the receiver, subwoofer by IR scripts (an on and an off action) |
 
-## Settings on the device
+## The room's device and its settings
 
 Each room is a device (Settings → Devices & services → Better Media Player → the room). Its page shows the status, what is needed right now, automatic power, the *All off* button and the room's controls:
 
 ![Device page](images/device.png)
 
-How the room behaves – times, waits, standby, night mode, volume presets and follow me – is set under *Configuration* on that page. These are configuration entities: they take effect at once, can be set by automations (`number.set_value`, `switch.turn_on`, `select.select_option`) and do not show up on auto-generated dashboards. A room only has the ones it can use; to start, you can leave them all at their defaults. All of them, with their entity ids, defaults and when a room has them: [Reference](reference.md#settings).
+How the room behaves – times, waits, standby, night mode, volume presets and follow me – are the room's settings, each device of the room has its own (run-down, wait after on, standby, off at night). The [panel](designer.md) shows them; the action `better_media_player.set_setting` changes one, at once and kept ([examples](automations.md#settings)). To start, you can leave them all at their defaults. All of them, with their defaults: [Reference](reference.md#settings).
 
-<details>
-<summary>Screenshot: the settings of a room</summary>
-
-<img src="images/device-settings.png" alt="Configuration entities of a room" width="500">
-
-</details>
-
-The **Central settings** device has *Follow me: default volume*, *Dynamic controls* and *Hide delay*; its **Configure** only asks for the follow-me player.
+The **Central settings** (follow me's default volume, dynamic controls, hide delay) are set the same way, without a room; the central entry's **Configure** only asks for the follow-me player.
 
 ## Repairs
 
@@ -63,9 +56,10 @@ What a room is set up with is checked against Home Assistant:
 - **Settings → Repairs** shows, until the cause is gone:
   - entities a room is set up with that do not exist (any more) or are disabled (an error for a missing player, a warning otherwise; checked from a minute after Home Assistant has started, as some integrations add their entities late);
   - plugs, devices or players that several rooms switch (each belongs to one room; sensors may be shared);
-  - a group player as a room's player, or a follow-me player that is no Music Assistant group player.
+  - a group player as a room's player, or a follow-me player that is no Music Assistant group player;
+  - after the update from version 1.2: automations or scripts that still use a setting entity of before (they are removed; change them to the action `better_media_player.set_setting`, see [Reference](reference.md#up-to-version-12)).
 
-Fix them under **Configure** of the room (or of the central settings).
+Fix the others under **Configure** of the room (or of the central settings).
 
 ---
 

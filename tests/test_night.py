@@ -32,7 +32,7 @@ from .conftest import (
     setup_room,
     start_follow,
 )
-from .helpers import NIGHT, ROOM, STATUS, count_calls, music_at, set_night, tick, vol, volume_sets
+from .helpers import NIGHT, ROOM, STATUS, count_calls, music_at, set_night, set_setting, tick, vol, volume_sets
 
 KNIGHT = "switch.kitchen_night_mode"
 
@@ -184,10 +184,7 @@ async def test_limit_zero_means_none(hass, home, freezer):
 async def test_lowering_the_limit_holds_at_once(hass, home, freezer):
     await music_at(hass, home, freezer, 0.5)
     await set_night(hass)
-    await hass.services.async_call(
-        "number", "set_value", {"entity_id": "number.living_room_night_maximum_volume", "value": 15}, blocking=True
-    )
-    await hass.async_block_till_done()
+    await set_setting(hass, "night_max_volume", 15)
     assert vol(hass) == 0.15
 
 
@@ -519,10 +516,7 @@ async def test_one_volume_command_on_switch(hass, home, freezer):
 async def test_lower_limit_holds_at_once(hass, home, freezer):
     await music_at(hass, home, freezer, 0.5)
     await set_night(hass)
-    await hass.services.async_call(
-        "number", "set_value", {"entity_id": "number.living_room_night_maximum_volume", "value": 15}, blocking=True
-    )
-    await hass.async_block_till_done()
+    await set_setting(hass, "night_max_volume", 15)
     await tick(hass, freezer, 5)
     assert vol(hass) == 0.15
 

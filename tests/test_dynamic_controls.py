@@ -20,14 +20,14 @@ from .helpers import (
     SLEEP_PLUS,
     WAKE,
     follow_from,
+    set_setting,
     tick,
 )
 
 ALL_OFF = "button.living_room_all_off"
 FOLLOW_ROOMS = "sensor.better_media_player_follow_rooms"
 ROOM_CONTROLS = [ALL_OFF, SLEEP, SLEEP_PLUS, SLEEP_END, NIGHT, QUIET, WAKE, PRESET]
-ALWAYS = [ROOM, "switch.living_room_automatic_power", "number.living_room_night_maximum_volume",
-          "number.living_room_preset_normal", "sensor.living_room_status"]
+ALWAYS = [ROOM, "switch.living_room_automatic_power", "sensor.living_room_status"]
 
 
 def _hidden(hass, entity_id) -> bool:
@@ -192,11 +192,8 @@ async def test_hub_without_follow_player(hass, home, freezer):
     assert result["type"].value == "create_entry"
     assert result["options"] == {}
     await hass.async_block_till_done()
-    # the central settings are on its device
-    await hass.services.async_call(
-        "switch", "turn_off", {"entity_id": "switch.better_media_player_dynamic_controls"}, blocking=True
-    )
-    await hass.async_block_till_done()
+    # the central settings: with the action, also without a follow-me player
+    await set_setting(hass, "dynamic_controls", False, entity_id=None)
     await setup_room(hass)
     await tick(hass, freezer, 5)
     assert _shown(hass) == set(ROOM_CONTROLS)
@@ -204,9 +201,7 @@ async def test_hub_without_follow_player(hass, home, freezer):
 
 async def test_hide_delay_on_the_central_device(hass, home, freezer):
     await setup_hub(hass)
-    await hass.services.async_call(
-        "number", "set_value", {"entity_id": "number.better_media_player_hide_delay", "value": 10}, blocking=True
-    )
+    await set_setting(hass, "hide_delay", 10, entity_id=None)
     await setup_room(hass)
     await _music(hass, home, freezer)
     await tick(hass, freezer, 5)
@@ -374,10 +369,7 @@ async def test_a_new_hide_delay_also_for_a_pending_hide(hass, home, freezer):
     await hass.services.async_call("media_player", "turn_off", {"entity_id": ROOM}, blocking=True)
     await hass.async_block_till_done()
     await tick(hass, freezer, 5)  # the hide waits 60 s
-    await hass.services.async_call(
-        "number", "set_value", {"entity_id": "number.better_media_player_hide_delay", "value": 2}, blocking=True
-    )
-    await hass.async_block_till_done()
+    await set_setting(hass, "hide_delay", 2, entity_id=None)
     await tick(hass, freezer, 4)
     assert PRESET not in _shown(hass)
 

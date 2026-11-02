@@ -32,7 +32,7 @@ async def test_a_room_registers_its_roles_and_leaves_on_unload(hass, home, freez
     control = get_control(hass)
     group = control.groups[entry.entry_id]
     assert group is entry.runtime_data.power.devices
-    assert set(group.nodes) == set(entry.runtime_data.power.roles)
+    assert set(group.nodes) == set(entry.runtime_data.power.nodes)
     assert await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
     assert entry.entry_id not in control.groups
@@ -44,6 +44,6 @@ async def test_an_old_group_leaving_does_not_drop_the_new_one(hass, home, freeze
     control = get_control(hass)
     power = entry.runtime_data.power
     old = power.devices
-    new = control.register(entry.entry_id, power, list(power.roles.values()))
+    new = control.register(entry.entry_id, power, list(power.nodes.values()))
     control.unregister(entry.entry_id, old)
     assert control.groups[entry.entry_id] is new

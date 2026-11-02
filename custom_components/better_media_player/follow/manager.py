@@ -56,6 +56,7 @@ from homeassistant.helpers.storage import Store
 
 from .. import clock
 from ..const import (
+    CENTRAL_SETTINGS,
     CONF_FOLLOW_PLAYER,
     DOMAIN,
     FOLLOW_ACTIVE,
@@ -70,7 +71,6 @@ from ..const import (
     FOLLOW_UNKNOWN,
     FOLLOW_WAITING,
     FOLLOW_WAKING,
-    HUB_ENTITY_DEFAULTS,
     SOURCE_AUDIO,
     SOURCE_VIDEO,
     STORAGE_VERSION,
@@ -151,8 +151,8 @@ class FollowManager:
     # ------------------------------------------------------------------ setup
 
     def setting(self, key: str) -> Any:
-        """A value set on the central device (config entity), else its default."""
-        return self.data.get(key, HUB_ENTITY_DEFAULTS[key])
+        """A central setting (set in the panel or with set_setting), else its default."""
+        return self.data.get(key, CENTRAL_SETTINGS[key])
 
     async def async_set_setting(self, key: str, value: Any) -> None:
         self.data[key] = value

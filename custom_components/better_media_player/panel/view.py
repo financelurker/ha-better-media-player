@@ -1,9 +1,7 @@
-"""What the panel shows of a room: its sources, devices and cables, and the route
-of each source through them.
+"""What the panel shows of a room: its sources, devices and cables (the room's
+setup, model.py), the route of each source through them, and its settings.
 
-The room's options are read as they are today: the players are the sources, the
-roles display / speakers / subwoofer are one device each, the connections are the
-cables. Routes are worked out by the device layer (devices/graph.py), the same
+Routes are worked out by the device layer (devices/graph.py), the same
 calculation that switches the room.
 """
 
@@ -12,58 +10,30 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
-from homeassistant.const import ATTR_FRIENDLY_NAME, ATTR_UNIT_OF_MEASUREMENT, EntityCategory
+from homeassistant.const import ATTR_FRIENDLY_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers import entity_registry as er
 
-from ..const import (
-    CONF_AREA,
-    CONF_AUDIO_PLAYER,
-    CONF_AUDIO_POWER,
-    CONF_BASS,
-    CONF_CONNECTIONS,
-    CONF_DISPLAY,
-    CONF_DISPLAY_POWER,
-    CONF_FOLLOW_PLAYER,
-    CONF_OCCUPANCY,
-    CONF_SPEAKERS,
-    CONF_VIDEO_PLAYER,
-    CONF_VOLUME_CONTROL,
-    CONF_VOLUME_ENTITY,
-    CONN_FROM,
-    CONN_INPUT,
-    CONN_MODE,
-    CONN_SIGNALS,
-    CONN_TO,
-    DEFAULTS,
-    DOMAIN,
-    INPUT_ROLES,
-    ROLE_ACTIONS,
-    SOURCE_AUDIO,
-    SOURCE_CONF,
-    SOURCE_VIDEO,
-    SOURCES,
-    VOLUME_DEVICE,
-)
-from ..devices.const import SWITCH_DOMAINS
+from ..const import CENTRAL_SETTINGS, CONF_AREA, CONF_FOLLOW_PLAYER, CONF_OCCUPANCY, DOMAIN
 from ..devices.graph import route
 from ..devices.model import Edge, Mode, Node, Signal
-from ..room.power import NEEDS, role_control, role_inputs
-
-# a device kind puts out (picture / sound); the route ends there unless a cable goes on
-KIND_GIVES: dict[str, frozenset[Signal]] = {
-    "display": frozenset({Signal.PICTURE}),
-    "receiver": frozenset({Signal.SOUND}),
-    "amp": frozenset({Signal.SOUND}),
-    "speakers": frozenset({Signal.SOUND}),
-    "subwoofer": frozenset({Signal.SOUND}),
-}
-
-# today's option keys as ids in the panel (a role's id is its device kind)
-ID_OF = {CONF_VIDEO_PLAYER: SOURCE_VIDEO, CONF_AUDIO_PLAYER: SOURCE_AUDIO, CONF_DISPLAY: "display", CONF_SPEAKERS: "speakers", CONF_BASS: "subwoofer"}
-ROLE_POWER = {CONF_DISPLAY: CONF_DISPLAY_POWER, CONF_SPEAKERS: CONF_AUDIO_POWER, CONF_BASS: None}  # its power sensors
+from ..model import (
+    DEVICE_SETTINGS,
+    KIND_GIVES,
+    NEEDS,
+    OPT_CABLES,
+    OPT_VOLUME,
+    PASSIVE_KINDS,
+    ROOM_SETTINGS,
+    SOURCE_SETTINGS,
+    device_setting,
+    devices_of,
+    shows_picture,
+    source_setting,
+    sources_of,
+    switch_order,
+)
 
 
 def _name(hass: HomeAssistant, entity_id: str | None) -> str | None:
@@ -75,7 +45,8 @@ def _name(hass: HomeAssistant, entity_id: str | None) -> str | None:
 
 def routes_of(sources: list[dict], devices: list[dict], cables: list[dict]) -> dict[str, dict]:
     """The route of each source: devices on it, cables it uses (index), devices fed
-    directly (no cable reaches them) and the input wanted on a device."""
+    directly (no cable brings them a signal), the order they come on in and the
+    input wanted on a device."""
     nodes = {d["id"]: Node(key=d["id"], entities=[], sources=(), gives=KIND_GIVES.get(d["kind"], frozenset())) for d in devices}
     ids = {s["id"] for s in sources} | set(nodes)
     edges = [
@@ -94,8 +65,12 @@ def routes_of(sources: list[dict], devices: list[dict], cables: list[dict]) -> d
     for src in sources:
         needs = [Signal(x) for x in src.get("needs") or ()]
         r = route(src["id"], needs, nodes, edges)
+        on = [d for d in devices if d["id"] in r.nodes and d["kind"] not in PASSIVE_KINDS]
         out[src["id"]] = {
             "devices": sorted(r.nodes),
+            # the order they come on in: the picture's before the player, the sound's after it
+            "order": switch_order(on, cables, [src["id"]]),
+            "picture": sorted(d["id"] for d in on if shows_picture(d, cables)),
             "cables": sorted(r.edges),
             "direct": sorted(r.direct),
             "inputs": {k: {"input": i, "mode": str(m)} for k, (i, m) in sorted(r.inputs.items())},
@@ -103,125 +78,64 @@ def routes_of(sources: list[dict], devices: list[dict], cables: list[dict]) -> d
     return out
 
 
-def _settings(hass: HomeAssistant, entry: ConfigEntry) -> list[dict[str, Any]]:
-    """The entry's settings as they are set today (its configuration entities)."""
-    out = []
-    for ent in er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id):
-        if ent.entity_category != EntityCategory.CONFIG or ent.disabled:
-            continue
-        state = hass.states.get(ent.entity_id)
-        name = str(state.attributes.get(ATTR_FRIENDLY_NAME)) if state else ent.entity_id
-        name = name.removeprefix(f"{entry.title} ")  # the device's name: the room is known
-        out.append(
-            {
-                "entity_id": ent.entity_id,
-                "key": ent.translation_key or ent.unique_id.removeprefix(f"{entry.entry_id}_"),
-                "name": name,
-                "state": state.state if state else None,
-                "unit": state.attributes.get(ATTR_UNIT_OF_MEASUREMENT) if state else None,
-            }
-        )
-    return sorted(out, key=lambda x: x["entity_id"])
-
-
-def _area(hass: HomeAssistant, entry: ConfigEntry, options: dict) -> str | None:
+def _area(hass: HomeAssistant, entry: ConfigEntry) -> str | None:
     """The room's area: its device's (set in Home Assistant), else the one chosen at setup."""
     device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, entry.entry_id)})
-    area_id = (device.area_id if device else None) or options.get(CONF_AREA)
+    area_id = (device.area_id if device else None) or entry.options.get(CONF_AREA)
     area = ar.async_get(hass).async_get_area(area_id) if area_id else None
     return area.name if area else None
 
 
-def room_view(hass: HomeAssistant, entry: ConfigEntry, layout: dict | None = None) -> dict[str, Any]:
-    """A room as the panel shows it."""
-    o: dict[str, Any] = {**DEFAULTS, **entry.data, **entry.options}
-    sources = []
-    for key in SOURCES:
-        player_k, on_k, off_k, host_k = SOURCE_CONF[key]
-        if o.get(player_k):
-            sources.append(
-                {
-                    "id": key,
-                    "player": o[player_k],
-                    "name": _name(hass, o[player_k]),
-                    "needs": [str(s) for s in NEEDS[key]],
-                    "host": o.get(host_k) or None,
-                    "on_action": o.get(on_k) or None,
-                    "off_action": o.get(off_k) or None,
-                }
-            )
-    devices = []
-    for conf, power_k in ROLE_POWER.items():
-        entities = list(o.get(conf) or [])
-        on_k, off_k = ROLE_ACTIONS[conf]
-        actions = [o[on_k], o[off_k]] if o.get(on_k) and o.get(off_k) else None
-        if not entities and not actions:
-            continue
-        device: dict[str, Any] = {
-            "id": ID_OF[conf],
-            "kind": ID_OF[conf],
-            "power": {
-                "plugs": [e for e in entities if e.split(".")[0] in SWITCH_DOMAINS],
-                "devices": [e for e in entities if e.split(".")[0] not in SWITCH_DOMAINS],
-                "actions": actions,
-                "sensors": list(o.get(power_k) or []) if power_k else [],
-            },
-            "control": None,
-            "inputs": None,
+def room_view(hass: HomeAssistant, entry: ConfigEntry, data: dict | None, layout: dict | None = None) -> dict[str, Any]:
+    """A room as the panel shows it (data: its stored settings, None while not loaded)."""
+    o = entry.options
+    sources = [
+        {
+            "id": key,
+            "player": s["player"],
+            "name": _name(hass, s["player"]),
+            "needs": [str(x) for x in NEEDS[key]],
+            "host": s.get("host") or None,
+            "on_action": s.get("on_action") or None,
+            "off_action": s.get("off_action") or None,
+            # the settings of its hardware plug (with one, while the room is loaded)
+            "settings": {k: source_setting(data, key, k) for k in SOURCE_SETTINGS} if s.get("host") and data is not None else None,
         }
-        if conf in INPUT_ROLES:
-            c = role_control(o, conf)
-            device["control"] = {"on": str(c.on), "off": str(c.off), "fallback": c.fallback, "timeout": c.timeout}
-            if (inputs := role_inputs(o, conf)) is not None:
-                state = hass.states.get(inputs.entity) if inputs.entity else None
-                offered = list(state.attributes.get("source_list") or []) if state else []
-                device["inputs"] = {
-                    "entity": inputs.entity,
-                    "actions": dict(inputs.actions),
-                    "pause": inputs.pause,
-                    "list": offered or list(inputs.actions),
-                }
+        for key, s in sources_of(o).items()
+        if key in NEEDS
+    ]
+    devices = []
+    for d in devices_of(o):
+        device = dict(d)
+        if (inputs := d.get("inputs")) is not None:
+            state = hass.states.get(inputs["entity"]) if inputs.get("entity") else None
+            offered = list(state.attributes.get("source_list") or []) if state else []
+            device["inputs"] = {**inputs, "list": offered or list(inputs.get("actions") or {})}
+        device["settings"] = {k: device_setting(data, d, k) for k in DEVICE_SETTINGS} if data is not None else None
         devices.append(device)
-    cables = []
-    for c in o.get(CONF_CONNECTIONS) or []:
-        if c.get(CONN_FROM) in ID_OF and c.get(CONN_TO) in ID_OF:
-            cables.append(
-                {
-                    "from": ID_OF[c[CONN_FROM]],
-                    "to": ID_OF[c[CONN_TO]],
-                    "signals": list(c.get(CONN_SIGNALS) or []),
-                    "input": c.get(CONN_INPUT) or None,
-                    "mode": c.get(CONN_MODE) or "bmp",
-                }
-            )
     ids = {s["id"] for s in sources} | {d["id"] for d in devices}
-    cables = [c for c in cables if c["from"] in ids and c["to"] in ids]
-    volume = (
-        {"where": "device", "entity": o.get(CONF_VOLUME_ENTITY)}
-        if o.get(CONF_VOLUME_CONTROL) == VOLUME_DEVICE and o.get(CONF_VOLUME_ENTITY)
-        else {"where": "players"}
-    )
+    cables = [dict(c) for c in o.get(OPT_CABLES) or [] if c["from"] in ids and c["to"] in ids]
     return {
         "entry_id": entry.entry_id,
         "name": entry.title,
         "loaded": entry.state is ConfigEntryState.LOADED,
-        "area": _area(hass, entry, o),
+        "area": _area(hass, entry),
         "sources": sources,
         "devices": devices,
         "cables": cables,
         "routes": routes_of(sources, devices, cables),
-        "volume": volume,
+        "volume": dict(o.get(OPT_VOLUME) or {"where": "players"}),
         "occupancy": list(o.get(CONF_OCCUPANCY) or []),
-        "settings": _settings(hass, entry),
+        "settings": {k: data.get(k, v) for k, v in ROOM_SETTINGS.items()} if data is not None else None,
         "layout": dict(layout or {}),
     }
 
 
-def central_view(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]:
+def central_view(hass: HomeAssistant, entry: ConfigEntry, data: dict | None) -> dict[str, Any]:
     """The central entry as the panel shows it."""
     return {
         "entry_id": entry.entry_id,
         "name": entry.title,
         "follow_player": entry.options.get(CONF_FOLLOW_PLAYER) or None,
-        "settings": _settings(hass, entry),
+        "settings": {k: data.get(k, v) for k, v in CENTRAL_SETTINGS.items()} if data is not None else None,
     }

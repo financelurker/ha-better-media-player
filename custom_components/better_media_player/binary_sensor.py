@@ -11,7 +11,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import BetterMediaPlayerConfigEntry
-from .const import ROLE_AUDIO, ROLE_BASS, ROLE_DISPLAY
 from .entity import BetterMediaPlayerEntity
 
 
@@ -22,26 +21,26 @@ async def async_setup_entry(
 ) -> None:
     ctrl = entry.runtime_data
     entities: list[BinarySensorEntity] = [ProblemSensor(entry, ctrl, "problem")]
-    if ROLE_DISPLAY in ctrl.power.roles:
-        entities.append(DemandSensor(entry, ctrl, "display_demand", ROLE_DISPLAY))
-    if ROLE_AUDIO in ctrl.power.roles or ROLE_BASS in ctrl.power.roles:
-        role = ROLE_AUDIO if ROLE_AUDIO in ctrl.power.roles else ROLE_BASS
-        entities.append(DemandSensor(entry, ctrl, "audio_demand", role))
+    devices = [n for n in ctrl.power.nodes.values() if n.device is not None]
+    if any(n.picture for n in devices):  # (ids as before: "display needed")
+        entities.append(DemandSensor(entry, ctrl, "display_demand", True))
+    if any(not n.picture for n in devices):  # "speakers needed"
+        entities.append(DemandSensor(entry, ctrl, "audio_demand", False))
     async_add_entities(entities)
 
 
 class DemandSensor(BetterMediaPlayerEntity, BinarySensorEntity):
-    """On while a source needs this role (without run-down)."""
+    """On while a device for the picture (or the sound) is needed (without run-down)."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
-    def __init__(self, entry, ctrl, key: str, role: str) -> None:
+    def __init__(self, entry, ctrl, key: str, picture: bool) -> None:
         super().__init__(entry, ctrl, key)
-        self._role = role
+        self._picture = picture
 
     @property
     def is_on(self) -> bool:
-        return self.ctrl.power.demand(self._role)
+        return self.ctrl.power.demand(self._picture)
 
 
 class ProblemSensor(BetterMediaPlayerEntity, BinarySensorEntity):

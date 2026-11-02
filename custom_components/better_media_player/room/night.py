@@ -37,7 +37,6 @@ from homeassistant.core import State, callback
 from ..const import (
     CONF_NIGHT_FADE_IN,
     EVENT_NIGHT_MODE,
-    ROLE_BASS,
 )
 from .ramp import VolumeRamp
 
@@ -101,8 +100,9 @@ class NightMode:
         elif self.ctrl.data.get("night_fade_back"):
             await self._fade_back()
 
-    def role_enabled(self, key: str) -> bool:
-        return not (self.active and key == ROLE_BASS)
+    def enabled(self, node) -> bool:
+        """A device set to be off at night is not switched on in night mode."""
+        return not (self.active and node.device is not None and self.ctrl.power.device_setting(node, "night_off"))
 
     def ramping(self, player: str) -> bool:
         ramp = self._ramps.get(player)
@@ -122,9 +122,7 @@ class NightMode:
         if on:
             self._cancel_ramps()
             ctrl.data.pop("night_fade_back", None)
-            bass = ctrl.power.roles.get(ROLE_BASS)
-            if bass is not None and ctrl.auto_power and not ctrl.manual and ctrl.power.devices.node_on(bass):
-                bass.force_off = True  # no run-down
+            self.async_cut_disabled()
             for out, src in self._outputs():
                 await self._clamp(out, src)
             await ctrl.volume.async_resume_fades(fade_left)
@@ -134,6 +132,15 @@ class NightMode:
         if (hub := ctrl.hub) is not None:
             hub.async_schedule("night_mode")
         await ctrl.async_update("night_mode")
+
+    @callback
+    def async_cut_disabled(self) -> None:
+        """Devices off at night that are on go at once (no run-down); the caller updates."""
+        ctrl = self.ctrl
+        if self.active and ctrl.auto_power and not ctrl.manual:
+            for node in ctrl.power.nodes.values():
+                if not self.enabled(node) and ctrl.power.devices.node_on(node):
+                    node.force_off = True
 
     # ------------------------------------------------------------------ event
 

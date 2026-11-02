@@ -16,9 +16,7 @@ from homeassistant.helpers.trigger import TriggerActionType, TriggerInfo
 from homeassistant.helpers.typing import ConfigType
 
 from .const import (
-    CONF_AUDIO_PLAYER,
     CONF_ENTRY_TYPE,
-    CONF_VIDEO_PLAYER,
     DOMAIN,
     ENTRY_TYPE_HUB,
     EVENT_NIGHT_MODE,
@@ -26,6 +24,7 @@ from .const import (
     SOURCE_AUDIO,
     SOURCE_VIDEO,
 )
+from .model import sources_of
 
 # trigger type -> its event and the event data it waits for
 TRIGGERS: dict[str, tuple[str, dict[str, Any]]] = {
@@ -59,7 +58,7 @@ async def async_get_triggers(hass: HomeAssistant, device_id: str) -> list[dict[s
     entry = hass.config_entries.async_get_entry(entry_id)
     options = entry.options if entry is not None else {}
     # from the options: also for a room that is not loaded right now
-    sources = {k for k, conf in ((SOURCE_VIDEO, CONF_VIDEO_PLAYER), (SOURCE_AUDIO, CONF_AUDIO_PLAYER)) if options.get(conf)}
+    sources = set(sources_of(options))
     types = [t for t, (_event, data) in TRIGGERS.items() if data.get("source") in (None, *sources)]
     return [
         {CONF_PLATFORM: "device", CONF_DOMAIN: DOMAIN, CONF_DEVICE_ID: device_id, CONF_TYPE: t} for t in types

@@ -19,15 +19,18 @@ from custom_components.better_media_player.const import (
     CONF_ENTRY_TYPE,
     CONF_FOLLOW_PLAYER,
     CONF_SPEAKERS,
+    CONF_VOLUME_CONTROL,
     CONF_VOLUME_ENTITY,
     DEFAULTS,
     DOMAIN,
     ENTRY_TYPE_ROOM,
+    VOLUME_DEVICE,
 )
-from custom_components.better_media_player.issues import START_DELAY, entity_keys, get_checker
+from custom_components.better_media_player.issues import START_DELAY, get_checker
+from custom_components.better_media_player.model import entities_of, options_v4
 
 from .conftest import GROUP, KITCHEN, MUSIC, SPEAKERS, setup_hub, setup_room
-from .helpers import tick
+from .helpers import change_room, roles, tick
 
 GONE = "switch.gone_plug"
 OCC = "binary_sensor.open_plan_occupancy"
@@ -58,10 +61,15 @@ async def _kitchen(hass, **options) -> MockConfigEntry:
     return entry
 
 
-def test_entity_keys_are_the_setups_entity_fields():
-    keys = entity_keys()
-    assert keys == [k for k, f in _fields().items() if isinstance(f, sel.EntitySelector)]
-    assert {CONF_AUDIO_PLAYER, CONF_SPEAKERS, CONF_VOLUME_ENTITY, "occupancy", "display_power"} <= set(keys)
+def test_every_entity_of_the_setup_is_checked():
+    """Each entity field of the setup (as the config flow asks it) is among the room's entities after the migration."""
+    fields = {k: f for k, f in _fields().items() if isinstance(f, sel.EntitySelector)}
+    old = {k: [f"switch.e_{k}"] if f.config.get("multiple") else f"switch.e_{k}" for k, f in fields.items()}
+    old[CONF_VOLUME_CONTROL] = VOLUME_DEVICE  # (the volume's entity counts only then)
+    assert {CONF_AUDIO_PLAYER, CONF_SPEAKERS, CONF_VOLUME_ENTITY, "occupancy", "display_power"} <= set(old)
+    found = set(entities_of(options_v4(old)))
+    for k in fields:
+        assert set(old[k] if isinstance(old[k], list) else [old[k]]) <= found, k
 
 
 async def test_missing_entity_after_the_start_delay(hass, home, freezer):
@@ -108,8 +116,8 @@ async def test_renamed_entity_is_followed(hass, home, freezer):
     reg.async_update_entity(plug.entity_id, new_entity_id="switch.new_bass")
     hass.states.async_set("switch.new_bass", "off")
     await tick(hass, freezer, 1)
-    assert entry.options[CONF_BASS] == ["switch.new_bass"]
-    assert entry.options[CONF_SPEAKERS] == [SPEAKERS]
+    assert roles(entry)[CONF_BASS] == ["switch.new_bass"]
+    assert roles(entry)[CONF_SPEAKERS] == [SPEAKERS]
     await tick(hass, freezer, 3)
     assert _issues(hass) == {}
 
@@ -132,8 +140,7 @@ async def test_shared_entities(hass, home, freezer):
     issue = _issue(hass, "shared_entities")
     assert issue.translation_placeholders == {"entities": f"- `{SPEAKERS}`: Kitchen, Living Room"}
     # sensors are only read: shared is fine
-    hass.config_entries.async_update_entry(kitchen, options={**kitchen.options, CONF_SPEAKERS: [], "occupancy": [OCC]})
-    await hass.async_block_till_done()
+    await change_room(hass, kitchen, **{CONF_SPEAKERS: [], "occupancy": [OCC]})
     await tick(hass, freezer, 3)
     assert not [i for i in _issues(hass) if i.startswith("shared_entities")]
 
@@ -212,15 +219,14 @@ async def test_several_renames_reload_once(hass, home, freezer):
         reg.async_update_entity(spk.entity_id, new_entity_id="switch.room_speakers")
         await tick(hass, freezer, 1)
     assert [c.args[0].entry_id for c in update.call_args_list] == [entry.entry_id]
-    assert (entry.options[CONF_BASS], entry.options[CONF_SPEAKERS]) == (["switch.room_bass"], ["switch.room_speakers"])
+    assert (roles(entry)[CONF_BASS], roles(entry)[CONF_SPEAKERS]) == (["switch.room_bass"], ["switch.room_speakers"])
 
 
 async def test_a_dismissed_issue_does_not_hide_new_ones(hass, home, freezer):
     entry = await setup_room(hass, **{CONF_BASS: [GONE]})
     await _after_start(hass, freezer)
     first = next(iter(_issues(hass)))
-    hass.config_entries.async_update_entry(entry, options={**entry.options, CONF_SPEAKERS: ["switch.gone_too"]})
-    await hass.async_block_till_done()
+    await change_room(hass, entry, **{CONF_SPEAKERS: ["switch.gone_too"]})
     await tick(hass, freezer, 3)
     assert list(_issues(hass)) != [first]
     assert len(_issues(hass)) == 1

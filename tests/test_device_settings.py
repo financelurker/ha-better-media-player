@@ -1,73 +1,90 @@
-"""How a room (and follow me) behaves is set on its device, not in the options."""
+"""How a room (and follow me) behaves: its settings, set with the action set_setting
+and read with get_settings (the panel shows them)."""
 
 from __future__ import annotations
 
+import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from homeassistant.const import EntityCategory
-from homeassistant.helpers import entity_registry as er
+from homeassistant.exceptions import ServiceValidationError
 
 from custom_components.better_media_player.const import (
+    CENTRAL_SETTINGS,
     CONF_ENTRY_TYPE,
     DOMAIN,
     ENTRY_TYPE_HUB,
     ENTRY_TYPE_ROOM,
 )
+from custom_components.better_media_player.model import DEVICE_SETTINGS, ROOM_SETTINGS
 
-from .conftest import FOLLOW, LIVING_OCC, SPEAKERS, TV, TV_POWER, room_options, setup_hub, setup_room
-from .helpers import ROOM, follow_from, tick
-
-
-async def _set(hass, entity_id, value):
-    if entity_id.startswith("number."):
-        await hass.services.async_call("number", "set_value", {"entity_id": entity_id, "value": value}, blocking=True)
-    elif entity_id.startswith("select."):
-        await hass.services.async_call("select", "select_option", {"entity_id": entity_id, "option": value}, blocking=True)
-    else:
-        service = "turn_on" if value else "turn_off"
-        await hass.services.async_call("switch", service, {"entity_id": entity_id}, blocking=True)
-    await hass.async_block_till_done()
+from .conftest import FOLLOW, KODI, LIVING_OCC, SPEAKERS, TV, TV_POWER, room_options, setup_hub, setup_room
+from .helpers import ROOM, follow_from, get_settings, set_setting, tick
 
 
-def _ids(hass, entry):
-    return {e.entity_id for e in er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)}
+async def test_get_settings_of_a_room_and_its_devices(hass, home):
+    await setup_room(hass)
+    got = await get_settings(hass)
+    assert got["settings"] == ROOM_SETTINGS
+    assert set(got["devices"]) == {"display", "speakers", "subwoofer"}
+    assert all(set(d) == set(DEVICE_SETTINGS) for d in got["devices"].values())
+    assert got["devices"]["display"]["run_down"] == 10 and got["devices"]["speakers"]["run_down"] == 2
+    assert got["devices"]["subwoofer"]["night_off"] is True and got["devices"]["display"]["night_off"] is False
+    assert (await get_settings(hass, device="display"))["devices"].keys() == {"display"}
 
 
-async def test_settings_are_config_entities(hass, home):
-    entry = await setup_room(hass, occupancy=[LIVING_OCC], display_power=[TV_POWER])
-    reg = er.async_get(hass)
-    for entity_id in (
-        "number.living_room_start_timeout",
-        "number.living_room_wait_after_display_on",
-        "number.living_room_wait_after_speakers_on",
-        "number.living_room_sleep_timer_fade_out",
-        "number.living_room_snooze_time",
-        "number.living_room_night_fade_back_up",
-        "number.living_room_display_standby_below",
-        "number.living_room_display_wait_for_standby_at_most",
-        "switch.living_room_display_wait_for_standby",
-        "number.living_room_follow_me_leave_after",
-        "number.living_room_follow_me_volume_offset",
-        "switch.living_room_follow_me_prewarm_speakers",
-        "switch.living_room_wake_detect_leaving_the_room",
-        "select.living_room_power_on_preset",
-    ):
-        assert entity_id in _ids(hass, entry), entity_id
-        assert reg.async_get(entity_id).entity_category is EntityCategory.CONFIG, entity_id
-    # only what the room has: no speaker standby without speaker power sensors, no host wait
-    assert "switch.living_room_speakers_wait_for_standby" not in _ids(hass, entry)
-    assert "number.living_room_wait_after_player_plug_on" not in _ids(hass, entry)
-
-
-async def test_follow_settings_only_in_follow_rooms(hass, home):
+async def test_a_device_by_its_name(hass, home):
     entry = await setup_room(hass)
-    assert "number.living_room_follow_me_leave_after" not in _ids(hass, entry)
-    assert "switch.living_room_follow_me_prewarm_speakers" not in _ids(hass, entry)
+    devices = [dict(d) for d in entry.options["devices"]]
+    devices[0]["name"] = "TV"
+    hass.config_entries.async_update_entry(entry, options={**entry.options, "devices": devices})
+    await hass.async_block_till_done()
+    await set_setting(hass, "run_down", 20, device="TV")
+    assert (await get_settings(hass, device=devices[0]["id"]))["devices"][devices[0]["id"]]["run_down"] == 20
+
+
+@pytest.mark.parametrize(
+    ("data", "key"),
+    [
+        ({"setting": "nonsense", "value": 1}, "settings_unknown"),
+        ({"setting": "run_down", "value": 1}, "settings_needs_device"),
+        ({"setting": "night_max_volume", "value": 1, "device": "display"}, "settings_unknown"),
+        ({"setting": "run_down", "value": 1, "device": "beamer"}, "settings_no_device"),
+        ({"setting": "night_max_volume", "value": 101}, "settings_bad_value"),
+        ({"setting": "night_max_volume", "value": "loud"}, "settings_bad_value"),
+        ({"setting": "prewarm", "value": 1}, "settings_bad_value"),
+        ({"setting": "power_on_preset", "value": "deafening"}, "settings_bad_value"),
+        ({"setting": "night_max_volume", "value": 20, "entity_id": "media_player.somewhere"}, "settings_not_a_room"),
+        ({"setting": "night_max_volume", "value": 20, "entity_id": None}, "settings_unknown"),
+    ],
+)
+async def test_what_the_action_refuses(hass, home, data, key):
+    await setup_room(hass)
+    data = {"entity_id": ROOM, **data}
+    if data["entity_id"] is None:
+        data.pop("entity_id")
+    with pytest.raises(ServiceValidationError) as err:
+        await hass.services.async_call(DOMAIN, "set_setting", data, blocking=True)
+    assert err.value.translation_key == key
+    assert (await get_settings(hass))["settings"] == ROOM_SETTINGS, "nothing changed"
+
+
+async def test_night_run_down_back_to_as_by_day(hass, home):
+    await setup_room(hass)
+    await set_setting(hass, "night_run_down", 1, device="display")
+    await set_setting(hass, "night_run_down", None, device="display")
+    assert (await get_settings(hass))["devices"]["display"]["night_run_down"] is None
+
+
+async def test_central_settings_need_the_central_entry(hass, home):
+    await setup_room(hass)
+    with pytest.raises(ServiceValidationError) as err:
+        await hass.services.async_call(DOMAIN, "get_settings", {}, blocking=True, return_response=True)
+    assert err.value.translation_key == "settings_no_central"
 
 
 async def test_a_wait_set_on_the_device_is_used(hass, home, freezer):
     await setup_room(hass)
-    await _set(hass, "number.living_room_wait_after_display_on", 5)
+    await set_setting(hass, "on_wait", 5, device="display")
     home.kodi_boots = True
     hass.async_create_task(hass.services.async_call("media_player", "turn_on", {"entity_id": ROOM}, blocking=True))
     await tick(hass, freezer, 2)
@@ -80,7 +97,7 @@ async def test_a_wait_set_on_the_device_is_used(hass, home, freezer):
 async def test_standby_wait_switched_on_the_device(hass, home, freezer):
     hass.states.async_set(TV_POWER, "80")
     await setup_room(hass, display_power=[TV_POWER])
-    await _set(hass, "switch.living_room_display_wait_for_standby", True)
+    await set_setting(hass, "standby", True, device="display")
     home.kodi_boots = True
     await hass.services.async_call("media_player", "turn_on", {"entity_id": ROOM}, blocking=True)
     await hass.async_block_till_done()
@@ -95,7 +112,7 @@ async def test_standby_wait_switched_on_the_device(hass, home, freezer):
 
 async def test_power_on_preset_on_the_device(hass, home, freezer):
     entry = await setup_room(hass)
-    await _set(hass, "select.living_room_power_on_preset", "quiet")
+    await set_setting(hass, "power_on_preset", "quiet")
     entry.runtime_data.data["room_volume"] = 0.7
     home.music("playing", volume_level=0.7)
     await hass.async_block_till_done()
@@ -104,7 +121,7 @@ async def test_power_on_preset_on_the_device(hass, home, freezer):
 
 
 async def test_prewarm_switched_off_on_the_device(hass, house, freezer):
-    await _set(hass, "switch.living_room_follow_me_prewarm_speakers", False)
+    await set_setting(hass, "prewarm", False)
     hass.states.async_set("binary_sensor.kitchen_occupancy", "on")
     await follow_from(hass, house, player="media_player.kitchen_player", room="media_player.kitchen")
     await tick(hass, freezer, 3)
@@ -113,27 +130,24 @@ async def test_prewarm_switched_off_on_the_device(hass, house, freezer):
 
 async def test_settings_survive_a_reload(hass, home):
     entry = await setup_room(hass)
-    await _set(hass, "number.living_room_snooze_time", 12)
+    await set_setting(hass, "snooze_minutes", 12)
+    await set_setting(hass, "standby_w", 1.5, device="speakers")
     assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
-    assert float(hass.states.get("number.living_room_snooze_time").state) == 12
+    got = await get_settings(hass)
+    assert got["settings"]["snooze_minutes"] == 12
+    assert got["devices"]["speakers"]["standby_w"] == 1.5
 
 
 # ------------------------------------------------------------- central device
 
 
-async def test_central_settings_are_entities(hass, home):
+async def test_central_settings(hass, home):
     home.group("idle", [], FOLLOW)
     hub = await setup_hub(hass)
     assert dict(hub.options) == {"follow_player": FOLLOW}
-    reg = er.async_get(hass)
-    for entity_id in (
-        "number.better_media_player_follow_me_default_volume",
-        "number.better_media_player_hide_delay",
-        "switch.better_media_player_dynamic_controls",
-    ):
-        assert reg.async_get(entity_id).entity_category is EntityCategory.CONFIG
-    await _set(hass, "number.better_media_player_follow_me_default_volume", 40)
+    assert (await get_settings(hass, entity_id=None)) == {"settings": CENTRAL_SETTINGS}
+    await set_setting(hass, "default_volume", 40, entity_id=None)
     assert hub.runtime_data.volume.base_volume(FOLLOW) == 40  # nothing remembered yet: the default
 
 
@@ -156,15 +170,16 @@ async def test_room_options_move_to_the_device(hass, home, hass_storage):
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
-    assert entry.version == 3
-    assert set(entry.options) == {"video_player", "audio_player", "display", "speakers", "bass", "occupancy", "volume_control"}
-    state = hass.states.get
-    assert float(state("number.living_room_speaker_run_down").state) == 4, "set on the entity: it stays"
-    assert float(state("number.living_room_display_run_down").state) == 12, "changed in the options before: it wins"
-    assert float(state("number.living_room_sleep_timer_fade_out").state) == 7
-    assert float(state("number.living_room_wait_after_display_on").state) == 3
-    assert state("switch.living_room_follow_me_prewarm_speakers").state == "off"
-    assert state("select.living_room_power_on_preset").state == "normal"
+    assert entry.version == 4
+    assert set(entry.options) == {"sources", "devices", "cables", "volume", "occupancy"}
+    got = await get_settings(hass)
+    assert got["devices"]["speakers"]["run_down"] == 4, "set on the entity: it stays"
+    assert got["devices"]["subwoofer"]["run_down"] == 4, "the speakers' run-down was the subwoofer's too"
+    assert got["devices"]["display"]["run_down"] == 12, "changed in the options before: it wins"
+    assert got["devices"]["display"]["on_wait"] == 3
+    assert got["settings"]["sleep_fade"] == 7
+    assert got["settings"]["prewarm"] is False
+    assert got["settings"]["power_on_preset"] == "normal"
 
 
 async def test_central_options_move_to_the_device(hass, home):
@@ -177,15 +192,14 @@ async def test_central_options_move_to_the_device(hass, home):
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
     assert dict(entry.options) == {"follow_player": FOLLOW}
-    assert float(hass.states.get("number.better_media_player_follow_me_default_volume").state) == 35
-    assert hass.states.get("switch.better_media_player_dynamic_controls").state == "off"
-    assert float(hass.states.get("number.better_media_player_hide_delay").state) == 7
+    got = (await get_settings(hass, entity_id=None))["settings"]
+    assert (got["default_volume"], got["dynamic_controls"], got["hide_delay"]) == (35, False, 7)
 
 
 async def test_without_the_standby_switch_the_plug_goes_off_at_once(hass, home, freezer):
     hass.states.async_set(TV_POWER, "80")
     await setup_room(hass, display_power=[TV_POWER])
-    assert hass.states.get("switch.living_room_display_wait_for_standby").state == "off"
+    assert (await get_settings(hass))["devices"]["display"]["standby"] is False
     home.kodi_boots = True
     await hass.services.async_call("media_player", "turn_on", {"entity_id": ROOM}, blocking=True)
     await hass.async_block_till_done()
@@ -212,21 +226,55 @@ async def test_migration_keeps_types_and_drops_old_markers(hass, home, hass_stor
     assert not [k for k in data if k.startswith("cfg_") and k != "cfg_volume"]
 
 
-async def test_settings_go_with_their_connection(hass, home):
-    from .conftest import TV_POWER as POWER
+async def test_the_room_as_a_target(hass, home):
+    """As a target the room player comes as a list (of one)."""
+    await setup_room(hass)
+    await hass.services.async_call(
+        DOMAIN, "set_setting", {"setting": "night_max_volume", "value": 22}, target={"entity_id": ROOM}, blocking=True
+    )
+    got = await hass.services.async_call(DOMAIN, "get_settings", {}, target={"entity_id": ROOM}, blocking=True, return_response=True)
+    assert got["settings"]["night_max_volume"] == 22
 
-    entry = await setup_room(hass, display_power=[POWER])
-    assert hass.states.get("switch.living_room_display_wait_for_standby") is not None
-    options = dict(entry.options)
-    options.pop("display_power")
-    hass.config_entries.async_update_entry(entry, options=options)
-    await hass.async_block_till_done()
-    reg = er.async_get(hass)
-    for entity_id in (
-        "switch.living_room_display_wait_for_standby",
-        "number.living_room_display_standby_below",
-        "number.living_room_display_wait_for_standby_at_most",
+
+async def test_the_settings_of_a_player_s_hardware_plug(hass, home, freezer):
+    hass.states.async_set("switch.kodi_box_plug", "off")
+    await setup_room(hass, video_host="switch.kodi_box_plug")
+    got = await get_settings(hass)
+    assert got["sources"] == {"video": {"run_down": 2, "on_wait": 0}}, "only a player with a plug for its hardware"
+    await set_setting(hass, "on_wait", 4, device="video")
+    await set_setting(hass, "run_down", 7, device=hass.states.get(KODI).attributes.get("friendly_name") or "video")
+    assert (await get_settings(hass, device="video")) == {
+        "settings": ROOM_SETTINGS, "devices": {}, "sources": {"video": {"run_down": 7, "on_wait": 4}},
+    }
+    for data, key in (
+        ({"setting": "standby", "value": True, "device": "video"}, "settings_unknown"),
+        ({"setting": "run_down", "value": 1, "device": "audio"}, "settings_no_device"),  # no plug for its hardware
     ):
-        assert reg.async_get(entity_id) is None, entity_id
-        assert hass.states.get(entity_id) is None, entity_id
-    assert reg.async_get("number.living_room_wait_after_display_on") is not None
+        with pytest.raises(ServiceValidationError) as err:
+            await hass.services.async_call(DOMAIN, "set_setting", {"entity_id": ROOM, **data}, blocking=True)
+        assert err.value.translation_key == key
+
+
+async def test_values_as_automations_give_them(hass, home):
+    """A device needs its room; on / off as text (an input_boolean's state); whole numbers stay whole."""
+    await setup_room(hass)
+    with pytest.raises(ServiceValidationError) as err:
+        await hass.services.async_call(DOMAIN, "set_setting", {"device": "display", "setting": "run_down", "value": 3}, blocking=True)
+    assert err.value.translation_key == "settings_needs_room"
+    await set_setting(hass, "prewarm", "off")
+    await set_setting(hass, "night_max_volume", "25")  # a template's result
+    got = (await get_settings(hass))["settings"]
+    assert got["prewarm"] is False and got["night_max_volume"] == 25 and isinstance(got["night_max_volume"], int)
+
+
+async def test_off_at_night_set_during_the_night_goes_at_once(hass, home, freezer):
+    await setup_room(hass)
+    home.music("playing")
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 3)
+    await hass.services.async_call("switch", "turn_on", {"entity_id": "switch.living_room_night_mode"}, blocking=True)
+    await hass.async_block_till_done()
+    assert home.on(SPEAKERS)
+    await set_setting(hass, "night_off", True, device="speakers")
+    await tick(hass, freezer, 3)
+    assert not home.on(SPEAKERS), "as when night mode comes on: no run-down"

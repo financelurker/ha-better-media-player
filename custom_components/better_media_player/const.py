@@ -28,7 +28,7 @@ CONF_ENTRY_TYPE = "entry_type"
 ENTRY_TYPE_ROOM = "room"
 ENTRY_TYPE_HUB = "hub"
 
-HUB_PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.NUMBER, Platform.SWITCH]
+HUB_PLATFORMS: list[Platform] = [Platform.SENSOR]
 
 # --- Hub (central settings) ----------------------------------------------------
 CONF_FOLLOW_PLAYER = "follow_player"  # the follow-me player: an MA group with dynamic members
@@ -37,8 +37,8 @@ CONF_DEFAULT_VOLUME = "default_volume"  # %
 # controls that make no sense right now are hidden (all rooms), after a delay (s)
 CONF_DYNAMIC_CONTROLS = "dynamic_controls"
 CONF_HIDE_DELAY = "hide_delay"
-# central settings: set on the central device (entities); options only the follow-me player
-HUB_ENTITY_DEFAULTS: dict = {CONF_DEFAULT_VOLUME: 25, CONF_DYNAMIC_CONTROLS: True, CONF_HIDE_DELAY: 3}
+# the central settings and their first values (set_setting / get_settings; the options hold only the follow-me player)
+CENTRAL_SETTINGS: dict = {CONF_DEFAULT_VOLUME: 25, CONF_DYNAMIC_CONTROLS: True, CONF_HIDE_DELAY: 3}
 
 SERVICE_FOLLOW_START = "start_follow"
 SERVICE_FOLLOW_STOP = "stop_follow"
@@ -53,7 +53,7 @@ CONF_VOLUME_ENTITY = "volume_entity"
 VOLUME_PLAYERS = "players"
 VOLUME_DEVICE = "device"
 VOLUME_ENTITY_DOMAINS = ["media_player", "number", "input_number"]
-# volume presets: fixed names, a volume (%) per room (number entities); 0: not offered
+# volume presets: fixed names, a volume (%) per room (a setting); 0: not offered
 PRESETS = ["quiet", "normal", "loud", "party"]
 PRESET_MANUAL = "manual"  # the volume was changed after the preset
 PRESET_NONE = "none"
@@ -213,7 +213,8 @@ CONF_AUDIO_STANDBY = "audio_standby"
 CONF_AUDIO_STANDBY_W = "audio_standby_w"
 CONF_AUDIO_STANDBY_MAX = "audio_standby_max"  # min
 
-# set on the room device (number entities), not in the options; first values
+# the settings that moved from the options to the store with version 3 (only for
+# that migration; since version 4: model.ROOM_SETTINGS and the devices' settings)
 ENTITY_DEFAULTS: dict = {
     CONF_DISPLAY_RUN_DOWN: 10,
     CONF_AUDIO_RUN_DOWN: 2,
@@ -246,7 +247,7 @@ ENTITY_DEFAULTS: dict = {
     CONF_SNOOZE_MINUTES: 9,
 }
 
-# room options (what is connected; how it behaves is set on the device)
+# room options of version 3 (what is connected; only for the migration to version 4)
 DEFAULTS: dict = {
     CONF_VOLUME_CONTROL: VOLUME_PLAYERS,
 }

@@ -8,24 +8,20 @@ from homeassistant.core import CoreState, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_state_change_event
 
 from custom_components.better_media_player.const import (
-    CONF_PRESET_FADE,
     CONF_VOLUME_CONTROL,
     CONF_VOLUME_ENTITY,
-    ENTITY_DEFAULTS,
     VOLUME_DEVICE,
 )
+from custom_components.better_media_player.model import ROOM_SETTINGS
 from custom_components.better_media_player.room.ramp import ease_in_out
 
 from .conftest import AVR, GROUP, KODI, MUSIC, setup_room
-from .helpers import NIGHT, PRESET, ROOM, music_at, room_volume, select_preset, start_wake, tick, vol
-
-FADE = "number.living_room_preset_fade"
-
+from .helpers import NIGHT, PRESET, ROOM, get_settings, music_at, room_volume, select_preset, set_setting, start_wake, tick, vol
 
 @pytest.fixture(autouse=True)
 def _fade(monkeypatch):
     """These tests cover the fade: the room fades over 3 s (default: it jumps)."""
-    monkeypatch.setitem(ENTITY_DEFAULTS, CONF_PRESET_FADE, 3)
+    monkeypatch.setitem(ROOM_SETTINGS, "preset_fade", 3)
 
 
 def _track(hass: HomeAssistant, entity_id: str = MUSIC) -> list[float]:
@@ -43,11 +39,6 @@ def _track(hass: HomeAssistant, entity_id: str = MUSIC) -> list[float]:
     return seen
 
 
-async def _number(hass: HomeAssistant, entity_id: str, value: float) -> None:
-    await hass.services.async_call("number", "set_value", {"entity_id": entity_id, "value": value}, blocking=True)
-    await hass.async_block_till_done()
-
-
 async def _preset(hass: HomeAssistant, preset: str, **data) -> None:
     await hass.services.async_call(
         "better_media_player", "set_volume_preset", {"entity_id": ROOM, "preset": preset, **data}, blocking=True
@@ -63,7 +54,7 @@ def test_the_curve_is_slow_at_both_ends():
 
 async def test_a_preset_fades_there(hass, home, freezer):
     await music_at(hass, home, freezer, volume=0.2)
-    assert float(hass.states.get(FADE).state) == 3
+    assert (await get_settings(hass))["settings"]["preset_fade"] == 3
     steps = _track(hass)
     await select_preset(hass, "loud")
     assert hass.states.get(PRESET).state == "loud", "the select shows the preset at once"
@@ -90,7 +81,7 @@ async def test_down_as_well(hass, home, freezer):
 
 async def test_zero_jumps(hass, home, freezer):
     await music_at(hass, home, freezer, volume=0.2)
-    await _number(hass, FADE, 0)
+    await set_setting(hass, "preset_fade", 0)
     await select_preset(hass, "loud")
     assert vol(hass) == 0.5
 

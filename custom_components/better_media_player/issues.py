@@ -6,6 +6,9 @@
   several rooms switch, and group players where a room's own player belongs
   (or no group where follow me needs one) become issues in Repairs. They
   clear by themselves once the cause is gone.
+- Automations and scripts that still use a setting entity that was removed
+  (the settings are set with the action set_setting now) become an issue too,
+  until they no longer use it.
 
 Checked a while after Home Assistant has started (integrations may add their
 entities late), then again whenever entities, entries or the missing
@@ -24,26 +27,11 @@ from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, EVENT_HOMEASSISTANT
 from homeassistant.core import CALLBACK_TYPE, CoreState, Event, HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
-from homeassistant.helpers import selector as sel
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 
 from .players import is_group
-from .const import (
-    CONF_AUDIO_HOST,
-    CONF_AUDIO_PLAYER,
-    CONF_BASS,
-    CONF_DISPLAY,
-    CONF_ENTRY_TYPE,
-    CONF_FOLLOW_PLAYER,
-    CONF_SPEAKERS,
-    CONF_VIDEO_HOST,
-    CONF_VIDEO_PLAYER,
-    CONF_VOLUME_CONTROL,
-    CONF_VOLUME_ENTITY,
-    DOMAIN,
-    ENTRY_TYPE_HUB,
-    VOLUME_DEVICE,
-)
+from .const import CONF_ENTRY_TYPE, CONF_FOLLOW_PLAYER, DOMAIN, ENTRY_TYPE_HUB
+from .model import entities_of, players_of, renamed, switched_of
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -51,16 +39,7 @@ START_DELAY = 60  # s after Home Assistant has started
 RECHECK_DELAY = 1  # s: changes come in bursts (a reload, several registry updates)
 RENAME_DELAY = 0.5  # s: a device's entities are renamed one after the other
 NOT_KNOWN = (STATE_UNAVAILABLE, STATE_UNKNOWN)
-PLAYER_KEYS = (CONF_VIDEO_PLAYER, CONF_AUDIO_PLAYER)
-# what a room switches or plays on: one room each
-SWITCHED_KEYS = (*PLAYER_KEYS, CONF_VIDEO_HOST, CONF_AUDIO_HOST, CONF_DISPLAY, CONF_SPEAKERS, CONF_BASS, CONF_VOLUME_ENTITY)
-
-
-def entity_keys() -> list[str]:
-    """The room options that name entities (every entity selector of the setup)."""
-    from .config_flow import _fields  # (the setup's fields are the source of truth)
-
-    return [key for key, field in _fields().items() if isinstance(field, sel.EntitySelector)]
+REMOVED_KEY = "removed_entities"  # in a room's or the central entry's store: setting entities removed (version 4)
 
 
 def _is_hub(entry: ConfigEntry) -> bool:
@@ -75,35 +54,33 @@ def _ids(value: Any) -> list[str]:
     return []
 
 
-def configured(entry: ConfigEntry, keys: tuple[str, ...] | list[str] | None = None) -> dict[str, list[str]]:
-    """The entities an entry is set up with, by option key."""
-    options = entry.options
+def configured(entry: ConfigEntry) -> list[str]:
+    """The entities an entry is set up with."""
     if _is_hub(entry):
-        keys = [CONF_FOLLOW_PLAYER]
-    elif keys is None:
-        keys = entity_keys()
-    out = {}
-    for key in keys:
-        if key == CONF_VOLUME_ENTITY and options.get(CONF_VOLUME_CONTROL) != VOLUME_DEVICE:
-            continue  # (left from before: the room's volume is on the players)
-        if ids := _ids(options.get(key)):
-            out[key] = ids
-    return out
+        return _ids(entry.options.get(CONF_FOLLOW_PLAYER))
+    return entities_of(entry.options)
 
 
-def renamed_options(options: dict, keys: list[str], old: str, new: str) -> dict | None:
+def renamed_options(options: dict, old: str, new: str) -> dict | None:
     """The options with old replaced by new, or None if old is not in them."""
-    out = dict(options)
-    changed = False
-    for key in keys:
-        value = out.get(key)
-        if value == old:
-            out[key] = new
-            changed = True
-        elif isinstance(value, list) and old in value:
-            out[key] = [new if v == old else v for v in value]
-            changed = True
-    return out if changed else None
+    out = renamed(dict(options), old, new)
+    return out if out != options else None
+
+
+def removed_in_use(hass: HomeAssistant, entity_ids: list[str]) -> dict[str, list[str]]:
+    """Removed entities that automations or scripts still use: entity -> their names."""
+    from homeassistant.components import automation, script  # noqa: PLC0415 (only when loaded)
+
+    out: dict[str, list[str]] = {}
+    for entity_id in entity_ids:
+        users = []
+        if "automation" in hass.config.components:
+            users += automation.automations_with_entity(hass, entity_id)
+        if "script" in hass.config.components:
+            users += script.scripts_with_entity(hass, entity_id)
+        if users:
+            out[entity_id] = sorted(users)
+    return out
 
 
 class IssueChecker:
@@ -123,6 +100,8 @@ class IssueChecker:
     @callback
     def start(self) -> None:
         self._unsubs.append(self.hass.bus.async_listen(er.EVENT_ENTITY_REGISTRY_UPDATED, self._registry_updated))
+        # an automation changed: a removed entity may no longer be used
+        self._unsubs.append(self.hass.bus.async_listen("automation_reloaded", callback(lambda _e: self.changed())))
         if self.hass.state is CoreState.running:
             self._schedule(START_DELAY)
             return
@@ -187,9 +166,8 @@ class IssueChecker:
         if self._stopped:
             return
         for entry in self.hass.config_entries.async_entries(DOMAIN):
-            keys = [CONF_FOLLOW_PLAYER] if _is_hub(entry) else entity_keys()
             current = self._renamed.get(entry.entry_id, dict(entry.options))
-            if (options := renamed_options(current, keys, old, new)) is not None:
+            if (options := renamed_options(current, old, new)) is not None:
                 _LOGGER.info("%s: %s was renamed to %s, the room follows", entry.title, old, new)
                 self._renamed[entry.entry_id] = options
         if self._renamed and self._rename_later is None:
@@ -216,16 +194,14 @@ class IssueChecker:
         for entry in entries:
             hub = _is_hub(entry)
             missing, disabled = [], []
-            for key, ids in configured(entry).items():
-                for entity_id in ids:
-                    reg_entry = reg.async_get(entity_id)
-                    if reg_entry is None and self.hass.states.get(entity_id) is None:
-                        missing.append(entity_id)
-                    elif reg_entry is not None and reg_entry.disabled_by is not None:
-                        disabled.append(entity_id)
+            for entity_id in configured(entry):
+                reg_entry = reg.async_get(entity_id)
+                if reg_entry is None and self.hass.states.get(entity_id) is None:
+                    missing.append(entity_id)
+                elif reg_entry is not None and reg_entry.disabled_by is not None:
+                    disabled.append(entity_id)
             watch.update(missing)
-            player_keys = (CONF_FOLLOW_PLAYER,) if hub else PLAYER_KEYS
-            player_ids = sorted({i for k in player_keys for i in _ids(entry.options.get(k))})
+            player_ids = sorted(set(_ids(entry.options.get(CONF_FOLLOW_PLAYER)) if hub else players_of(entry.options)))
             for kind, ids in (("missing", missing), ("disabled", disabled)):
                 if not ids:
                     continue
@@ -234,6 +210,13 @@ class IssueChecker:
                     continue
                 severity = ir.IssueSeverity.ERROR if set(player_ids) & set(ids) else ir.IssueSeverity.WARNING
                 wanted.add(self._issue(f"{kind}_entities", ids, severity, entry, entities=_list(ids)))
+
+            # setting entities removed with version 4 that automations or scripts still use
+            owner = getattr(entry, "runtime_data", None)
+            if removed := list((getattr(owner, "data", None) or {}).get(REMOVED_KEY) or []):
+                if in_use := removed_in_use(self.hass, removed):
+                    lines = "\n".join(f"- `{e}`: {', '.join(names)}" for e, names in sorted(in_use.items()))
+                    wanted.add(self._issue("removed_entities", sorted(in_use), ir.IssueSeverity.WARNING, entry, entities=lines))
 
             # group players: only from a state that tells (Music Assistant may still be loading)
             known = []
@@ -251,7 +234,7 @@ class IssueChecker:
                 continue
             if groups := [p for p in known if is_group(self.hass, p)]:
                 wanted.add(self._issue("group_player", groups, ir.IssueSeverity.WARNING, entry, entities=_list(groups)))
-            for entity_id in {i for ids in configured(entry, SWITCHED_KEYS).values() for i in ids}:
+            for entity_id in switched_of(entry.options):
                 users.setdefault(entity_id, []).append(entry.title)
 
         shared = {e: sorted(rooms) for e, rooms in users.items() if len(rooms) > 1}
@@ -271,7 +254,7 @@ class IssueChecker:
 
         self._unwatch()
         if watch:  # e.g. a YAML entity without unique id that comes later, a player that becomes available
-            self._watch = async_track_state_change_event(self.hass, sorted(watch), lambda _e: self.changed())
+            self._watch = async_track_state_change_event(self.hass, sorted(watch), callback(lambda _e: self.changed()))
 
     def _issue(self, key: str, ids: list[str], severity: ir.IssueSeverity, entry: ConfigEntry, **placeholders: str) -> str:
         """The issue's id names the entities: one dismissed does not hide others that come later."""

@@ -46,8 +46,7 @@ Home Assistant instance (2026.10.3, English, light theme) with the demo integrat
    node shoot.js ../../docs/images dashboard-music
    ```
 
-   `device-settings.png` is the *Configuration* card of the room's device page (taken in a narrow window,
-   so the names are not cut). `announce.png` is the action in the developer tools (filled in YAML mode,
+   `announce.png` is the action in the developer tools (filled in YAML mode,
    shown in UI mode).
 
 5. Update the image versions in the README (its image URLs carry a hash of the file, so a changed image is not

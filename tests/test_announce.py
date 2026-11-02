@@ -21,6 +21,7 @@ from .helpers import (
     WAKE,
     announce,
     calls_to,
+    set_setting,
     follow_from,
     settle_held,
     speak,
@@ -30,10 +31,6 @@ from .helpers import (
     tick_held,
     wake_playing,
 )
-
-VIDEO_MODE = "select.living_room_announcement_during_video"
-LOWER_BY = "number.living_room_announcement_lower_film_by"
-
 
 def _order(home, services):
     return [(c[1], c[2]) for c in home.calls if c[1] in services]
@@ -128,16 +125,16 @@ async def _film(hass, home, freezer, mode=None, lower=None):
     entry.runtime_data.data["last_source"] = "video"
     await hass.async_block_till_done()
     if mode is not None:
-        await hass.services.async_call("select", "select_option", {"entity_id": VIDEO_MODE, "option": mode}, blocking=True)
+        await set_setting(hass, "announce_video", mode)
     if lower is not None:
-        await hass.services.async_call("number", "set_value", {"entity_id": LOWER_BY, "value": lower}, blocking=True)
+        await set_setting(hass, "announce_video_lower", lower)
     await hass.async_block_till_done()
     return entry
 
 
 async def test_the_film_pauses_and_goes_on(hass, home, freezer):
-    await _film(hass, home, freezer)
-    assert hass.states.get(VIDEO_MODE).state == "pause"
+    entry = await _film(hass, home, freezer)
+    assert entry.runtime_data.setting("announce_video") == "pause"
     await speak(hass)
     order = _order(home, {"media_pause", "announce", "media_play"})
     assert order == [("media_pause", KODI), ("announce", MUSIC), ("media_play", KODI)]
@@ -438,8 +435,7 @@ async def test_a_preset_not_offered_fails_before_anything(hass, home, freezer):
     home.ma_announce = True
     home.music("off")
     entry = await setup_room(hass)
-    await entry.runtime_data.async_set_number("preset_party", 0)
-    await hass.async_block_till_done()
+    await set_setting(hass, "preset_party", 0)
     with pytest.raises(ServiceValidationError):
         await announce(hass, volume="party")
     assert not home.on(SPEAKERS)
@@ -447,12 +443,10 @@ async def test_a_preset_not_offered_fails_before_anything(hass, home, freezer):
 
 
 async def test_a_room_that_fails_fails_the_action_after_the_others(hass, house, freezer):
-    from custom_components.better_media_player.room import room_of
-
     house.ma_announce = True
     house.music("playing")
     await hass.async_block_till_done()
-    await room_of(hass, "media_player.kitchen").async_set_number("preset_party", 0)
+    await set_setting(hass, "preset_party", 0, entity_id="media_player.kitchen")
     with pytest.raises(ServiceValidationError):
         await announce(hass, entity_id=[ROOM, "media_player.kitchen"], volume="party")
     assert [a[0] for a in house.announcements] == [MUSIC], "the room that can has it"
@@ -597,9 +591,8 @@ async def test_the_room_players_announce_extra_is_checked(hass, home, freezer):
 async def test_a_room_that_is_off_announces_once_its_speakers_are_ready(hass, home, freezer):
     home.ma_announce = True
     home.music("off")
-    entry = await setup_room(hass, bass=None)  # the speakers are the last device
-    await entry.runtime_data.async_set_setting("audio_on_wait", 5)  # they need a moment
-    await hass.async_block_till_done()
+    await setup_room(hass, bass=None)  # the speakers are the last device
+    await set_setting(hass, "on_wait", 5, device="speakers")  # they need a moment
     task = speak_later(hass)
     await settle_held(hass)
     await tick_held(hass, freezer, 3)

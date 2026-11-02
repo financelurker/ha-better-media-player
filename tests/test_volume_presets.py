@@ -20,9 +20,12 @@ from .helpers import (
     NIGHT,
     PRESET,
     ROOM,
+    change_room,
+    get_settings,
     music_at,
     room_volume,
     select_preset,
+    set_setting,
     start_wake,
     tick,
     vol,
@@ -49,7 +52,7 @@ async def test_preset_sets_the_room_volume(hass, home, freezer):
 async def test_by_default_a_preset_jumps_there(hass, home, freezer):
     """Preset fade is 0 by default: one volume step, as before the fade existed."""
     await music_at(hass, home, freezer)
-    assert float(hass.states.get("number.living_room_preset_fade").state) == 0
+    assert (await get_settings(hass))["settings"]["preset_fade"] == 0
     home.played.clear()
     await select_preset(hass, "loud")
     assert volume_sets(home, MUSIC) == [0.5]
@@ -92,20 +95,14 @@ async def test_select_without_presets_offers_only_manual(hass, home):
 
 
 async def _number(hass, name, value):
-    await hass.services.async_call(
-        "number", "set_value", {"entity_id": f"number.living_room_preset_{name}", "value": value}, blocking=True
-    )
-    await hass.async_block_till_done()
+    await set_setting(hass, f"preset_{name}", value)
 
 
-async def test_preset_values_are_number_entities(hass, home, freezer):
-    from homeassistant.const import EntityCategory
-    from homeassistant.helpers import entity_registry as er
-
+async def test_preset_values_are_settings(hass, home, freezer):
     await music_at(hass, home, freezer)
-    st = hass.states.get("number.living_room_preset_loud")
-    assert float(st.state) == 50 and st.attributes["unit_of_measurement"] == "%"
-    assert er.async_get(hass).async_get("number.living_room_preset_loud").entity_category is EntityCategory.CONFIG
+    assert (await get_settings(hass))["settings"]["preset_loud"] == 50
+    with pytest.raises(ServiceValidationError):
+        await _number(hass, "loud", 101)
     await _number(hass, "loud", 60)
     await select_preset(hass, "loud")
     assert vol(hass) == 0.6
@@ -151,12 +148,12 @@ async def test_another_preset_set_to_zero_leaves_the_select(hass, home, freezer)
     assert hass.states.get(PRESET).state == "normal"
 
 
-async def test_number_value_survives_a_reload(hass, home, freezer):
+async def test_a_preset_value_survives_a_reload(hass, home, freezer):
     entry = await music_at(hass, home, freezer)
     await _number(hass, "quiet", 10)
     assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
-    assert float(hass.states.get("number.living_room_preset_quiet").state) == 10
+    assert (await get_settings(hass))["settings"]["preset_quiet"] == 10
 
 
 # ---------------------------------------------------------- night / groups
@@ -313,10 +310,7 @@ async def test_switching_the_output_keeps_the_preset(hass, home, freezer):
     await tick(hass, freezer, 3)
     await select_preset(hass, "loud")
     home.avr("off")
-    hass.config_entries.async_update_entry(
-        entry, options={**entry.options, CONF_VOLUME_CONTROL: VOLUME_DEVICE, CONF_VOLUME_ENTITY: AVR}
-    )
-    await hass.async_block_till_done()
+    await change_room(hass, entry, **{CONF_VOLUME_CONTROL: VOLUME_DEVICE, CONF_VOLUME_ENTITY: AVR})
     assert hass.states.get(PRESET).state == "loud"
     assert room_volume(hass) == 0.5
 

@@ -53,7 +53,6 @@ from ..const import (
     CONF_PRESET,
     CONF_PRESET_FADE,
     DOMAIN,
-    ENTITY_DEFAULTS,
     PRESET_NONE,
     PRESETS,
 )
@@ -114,11 +113,11 @@ class RoomVolume:
     @property
     def presets(self) -> dict[str, float]:
         """The room's presets (0..1), in their order; 0 is not offered. The
-        values are the number entities'."""
+        values are the room's settings (preset_<name>)."""
         out: dict[str, float] = {}
         for name in PRESETS:
             key = CONF_PRESET.format(name)
-            value = self.ctrl.data.get(key, ENTITY_DEFAULTS[key])
+            value = self.ctrl.setting(key)
             if value not in (None, "") and float(value) > 0:
                 out[name] = max(0.0, min(1.0, float(value) / 100))
         return out
@@ -152,7 +151,7 @@ class RoomVolume:
         self.ctrl._notify()
 
     def fade_seconds(self) -> float:
-        """The preset fade (s) set on the device."""
+        """The preset fade (s), a setting of the room."""
         try:
             return max(0.0, float(self.ctrl.setting(CONF_PRESET_FADE) or 0))
         except (TypeError, ValueError):
@@ -160,7 +159,7 @@ class RoomVolume:
 
     async def async_set_preset(self, name: str | None, fade: float | None = None) -> None:
         """Choose a preset (None: none, the volume stays as it is); the volume
-        fades there in fade s (None: the preset fade set on the device)."""
+        fades there in fade s (None: the room's preset fade)."""
         if name is None:
             self._choose(None)
             return
@@ -191,7 +190,7 @@ class RoomVolume:
         self._fade_next = fade and not self.ctrl.wake.active  # a wake sets its own volume
 
     async def async_preset_changed(self, name: str) -> None:
-        """A preset's value was changed (number entity): the chosen one goes along."""
+        """A preset's value was changed (a setting): the chosen one goes along."""
         if self.ctrl.data.get("volume_preset") != name:
             return  # (the select is updated with the room)
         if name in self.presets:

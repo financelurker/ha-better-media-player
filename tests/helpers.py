@@ -13,6 +13,7 @@ from pytest_homeassistant_custom_component.common import async_fire_time_changed
 from homeassistant.util import dt as dt_util
 
 from custom_components.better_media_player.const import DOMAIN
+from custom_components.better_media_player.model import merge_v3, options_v3
 
 from .conftest import BASS, FOLLOW, KITCHEN, KITCHEN_OCC, KITCHEN_SPK, LIVING_OCC, MUSIC, SPEAKERS, setup_room
 
@@ -201,4 +202,31 @@ async def music_at(hass, home, freezer, volume=0.4, **overrides):
 
 async def select_preset(hass, option: str) -> None:
     await hass.services.async_call("select", "select_option", {"entity_id": PRESET, "option": option}, blocking=True)
+    await hass.async_block_till_done()
+
+
+async def set_setting(hass, setting: str, value, entity_id: str | None = ROOM, device: str | None = None) -> None:
+    """Change a setting with the action (entity_id None: a central one)."""
+    data = {"setting": setting, "value": value}
+    if entity_id is not None:
+        data["entity_id"] = entity_id
+    if device is not None:
+        data["device"] = device
+    await hass.services.async_call("better_media_player", "set_setting", data, blocking=True)
+    await hass.async_block_till_done()
+
+
+async def get_settings(hass, entity_id: str | None = ROOM, device: str | None = None) -> dict:
+    data = {k: v for k, v in (("entity_id", entity_id), ("device", device)) if v is not None}
+    return await hass.services.async_call("better_media_player", "get_settings", data, blocking=True, return_response=True)
+
+
+def roles(entry) -> dict:
+    """A room's setup as the setup dialog's roles see it (version 3 view)."""
+    return options_v3(entry.options)
+
+
+async def change_room(hass, entry, **changes) -> None:
+    """Change a room's setup the way the setup dialog does (roles)."""
+    hass.config_entries.async_update_entry(entry, options=merge_v3(entry.options, {**options_v3(entry.options), **changes}))
     await hass.async_block_till_done()
