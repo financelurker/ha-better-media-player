@@ -7,6 +7,7 @@ from __future__ import annotations
 from .conftest import BASS, FOLLOW, KITCHEN, KITCHEN_OCC, LIVING_OCC, MUSIC, SPEAKERS, setup_room
 from .helpers import (
     ROOM,
+    set_setting,
     SNOOZE,
     WAKE,
     calls_to,
@@ -323,7 +324,7 @@ async def test_it_goes_off_before_its_hardware_plug(hass, home, freezer):
     home.music("off")
     entry = await setup_room(hass, video_player=None, display=None, audio_host=host)
     entry.runtime_data.data["last_source"] = "audio"
-    await entry.runtime_data.async_set_setting("host_run_down", 10)
+    await set_setting(hass, "run_down", 10, device="audio")  # its hardware plug
     home.music("playing")
     await hass.async_block_till_done()
     await tick(hass, freezer, 10)
@@ -336,8 +337,8 @@ async def test_it_goes_off_before_its_hardware_plug(hass, home, freezer):
 
 
 async def test_a_run_down_of_zero_still_brings_the_speakers_up(hass, home, freezer):
-    entry = await _room(hass, home)
-    await entry.runtime_data.async_set_setting("audio_run_down", 0)
+    await _room(hass, home)
+    await set_setting(hass, "run_down", 0, device="speakers")
     home.music("idle")
     await hass.async_block_till_done()
     await tick(hass, freezer, 10)

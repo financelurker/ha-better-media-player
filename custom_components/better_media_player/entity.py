@@ -13,13 +13,13 @@ from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_call_later
 
 from .const import (
+    CENTRAL_SETTINGS,
     CONF_AREA,
     CONF_DYNAMIC_CONTROLS,
     CONF_ENTRY_TYPE,
     CONF_HIDE_DELAY,
     DOMAIN,
     ENTRY_TYPE_HUB,
-    HUB_ENTITY_DEFAULTS,
     NAME,
     PANEL_URL,
     SOURCE_AUDIO,
@@ -91,7 +91,7 @@ def controls_settings(hass) -> tuple[bool, float] | None:
         entry.state in _PENDING or (entry.state is ConfigEntryState.NOT_LOADED and not hass.is_running)
     ):
         return None
-    return bool(HUB_ENTITY_DEFAULTS[CONF_DYNAMIC_CONTROLS]), float(HUB_ENTITY_DEFAULTS[CONF_HIDE_DELAY])
+    return bool(CENTRAL_SETTINGS[CONF_DYNAMIC_CONTROLS]), float(CENTRAL_SETTINGS[CONF_HIDE_DELAY])
 
 
 def prune_entities(hass, entry: ConfigEntry, domain: str, entities: list[Entity]) -> None:

@@ -24,7 +24,7 @@ The screenshots are taken from the Home Assistant demo integration: two demo pla
 
 <img src="images/dashboard-mobile.png" alt="Dashboard on a phone" width="320">
 
-The device page and the settings of a room: [Setup](setup.md#settings-on-the-device).
+The device page and the settings of a room: [Setup](setup.md#the-rooms-device-and-its-settings).
 
 ## Dynamic controls
 
@@ -46,7 +46,7 @@ A room's controls that make no sense right now are hidden (`hidden_by: integrati
 - "Plays or is on": one of its players is used (video player on, music playing or paused, or turned on with a source), or the room is being turned on.
 - A hidden control still works through actions and automations; a hidden button gives an error or does nothing.
 - A control you hid stays hidden; one you show again stays shown.
-- **Central settings:** the switch *Dynamic controls* (default on; off: nothing is hidden, in every room) and the number *Hide delay* (default 3 s) on its device. The follow-me player is optional there. Without central settings (none, disabled), the defaults apply.
+- **Central settings:** `dynamic_controls` (default on; off: nothing is hidden, in every room) and `hide_delay` (default 3 s), set with the action `better_media_player.set_setting` ([Reference](reference.md#settings)). The follow-me player is optional there. Without central settings (none, disabled), the defaults apply.
 
 ## Wake controls only during a wake
 

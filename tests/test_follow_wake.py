@@ -13,7 +13,7 @@ from custom_components.better_media_player.follow import get_hub
 from custom_components.better_media_player.follow.manager import FollowSession
 
 from .conftest import FOLLOW, KITCHEN, KITCHEN_OCC, LIVING_OCC, MUSIC, SPEAKERS, setup_hub, setup_room
-from .helpers import KROOM, ROOM, WAKE, settle, tick, vol
+from .helpers import KROOM, ROOM, WAKE, set_setting, settle, tick, vol
 
 LSTATE = "sensor.living_room_follow"
 KSTATE = "sensor.kitchen_follow"
@@ -257,10 +257,7 @@ async def test_other_sensor_first_then_bedroom_empty_is_left(hass, house, freeze
 
 
 async def test_left_detection_can_be_switched_off(hass, house, freezer):
-    await hass.services.async_call(
-        "switch", "turn_off", {"entity_id": "switch.living_room_wake_detect_leaving_the_room"}, blocking=True
-    )
-    await hass.async_block_till_done()
+    await set_setting(hass, "wake_detect_left", False)
     finished = async_capture_events(hass, EVENT_WAKE_FINISHED)
     hass.states.async_set(LIVING_OCC, "on")
     await hass.async_block_till_done()

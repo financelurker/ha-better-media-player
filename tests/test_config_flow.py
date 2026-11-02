@@ -19,8 +19,10 @@ from custom_components.better_media_player.const import (
     DOMAIN,
     ENTRY_TYPE_ROOM,
 )
+from custom_components.better_media_player.model import options_v3
 
 from .conftest import GROUP, KODI, LIVING_OCC, MUSIC, SPEAKERS, TV, setup_room
+from .helpers import get_settings
 
 PLAYERS = {"special": {}}
 DEVICES = {"actions": {}, "standby": {}, "follow": {}}
@@ -51,17 +53,18 @@ async def test_full_flow(hass, home):
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Living Room"
     assert result["data"] == {CONF_ENTRY_TYPE: ENTRY_TYPE_ROOM}
-    assert result["options"] == {
+    assert set(result["options"]) == {"sources", "devices", "cables", "volume", "occupancy"}, "no times, waits or other behaviour"
+    assert options_v3(result["options"]) == {
         CONF_VIDEO_PLAYER: KODI,
         CONF_AUDIO_PLAYER: MUSIC,
         CONF_DISPLAY: [TV],
         CONF_SPEAKERS: [SPEAKERS],
         "occupancy": [LIVING_OCC],
         "volume_control": "players",
-    }, "only what is connected: no times, waits or other behaviour"
+    }, "only what is connected"
     await hass.async_block_till_done()
     assert hass.states.get("media_player.living_room") is not None
-    assert float(hass.states.get("number.living_room_speaker_run_down").state) == 2  # the device's default
+    assert (await get_settings(hass))["devices"]["speakers"]["run_down"] == 2  # the device's default
 
 
 async def test_validation(hass, home):
@@ -127,8 +130,7 @@ async def test_options_flow(hass, home):
     assert result["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
     assert entry.options["occupancy"] == [LIVING_OCC]
-    assert "bass" not in entry.options  # cleared
-    assert hass.states.get("number.living_room_follow_me_leave_after") is not None
+    assert [d["id"] for d in entry.options["devices"]] == ["display", "speakers"]  # the subwoofer cleared
 
 
 async def test_options_show_the_sections_values(hass, home):

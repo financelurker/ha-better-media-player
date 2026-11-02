@@ -18,21 +18,24 @@ from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
 
 from .const import (
+    CENTRAL_SETTINGS,
     CONF_ENTRY_TYPE,
     CONF_FOLLOW_PLAYER,
+    DEFAULTS,
     DOMAIN,
     ENTITY_DEFAULTS,
     ENTRY_TYPE_HUB,
-    HUB_ENTITY_DEFAULTS,
     HUB_PLATFORMS,
     PLATFORMS,
     STORAGE_VERSION,
 )
+from .actions import async_setup_actions
 from .room.announce import async_setup_services
 from .room.controller import RoomController
 from .follow.manager import FollowManager
 from .room import get_rooms
-from .issues import async_setup_issues, get_checker
+from .issues import REMOVED_KEY, async_setup_issues, get_checker
+from .model import REMOVED_CENTRAL_ENTITIES, REMOVED_ROOM_ENTITIES, migrate_store, options_v4
 from .panel import async_setup_panel
 
 type BetterMediaPlayerConfigEntry = ConfigEntry[RoomController | FollowManager]
@@ -47,6 +50,7 @@ def is_hub(entry: ConfigEntry) -> bool:
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.data.setdefault(DOMAIN, {}).setdefault("rooms", {})
     async_setup_services(hass)
+    async_setup_actions(hass)
     async_setup_issues(hass)
     version = str((await async_get_integration(hass, DOMAIN)).version)
     hass.data[DOMAIN]["version"] = version
@@ -63,8 +67,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """1 -> 2: the central entry has one follow-me player instead of group policies.
-    2 -> 3: values set on the room device (number entities) are no longer options."""
-    if entry.version > 3:
+    2 -> 3: values set on the room device (number entities) are no longer options.
+    3 -> 4: a room's roles become devices (model.py); the setting entities are
+    removed (set with the action set_setting now)."""
+    if entry.version > 4:
         return False
     if entry.version == 1:
         options = dict(entry.options)
@@ -82,7 +88,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # how a room (or follow me) behaves is set on its device now: the
         # values move from the options to the device's stored values
         options = dict(entry.options)
-        defaults = HUB_ENTITY_DEFAULTS if is_hub(entry) else ENTITY_DEFAULTS
+        defaults = CENTRAL_SETTINGS if is_hub(entry) else ENTITY_DEFAULTS
         store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
         data = await store.async_load() or {}
         for key, default in defaults.items():
@@ -99,6 +105,28 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 data[key] = value
         await store.async_save(data)
         hass.config_entries.async_update_entry(entry, options=options, version=3)
+    if entry.version == 3:
+        store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
+        data = await store.async_load() or {}
+        if is_hub(entry):
+            options = dict(entry.options)
+            removed = REMOVED_CENTRAL_ENTITIES
+        else:
+            options = options_v4({**DEFAULTS, **entry.options})
+            data = migrate_store(data, options)
+            removed = REMOVED_ROOM_ENTITIES
+        # the setting entities go; automations and scripts that use them are
+        # shown in Repairs (issues.py) until they no longer do
+        reg = er.async_get(hass)
+        gone = []
+        for domain, key in removed:
+            if entity_id := reg.async_get_entity_id(domain, DOMAIN, f"{entry.entry_id}_{key}"):
+                gone.append(entity_id)
+                reg.async_remove(entity_id)
+        if gone:
+            data[REMOVED_KEY] = sorted({*data.get(REMOVED_KEY, []), *gone})
+        await store.async_save(data)
+        hass.config_entries.async_update_entry(entry, options=options, version=4)
     return True
 
 

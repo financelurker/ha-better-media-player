@@ -17,6 +17,7 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.util import dt as dt_util
 
 from custom_components.better_media_player.const import (
+    CENTRAL_SETTINGS,
     CONF_AUDIO_PLAYER,
     CONF_BASS,
     CONF_DISPLAY,
@@ -30,7 +31,6 @@ from custom_components.better_media_player.const import (
     ENTITY_DEFAULTS,
     ENTRY_TYPE_HUB,
     ENTRY_TYPE_ROOM,
-    HUB_ENTITY_DEFAULTS,
 )
 
 KODI = "media_player.kodi"
@@ -467,6 +467,34 @@ async def setup_room(hass: HomeAssistant, **overrides: Any) -> MockConfigEntry:
     return entry
 
 
+def device(dev_id: str, kind: str, *plugs: str, **more: Any) -> dict:
+    """A device of a room's setup (version 4)."""
+    return {
+        "id": dev_id, "kind": kind, "name": more.pop("name", None),
+        "power": {"plugs": list(plugs), "devices": more.pop("devices", []), "actions": None, "sensors": more.pop("sensors", [])},
+        "control": None, "inputs": None, "volume": more.pop("volume", None), **more,
+    }
+
+
+async def setup_room_devices(hass: HomeAssistant, devices: list[dict], cables: list[dict], volume: dict | None = None) -> MockConfigEntry:
+    """A room set up with devices and cables (what the panel edits): Kodi and the music player."""
+    sources = [
+        {"id": "video", "player": KODI, "host": None, "on_action": None, "off_action": None},
+        {"id": "audio", "player": MUSIC, "host": None, "on_action": None, "off_action": None},
+    ]
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Living Room",
+        data={CONF_ENTRY_TYPE: ENTRY_TYPE_ROOM},
+        options={"sources": sources, "devices": devices, "cables": cables, "volume": volume or {"where": "players"}},
+        version=4,
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    return entry
+
+
 # ------------------------------------------------------------- follow me
 
 async def setup_hub(hass: HomeAssistant, **overrides) -> MockConfigEntry:
@@ -475,7 +503,7 @@ async def setup_hub(hass: HomeAssistant, **overrides) -> MockConfigEntry:
         title="Better Media Player",
         data={CONF_ENTRY_TYPE: ENTRY_TYPE_HUB},
         options={k: v for k, v in {CONF_FOLLOW_PLAYER: FOLLOW, **overrides}.items() if v is not None},
-        version=_version(overrides, HUB_ENTITY_DEFAULTS),
+        version=_version(overrides, CENTRAL_SETTINGS),
     )
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)

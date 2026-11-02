@@ -9,6 +9,17 @@ import { W, H, PASSIVE, SINKS, nodesOf, arrange, curve, labelSpot, bounds, iconP
 
 const PANEL_URL = "better-media-player";
 
+// the unit a setting's number is in (settings: set_setting / get_settings)
+const UNITS = {
+  video_idle_timeout: "min", night_video_idle_timeout: "min", night_max_volume: "%", night_fade_in: "min",
+  preset_quiet: "%", preset_normal: "%", preset_loud: "%", preset_party: "%", preset_fade: "s",
+  announce_video_lower: "%", start_timeout: "s", sleep_fade: "min",
+  snooze_minutes: "min", presence_run_down: "min", volume_offset: "pts",
+  run_down: "min", night_run_down: "min", on_wait: "s", standby_w: "W", standby_max: "min",
+  default_volume: "%", hide_delay: "s",
+};
+const STANDBY = ["standby", "standby_w", "standby_max"]; // only with power sensors
+
 class BmpPanel extends LitElement {
   static properties = {
     hass: { attribute: false },
@@ -301,7 +312,7 @@ class BmpPanel extends LitElement {
     if (!src)
       return html`<div class="route">${!room.cables.length && room.devices.length ? html`${t("insp.migrated")} ` : nothing}${t("route.pick")} ${t("insp.click")}</div>`;
     const r = room.routes[src.id];
-    const devices = r.devices.map((id) => room.devices.find((d) => d.id === id)).filter((d) => d && !PASSIVE.includes(d.kind));
+    const devices = r.order.map((id) => room.devices.find((d) => d.id === id)).filter(Boolean);
     const name = (d) => d.name || t(`kind.${d.kind}`);
     const step = (d) => {
       const inp = r.inputs[d.id];
@@ -310,9 +321,9 @@ class BmpPanel extends LitElement {
         : r.direct.includes(d.id) ? html` <span class="tag">${t("route.direct")}</span>` : nothing}</span>`;
     };
     return html`<div class="route"><b>${t("route.starts", { source: this._sourceLabel(src) })}</b>
-      ${devices.filter((d) => !SINKS.includes(d.kind)).map(step)}
+      ${devices.filter((d) => r.picture.includes(d.id)).map(step)}
       <span class="step"><b>${src.name || src.player}</b> <span class="tag">${t("route.woken")}</span></span>
-      ${devices.filter((d) => SINKS.includes(d.kind)).map(step)}</div>`;
+      ${devices.filter((d) => !r.picture.includes(d.id)).map(step)}</div>`;
   }
 
   _renderInspector(room) {
@@ -335,7 +346,8 @@ class BmpPanel extends LitElement {
       return html`<h2>${n.name}</h2><div class="kind">${t("kind.player")} · ${t(`source.${s.id}`)}</div>
         ${this._entities(t("insp.entity"), [s.player])}
         ${s.host ? this._entities(t("insp.host"), [s.host]) : nothing}
-        ${s.on_action ? this._entities(t("insp.actions"), [s.on_action, s.off_action].filter(Boolean)) : nothing}`;
+        ${s.on_action ? this._entities(t("insp.actions"), [s.on_action, s.off_action].filter(Boolean)) : nothing}
+        ${s.settings ? html`<div class="field"><span class="lbl">${t("insp.host_settings")}</span>${this._settingsList(s.settings)}</div>` : nothing}`;
     }
     const d = n.device;
     const p = d.power || {};
@@ -357,7 +369,17 @@ class BmpPanel extends LitElement {
               <div class="inputs">${d.inputs.list.map((i) => html`<span>${i}</span>`)}</div></div>`
           : this._field(t("insp.inputs"), t("insp.no_inputs"))
         : nothing}
-      ${this._field(t("insp.on_routes"), routes.map((s) => this._sourceLabel(s)).join(", ") || "–")}`;
+      ${d.volume
+        ? html`<div class="field"><span class="lbl">${t("insp.volume")}${room.volume.where === "device" && room.volume.device === d.id ? html` <span class="tag room">${t("insp.room_volume")}</span>` : nothing}</span>
+            <button class="ent" @click=${() => this._moreInfo(d.volume)}>${d.volume}</button>
+            ${d.volume_migrated ? html`<p class="muted">${t("insp.volume_migrated", { entity: d.volume, device: n.name })}</p>` : nothing}</div>`
+        : nothing}
+      ${this._field(t("insp.on_routes"), routes.map((s) => this._sourceLabel(s)).join(", ") || "–")}
+      ${d.settings && !none
+        ? html`<div class="field"><span class="lbl">${t("insp.settings")}</span>${this._settingsList(
+            Object.fromEntries(Object.entries(d.settings).filter(([k]) => p.sensors?.length || !STANDBY.includes(k)))
+          )}</div>`
+        : nothing}`;
   }
 
   _field(label, value) {
@@ -370,18 +392,20 @@ class BmpPanel extends LitElement {
     )}</div>`;
   }
 
+  // settings by key: names and values (changed with the action set_setting)
   _settingsList(settings) {
-    return html`<div class="settings">${settings.map(
-      (s) => html`<button class="row" @click=${() => this._moreInfo(s.entity_id)}>
-        <span>${s.name}</span><b>${this._value(s)}</b></button>`
+    return html`<div class="settings">${Object.entries(settings).map(
+      ([k, v]) => html`<div class="row" title=${k}><span>${this._t(`setting.${k}`)}</span><b>${this._value(k, v)}</b></div>`
     )}</div>`;
   }
 
-  _value(s) {
-    if (s.state === null || s.state === undefined) return "–";
-    const hassState = this.hass.states[s.entity_id];
-    if (hassState && this.hass.formatEntityState) return this.hass.formatEntityState(hassState);
-    return s.unit ? `${s.state} ${s.unit}` : s.state;
+  _value(key, v) {
+    const t = this._t;
+    if (v === null || v === undefined) return key === "night_run_down" ? t("value.as_by_day") : "–";
+    if (typeof v === "boolean") return t(v ? "value.on" : "value.off");
+    if (typeof v === "string") return t(`choice.${v}`);
+    const num = this.hass?.locale ? Number(v).toLocaleString(this.hass.locale.language) : String(v);
+    return UNITS[key] ? `${num} ${UNITS[key]}` : num;
   }
 
   _renderSettings(room) {
@@ -390,14 +414,23 @@ class BmpPanel extends LitElement {
     return html`
       <div class="card"><h3>${t("settings.room")}</h3>
         ${this._field(t("settings.area"), room.area || "–")}
-        ${this._field(t("settings.volume"), room.volume.where === "device" ? t("settings.volume_device", { entity: name(room.volume.entity) }) : t("settings.volume_players"))}
+        ${this._field(t("settings.volume"), this._roomVolume(room))}
         <div class="field"><span class="lbl">${t("settings.presence")}</span>
           ${room.occupancy.length ? room.occupancy.map((id) => html`<button class="ent" @click=${() => this._moreInfo(id)}>${name(id)}</button>`) : html`<div>${t("settings.none")}</div>`}
         </div>
       </div>
       <div class="card"><h3>${t("settings.behaviour")}</h3>
-        ${room.loaded ? html`<p class="muted">${t("settings.behaviour_hint")}</p>${this._settingsList(room.settings)}` : html`<p class="muted">${t("settings.not_loaded")}</p>`}
+        ${room.settings ? html`<p class="muted">${t("settings.behaviour_hint")} ${t("settings.change_hint")}</p>${this._settingsList(room.settings)}` : html`<p class="muted">${t("settings.not_loaded")}</p>`}
       </div>`;
+  }
+
+  _roomVolume(room) {
+    const t = this._t;
+    if (room.volume.where !== "device") return t("settings.volume_players");
+    const d = room.devices.find((x) => x.id === room.volume.device);
+    if (!d?.volume) return "–";
+    return html`${t("settings.volume_device", { device: d.name || t(`kind.${d.kind}`), entity: d.volume })}
+      ${d.volume_migrated ? html`<p class="muted">${t("insp.volume_migrated", { entity: d.volume, device: d.name || t(`kind.${d.kind}`) })}</p>` : nothing}`;
   }
 
   _renderCentral() {
@@ -411,7 +444,8 @@ class BmpPanel extends LitElement {
           ${follow ? html`<button class="ent" @click=${() => this._moreInfo(follow)}>${this.hass.states[follow]?.attributes.friendly_name || follow}</button>` : html`<div>${t("central.off")}</div>`}
         </div>
       </div>
-      <div class="card"><h3>${t("central.settings")}</h3>${this._settingsList(c.settings)}</div>`;
+      <div class="card"><h3>${t("central.settings")}</h3>
+        ${c.settings ? html`<p class="muted">${t("settings.change_hint")}</p>${this._settingsList(c.settings)}` : html`<p class="muted">${t("settings.not_loaded")}</p>`}</div>`;
   }
 
   // ------------------------------------------------------------ interaction
@@ -637,8 +671,8 @@ class BmpPanel extends LitElement {
     .card { background: var(--bmp-card); border: 1px solid var(--bmp-line); border-radius: var(--ha-card-border-radius, 12px); padding: 16px 18px; display: grid; gap: 12px; align-content: start; }
     .card h3 { margin: 0; font-size: 16px; font-weight: 500; }
     .settings { display: grid; gap: 2px; }
-    .row { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; border: 0; background: none; text-align: left; padding: 7px 8px; border-radius: 6px; }
-    .row:hover { background: var(--bmp-chip); }
+    .row { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--bmp-line); }
+    .row:last-child { border-bottom: 0; }
     .row b { font-weight: 500; font-variant-numeric: tabular-nums; }
     .sources { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--bmp-line); background: var(--bmp-card); }
     .lbl { color: var(--bmp-muted); }
@@ -665,6 +699,7 @@ class BmpPanel extends LitElement {
     .step + .step::before { content: "→"; margin: 0 8px; color: var(--bmp-muted); }
     .tag { font-size: 11px; border-radius: 8px; padding: 1px 6px; background: var(--bmp-chip); color: var(--bmp-muted); }
     .tag.cec { color: var(--bmp-cec); }
+    .tag.room { color: var(--bmp-primary); }
     .tag.in { font-family: var(--code-font-family, ui-monospace, monospace); }
     .node { cursor: grab; }
     .node .box { fill: var(--bmp-card); stroke: var(--bmp-line); stroke-width: 1.5; }

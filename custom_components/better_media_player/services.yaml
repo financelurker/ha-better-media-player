@@ -202,3 +202,39 @@ announce:
     pre_announce:
       selector:
         boolean:
+
+set_setting:
+  fields:
+    entity_id:
+      example: media_player.living_room
+      selector:
+        entity:
+          integration: better_media_player
+          domain: media_player
+    device:
+      example: display
+      selector:
+        text:
+    setting:
+      required: true
+      example: night_max_volume
+      selector:
+        text:
+    value:
+      required: true
+      example: 25
+      selector:
+        object:
+
+get_settings:
+  fields:
+    entity_id:
+      example: media_player.living_room
+      selector:
+        entity:
+          integration: better_media_player
+          domain: media_player
+    device:
+      example: display
+      selector:
+        text:

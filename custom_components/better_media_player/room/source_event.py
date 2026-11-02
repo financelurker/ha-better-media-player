@@ -117,7 +117,7 @@ class SourceWatch:
             and not src.suppressed
             and not ctrl.turning_off
             and ctrl.player_state(src) not in (*_UNCERTAIN, "off", "standby")
-            and (ctrl.room_on or not ctrl.power.roles)
+            and (ctrl.room_on or not ctrl.power.nodes)
         )
 
     def _current(self) -> str | None:

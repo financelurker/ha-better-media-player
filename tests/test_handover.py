@@ -35,7 +35,7 @@ from .conftest import (
     setup_kitchen,
     setup_room,
 )
-from .helpers import KROOM, ROOM, tick
+from .helpers import KROOM, ROOM, set_setting, tick
 
 BEDROOM = "media_player.bedroom"
 SELECT = "select.living_room_hand_over_to"
@@ -129,9 +129,7 @@ async def test_follow_me_ends_into_the_destination(hass, rooms, freezer):
     hass.config_entries.async_update_entry(living, options={**living.options, "occupancy": [LIVING_OCC]})
     await hass.async_block_till_done()
     hass.states.async_set(LIVING_OCC, "on")
-    await hass.services.async_call(
-        "switch", "turn_off", {"entity_id": "switch.kitchen_follow_me_prewarm_speakers"}, blocking=True
-    )
+    await set_setting(hass, "prewarm", False, entity_id=KROOM)
     await _music(hass, home, freezer)
     await hass.services.async_call(DOMAIN, "start_follow", {"entity_id": ROOM}, blocking=True)
     await hass.async_block_till_done()

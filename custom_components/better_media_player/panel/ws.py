@@ -10,6 +10,7 @@ from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 
 from ..const import CONF_ENTRY_TYPE, DOMAIN, ENTRY_TYPE_HUB
+from ..follow import get_hub
 from ..room import get_rooms
 from .view import central_view, room_view, routes_of
 
@@ -20,9 +21,6 @@ WS_LAYOUT_SAVE = f"{DOMAIN}/layout/save"
 LAYOUT_KEY = "layout"  # in the room's store: {device or source id: [x, y]}
 
 
-def _layout(hass: HomeAssistant, entry_id: str) -> dict:
-    room = get_rooms(hass).get(entry_id)
-    return dict(room.data.get(LAYOUT_KEY) or {}) if room is not None else {}
 
 
 @callback
@@ -41,9 +39,12 @@ def ws_config_get(hass: HomeAssistant, connection: websocket_api.ActiveConnectio
     rooms = []
     for entry in hass.config_entries.async_entries(DOMAIN):
         if entry.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_HUB:
-            central = central_view(hass, entry)
+            hub = get_hub(hass)
+            central = central_view(hass, entry, hub.data if hub is not None else None)
         else:
-            rooms.append(room_view(hass, entry, _layout(hass, entry.entry_id)))
+            room = get_rooms(hass).get(entry.entry_id)
+            data = room.data if room is not None else None
+            rooms.append(room_view(hass, entry, data, (data or {}).get(LAYOUT_KEY)))
     rooms.sort(key=lambda r: r["name"].casefold())
     connection.send_result(msg["id"], {"central": central, "rooms": rooms})
 

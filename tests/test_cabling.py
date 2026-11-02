@@ -9,7 +9,7 @@ from custom_components.better_media_player.const import (
 )
 
 from .conftest import AVR, KODI, LG, MUSIC, SPEAKERS, TV, setup_room
-from .helpers import ROOM, tick
+from .helpers import ROOM, roles, tick
 
 VIDEO_IN = {"from": "video_player", "to": "display", "signals": ["picture", "sound"], "input": "HDMI 2"}
 VIDEO_AVR = {"from": "video_player", "to": "speakers", "signals": ["sound"], "input": "BD"}
@@ -100,7 +100,7 @@ async def test_an_input_changed_by_hand_is_left_until_the_source_changes(hass, h
     await tick(hass, freezer, 30)
     assert hass.states.get(AVR).attributes["source"] == "TUNER"
     assert selects(home, AVR) == ["NET"]
-    assert entry_power(hass).devices.input_manual(entry_power(hass).roles["audio"])
+    assert entry_power(hass).devices.input_manual(entry_power(hass).nodes["speakers"])
     home.kodi("playing")  # another source: its input again
     await hass.async_block_till_done()
     await tick(hass, freezer, 10)
@@ -264,7 +264,7 @@ async def test_adding_a_connection_in_the_dialog(hass, home, freezer):
     result = await _go(hass, result, {"input": "HDMI 2", "mode": "bmp"})
     assert result["menu_options"][:3] == ["connection_add", "connection_edit", "connection_remove"]
     result = await _save(hass, result)
-    assert entry.options["connections"] == [
+    assert roles(entry)["connections"] == [
         {"from": "video_player", "to": "display", "signals": ["picture", "sound"], "input": "HDMI 2", "mode": "bmp"}
     ]
     await _start_video(hass, home, freezer)  # the reloaded room uses it
@@ -315,7 +315,7 @@ async def test_editing_and_removing_connections(hass, home):
     result = await _go(hass, result, {"next_step_id": "connection_remove"})
     result = await _go(hass, result, {"connections": ["1"]})  # film → speakers
     await _save(hass, result)
-    assert [(c["from"], c["to"], c["input"], c.get("mode", "bmp")) for c in entry.options["connections"]] == [
+    assert [(c["from"], c["to"], c["input"], c.get("mode", "bmp")) for c in roles(entry)["connections"]] == [
         ("video_player", "display", "HDMI 2", "bmp"),
         ("audio_player", "speakers", "TUNER", "cec"),
     ]
@@ -332,7 +332,7 @@ async def test_the_control_of_a_device_in_the_dialog(hass, home):
     )
     await _save(hass, result)
     power = entry_power(hass)
-    control = power.roles["display"].control
+    control = power.nodes["display"].control
     assert (control.on, control.off, control.fallback, control.timeout) == ("cec", "bmp", True, 20.0)
     assert "display_input_actions" not in entry.options  # empty: not stored
 
@@ -344,7 +344,7 @@ async def test_removing_a_role_drops_its_connections(hass, home):
     result = await _go(hass, result, {CONF_DISPLAY: [LG], "actions": {}, "standby": {}, "follow": {}})  # no speakers
     result = await _go(hass, result, {"next_step_id": "save"})
     await hass.async_block_till_done()
-    assert [(c["from"], c["to"]) for c in entry.options["connections"]] == [("video_player", "display")]
+    assert [(c["from"], c["to"]) for c in roles(entry)["connections"]] == [("video_player", "display")]
     assert "speakers_inputs" not in entry.options
 
 
@@ -499,7 +499,7 @@ async def test_two_alike_connections_are_told_apart(hass, home):
     result = await _go(hass, result, {"next_step_id": "connection_remove"})
     result = await _go(hass, result, {"connections": ["1"]})
     await _save(hass, result)
-    assert [c.get("mode", "bmp") for c in entry.options["connections"]] == ["bmp"]
+    assert [c.get("mode", "bmp") for c in roles(entry)["connections"]] == ["bmp"]
 
 
 async def test_a_circle_is_refused_in_the_first_form(hass, home):

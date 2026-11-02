@@ -90,114 +90,15 @@
           "on": "mdi:weather-night",
           "off": "mdi:weather-sunny"
         }
-      },
-      "display_standby": {
-        "default": "mdi:power-sleep"
-      },
-      "audio_standby": {
-        "default": "mdi:power-sleep"
-      },
-      "prewarm": {
-        "default": "mdi:speaker-wireless"
-      },
-      "wake_detect_left": {
-        "default": "mdi:exit-run"
-      },
-      "dynamic_controls": {
-        "default": "mdi:eye-refresh-outline"
       }
     },
     "number": {
-      "display_run_down": {
-        "default": "mdi:television-off"
-      },
-      "audio_run_down": {
-        "default": "mdi:speaker-off"
-      },
-      "host_run_down": {
-        "default": "mdi:power-plug-off"
-      },
-      "video_idle_timeout": {
-        "default": "mdi:television-pause"
-      },
       "sleep_timer": {
         "default": "mdi:sleep",
         "range": {
           "0": "mdi:sleep-off",
           "1": "mdi:sleep"
         }
-      },
-      "night_video_idle_timeout": {
-        "default": "mdi:weather-night"
-      },
-      "night_display_run_down": {
-        "default": "mdi:weather-night"
-      },
-      "night_max_volume": {
-        "default": "mdi:volume-medium"
-      },
-      "preset_quiet": {
-        "default": "mdi:volume-low"
-      },
-      "preset_normal": {
-        "default": "mdi:volume-medium"
-      },
-      "preset_loud": {
-        "default": "mdi:volume-high"
-      },
-      "preset_party": {
-        "default": "mdi:party-popper"
-      },
-      "start_timeout": {
-        "default": "mdi:timer-alert-outline"
-      },
-      "display_on_wait": {
-        "default": "mdi:timer-sand"
-      },
-      "audio_on_wait": {
-        "default": "mdi:timer-sand"
-      },
-      "host_on_wait": {
-        "default": "mdi:timer-sand"
-      },
-      "display_standby_w": {
-        "default": "mdi:flash-outline"
-      },
-      "display_standby_max": {
-        "default": "mdi:timer-cog-outline"
-      },
-      "audio_standby_w": {
-        "default": "mdi:flash-outline"
-      },
-      "audio_standby_max": {
-        "default": "mdi:timer-cog-outline"
-      },
-      "preset_fade": {
-        "default": "mdi:volume-equal"
-      },
-      "sleep_fade": {
-        "default": "mdi:sleep"
-      },
-      "snooze_minutes": {
-        "default": "mdi:alarm-snooze"
-      },
-      "night_fade_in": {
-        "default": "mdi:weather-sunset-up"
-      },
-      "presence_run_down": {
-        "default": "mdi:account-clock"
-      },
-      "volume_offset": {
-        "default": "mdi:plus-minus-variant"
-      },
-      "default_volume": {
-        "default": "mdi:volume-medium"
-      },
-      "hide_delay": {
-        "default": "mdi:timer-sand"
-      },
-      "announce_video_lower": {
-        "default": "mdi:volume-minus"
       }
     },
     "button": {
@@ -231,26 +132,8 @@
           "manual": "mdi:volume-equal"
         }
       },
-      "power_on_preset": {
-        "default": "mdi:volume-source",
-        "state": {
-          "none": "mdi:volume-source",
-          "quiet": "mdi:volume-low",
-          "normal": "mdi:volume-medium",
-          "loud": "mdi:volume-high",
-          "party": "mdi:party-popper"
-        }
-      },
       "handover": {
         "default": "mdi:transfer-right"
-      },
-      "announce_video": {
-        "default": "mdi:bullhorn",
-        "state": {
-          "pause": "mdi:pause",
-          "overlay": "mdi:layers",
-          "lower": "mdi:volume-minus"
-        }
       }
     }
   },
@@ -284,6 +167,12 @@
     },
     "announce": {
       "service": "mdi:bullhorn"
+    },
+    "set_setting": {
+      "service": "mdi:tune"
+    },
+    "get_settings": {
+      "service": "mdi:tune-variant"
     }
   }
 }

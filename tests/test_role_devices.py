@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .conftest import BASS, HARMONY, IR_OFF, IR_ON, KODI, LG, MUSIC, SPEAKERS, TV, TV_POWER, setup_room
-from .helpers import ROOM, call_order, tick
+from .helpers import ROOM, call_order, set_setting, tick
 
 
 def _calls(home, entity_id, service=None):
@@ -112,8 +112,8 @@ async def test_the_plug_waits_for_the_device_to_go_off(hass, home, freezer):
 async def test_standby_wait_after_the_device_is_off(hass, home, freezer):
     hass.states.async_set(LG, "off")
     hass.states.async_set(TV_POWER, "80")
-    entry = await setup_room(hass, display=[TV, LG], display_power=[TV_POWER])
-    await entry.runtime_data.async_set_setting("display_standby", True)
+    await setup_room(hass, display=[TV, LG], display_power=[TV_POWER])
+    await set_setting(hass, "standby", True, device="display")
     home.kodi_boots = True
     await _turn_on(hass)
     await _turn_off(hass)
@@ -128,8 +128,8 @@ async def test_standby_wait_after_the_device_is_off(hass, home, freezer):
 async def test_a_device_only_role_has_no_standby_wait(hass, home, freezer):
     hass.states.async_set(LG, "off")
     hass.states.async_set(TV_POWER, "80")
-    entry = await setup_room(hass, display=[LG], display_power=[TV_POWER])
-    await entry.runtime_data.async_set_setting("display_standby", True)
+    await setup_room(hass, display=[LG], display_power=[TV_POWER])
+    await set_setting(hass, "standby", True, device="display")
     home.kodi_boots = True
     await _turn_on(hass)
     await _turn_off(hass)
@@ -310,7 +310,7 @@ async def test_a_device_woken_over_cec_during_the_start_is_no_manual_mode(hass, 
     hass.states.async_set(HARMONY, "off")
     entry = await setup_room(hass, display=[LG], speakers=[HARMONY], bass=None)
     ctrl = entry.runtime_data
-    await ctrl.async_set_setting("display_on_wait", 5)
+    await set_setting(hass, "on_wait", 5, device="display")
     orig = home.handle
 
     def handle(domain, service, entity_id, data, context):

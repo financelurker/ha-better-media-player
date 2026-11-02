@@ -14,10 +14,9 @@ from typing import TYPE_CHECKING
 
 from homeassistant.core import callback
 
-from ..const import CONF_START_TIMEOUT, DOMAIN, ROLE_AUDIO_HOST, ROLE_DISPLAY, ROLE_VIDEO_HOST
+from ..const import CONF_START_TIMEOUT, DOMAIN
 from .. import clock
 from ..devices import Node
-from .power import ON_ORDER
 
 if TYPE_CHECKING:
     from .controller import RoomController
@@ -76,19 +75,18 @@ class PowerSequence:
         try:
             if src is not None:
                 needed_sources = {src.key}
-                roles = [
-                    r
-                    for k in ON_ORDER
-                    if (r := power.roles.get(k)) is not None and src.key in r.sources and ctrl.night.role_enabled(k)
+                nodes = [
+                    n
+                    for k in power.on_order
+                    if src.key in (n := power.nodes[k]).sources and ctrl.night.enabled(n)
                 ]
             else:
                 needed_sources = set()
-                roles = [
-                    r for k in ON_ORDER if (r := power.roles.get(k)) is not None and power.role_demand(r)
-                ]
+                nodes = [n for k in power.on_order if power.needed(n := power.nodes[k])]
 
-            before_player = [r for r in roles if r.key in (ROLE_VIDEO_HOST, ROLE_AUDIO_HOST, ROLE_DISPLAY)]
-            after_player = [r for r in roles if r not in before_player]
+            # the players' plugs and what carries the picture before the player, the sound after
+            before_player = [n for n in nodes if n.device is None or n.picture]
+            after_player = [n for n in nodes if n not in before_player]
 
             await power.devices.async_bring_up(before_player, switched)
 

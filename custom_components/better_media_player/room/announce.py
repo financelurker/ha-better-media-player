@@ -7,7 +7,7 @@ supports Home Assistant's announcements, e.g. Music Assistant's):
    the same way as what plays (same speakers, same input of an amplifier),
    and the player pauses and resumes it itself.
 2. Else the other player of the room, if it announces; a film that plays
-   meanwhile is paused, overlaid or turned down (setting on the device).
+   meanwhile is paused, overlaid or turned down (a setting of the room).
 3. The room is off: the music player, else the video player. The room's
    devices (speakers, volume device) come up for it and go off right after.
 4. No player of the room announces (fallback): the active source's player,
@@ -369,11 +369,11 @@ class RoomAnnouncer:
             await ctrl._player(src, "media_pause")
 
     def _roles_for(self, src: Source) -> list[str]:
-        """The roles kept on for the announcement (automatic power only)."""
+        """The devices kept on for the announcement: its player's route (automatic power only)."""
         ctrl = self.ctrl
         if not ctrl.auto_power or ctrl.manual:
             return []
-        return [k for k, r in ctrl.power.roles.items() if src.key in r.sources and ctrl.night.role_enabled(k)]
+        return [k for k, n in ctrl.power.nodes.items() if src.key in n.sources and ctrl.night.enabled(n)]
 
     async def _power_up(self, src: Source, roles: list[str]) -> None:
         """The devices the player needs come up (if off); a player that is off is woken."""
@@ -381,7 +381,7 @@ class RoomAnnouncer:
         timeout = float(ctrl.setting(CONF_START_TIMEOUT))
         if roles:
             await ctrl.async_update("announce")
-            wanted = [ctrl.power.roles[k] for k in roles]
+            wanted = [ctrl.power.nodes[k] for k in roles]
             # until the power sequence is through: the devices report on and their
             # waits after switching on (e.g. speakers that need a moment) are over
             if not await ctrl._wait_until(
@@ -433,7 +433,7 @@ class RoomAnnouncer:
         room's fades still."""
         ctrl = self.ctrl
         for key in roles:
-            if (role := ctrl.power.roles.get(key)) is not None and not ctrl.power.devices.node_on(role):
+            if (node := ctrl.power.nodes.get(key)) is not None and not ctrl.power.devices.node_on(node):
                 self._brought_up.add(key)
         if self._running == 0:
             self._off = False
@@ -502,9 +502,9 @@ class RoomAnnouncer:
                 src.suppressed = True
                 await ctrl._source_off(src)
         for key in brought_up:
-            role = ctrl.power.roles.get(key)
-            if role is not None and not ctrl.power.role_demand(role):
-                role.force_off = True
+            node = ctrl.power.nodes.get(key)
+            if node is not None and not ctrl.power.needed(node):
+                node.force_off = True
         if self.active:
             return  # a new one began meanwhile: it holds the room still now
         ctrl.sleep.async_announce_done()

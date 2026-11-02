@@ -4,7 +4,7 @@
 
 Better Media Player has a page of its own in Home Assistant's sidebar: **Better Media Player** (for admins). It shows every room as a drawing – its players, its devices and how they are cabled – and which devices each player needs when it starts.
 
-**In this release the panel only shows.** Rooms are still set up in the integration's options (Settings → Devices & services → Better Media Player → **Configure**), and how a room behaves is set on its device. Editing in the panel comes in a later release.
+**In this release the panel only shows.** Rooms are still set up in the integration's options (Settings → Devices & services → Better Media Player → **Configure**), and their settings are changed with the action `better_media_player.set_setting` ([examples](automations.md#settings)). Editing in the panel comes in a later release.
 
 Tested on a local Home Assistant 2026.2 and 2026.10 with the demo integration (simulated devices).
 
@@ -23,7 +23,7 @@ Tested on a local Home Assistant 2026.2 and 2026.10 with the demo integration (s
 - **Cables:** what the room's [cabling](devices.md) describes. Picture is blue, sound orange and dashed; an input to choose is written on the cable (*· CEC* when HDMI-CEC chooses it).
 - **Dotted lines:** a device no cable reaches is fed directly, as in a room without cabling – the display gets the picture, speakers and subwoofer get the sound.
 - **Show route:** pick a player to highlight what it needs when it starts; below the drawing, the order in which the devices come on and the inputs they are switched to. *All* shows every cable.
-- **Details:** click a tile or a cable, and its details open on the right (× closes them; the drawing has the whole width otherwise). A player shows its entity, the plug of its hardware and its own actions; a device its plugs, the devices that switch themselves, its power sensors, who switches it on and off, its inputs and the players it is needed for; a cable what it carries and its input. A click on an entity opens it.
+- **Details:** click a tile or a cable, and its details open on the right (× closes them; the drawing has the whole width otherwise). A player shows its entity, the plug of its hardware (with that plug's run-down and wait) and its own actions; a device its plugs, the devices that switch themselves, its power sensors, who switches it on and off, its inputs, its volume (marked *Room volume* when the room's volume is set there), the players it is needed for and its settings (run-down, wait after on, standby, off at night); a cable what it carries and its input. A click on an entity opens it.
 
 The routes are worked out by the integration, with the same calculation that switches the room.
 
@@ -37,8 +37,8 @@ The routes are worked out by the integration, with the same calculation that swi
 
 ![The room's settings in the panel](images/panel-settings.png)
 
-- **Room:** its area, where its volume is set, its presence sensors for follow me.
-- **Behaviour:** the settings on the room's device (run-downs, night mode, presets, …) with their values. A click opens the setting to change it.
+- **Room:** its area, where its volume is set (on the players, or on which device), its presence sensors for follow me.
+- **Behaviour:** the room's settings (night mode, presets, announcements, follow me, …) with their values; its devices' settings are in their details. All of them: [Reference](reference.md#settings).
 - **General** (left): the follow-me player and the central settings.
 
 On a phone the rooms are a row above the drawing, the details below it.

@@ -53,17 +53,9 @@ from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.storage import Store
 
 from ..const import (
-    CONF_AUDIO_RUN_DOWN,
-    CONF_VOLUME_CONTROL,
-    CONF_VOLUME_ENTITY,
-    DEFAULTS,
     DOMAIN,
-    ENTITY_DEFAULTS,
-    ROLE_AUDIO,
-    ROLE_AUDIO_HOST,
-    ROLE_BASS,
+    PRESETS,
     SOURCE_AUDIO,
-    SOURCE_CONF,
     SOURCE_VIDEO,
     SOURCES,
     STATUS_DISABLED,
@@ -77,8 +69,8 @@ from ..const import (
     STATUS_STOPPING,
     STORAGE_VERSION,
     TICK_SECONDS,
-    VOLUME_DEVICE,
 )
+from ..model import ROOM_SETTINGS, sources_of, volume_entity
 from ..follow import get_hub
 from . import get_rooms
 from .sleep import REASON_ROOM_OFF, SleepTimer
@@ -93,7 +85,7 @@ from .wake import PHASE_STARTING, REASON_ROOM_OFF as WAKE_ROOM_OFF, WakeAlarm
 from .follow import RoomFollow
 from .handover import RoomHandover
 from ..devices.const import NOT_AVAILABLE, POWERED_STATES
-from .power import GROUP_ACTIVE_STATES, OFF_ORDER, RoomPower
+from .power import GROUP_ACTIVE_STATES, RoomPower
 from .sequence import PowerSequence
 from .. import clock
 
@@ -134,20 +126,19 @@ class RoomController:
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.hass = hass
         self.entry = entry
-        self.opts: dict[str, Any] = {**DEFAULTS, **entry.data, **entry.options}
-        o = self.opts
+        self.opts: dict[str, Any] = dict(entry.options)  # the setup (model.py)
 
         self.sources: dict[str, Source] = {}
+        found = sources_of(self.opts)
         for key in SOURCES:
-            player_k, on_k, off_k, host_k = SOURCE_CONF[key]
-            if o.get(player_k):
+            if (s := found.get(key)) is not None:
                 self.sources[key] = Source(
                     key=key,
-                    player=o[player_k],
-                    on_action=o.get(on_k),
-                    off_action=o.get(off_k),
-                    host=o.get(host_k),
-                    backend=backend_for(hass, o[player_k], key),
+                    player=s["player"],
+                    on_action=s.get("on_action"),
+                    off_action=s.get("off_action"),
+                    host=s.get("host"),
+                    backend=backend_for(hass, s["player"], key),
                 )
 
         self.power = RoomPower(self)
@@ -172,7 +163,7 @@ class RoomController:
         self.follow = RoomFollow(self)
 
         # where the room's volume is heard
-        device = o.get(CONF_VOLUME_ENTITY) if o.get(CONF_VOLUME_CONTROL) == VOLUME_DEVICE else None
+        device = volume_entity(self.opts)
         self.volume_device: DeviceOutput | None = DeviceOutput(self, device) if device else None
         self._outputs = {key: PlayerOutput(self, src) for key, src in self.sources.items()}
 
@@ -200,8 +191,8 @@ class RoomController:
             self.data["controls"] = self.data.pop("wake_controls")
         if self.data.get("last_source") not in self.sources:
             self.data["last_source"] = default_source
-        # values set on the device (config entities): first values from the defaults
-        for key, value in ENTITY_DEFAULTS.items():
+        # the room's settings: first values from the defaults
+        for key, value in ROOM_SETTINGS.items():
             self.data.setdefault(key, value)
         if self.data.get("volume_preset") is not None and self.data["volume_preset"] not in self.volume.presets:
             self.data.pop("volume_preset")  # no longer offered (options): it does not come back by itself
@@ -222,10 +213,10 @@ class RoomController:
         if self.volume_device is not None:
             tracked.append(self.volume_device.id)
         tracked += self.power.devices.entities
-        for role in self.power.roles.values():
-            tracked += role.power or []
-            if role.inputs is not None and role.inputs.entity:
-                tracked.append(role.inputs.entity)  # its input: checked and watched for changes by hand
+        for node in self.power.nodes.values():
+            tracked += node.power or []
+            if node.inputs is not None and node.inputs.entity:
+                tracked.append(node.inputs.entity)  # its input: checked and watched for changes by hand
         self._unsubs.append(
             async_track_state_change_event(self.hass, list(dict.fromkeys(tracked)), self._on_state_event)
         )
@@ -405,8 +396,8 @@ class RoomController:
         return bool(int(state.attributes.get(ATTR_SUPPORTED_FEATURES, 0) or 0) & feature)
 
     def setting(self, key: str) -> Any:
-        """A value set on the device (config entity), else its default."""
-        return self.data.get(key, ENTITY_DEFAULTS.get(key))
+        """A setting of the room (set in the panel or with set_setting), else its default."""
+        return self.data.get(key, ROOM_SETTINGS.get(key))
 
     @property
     def room_active(self) -> bool:
@@ -458,7 +449,7 @@ class RoomController:
             src.powered_at is not None
             and not src.suppressed
             and self.player_state(src) in POWERED_STATES
-            and clock.now() - src.powered_at < max(MIN_ON_SECONDS, float(self.setting(CONF_AUDIO_RUN_DOWN)) * 60)
+            and clock.now() - src.powered_at < max(MIN_ON_SECONDS, self.power.sound_run_down())
         )
 
     def source_active_raw(self, src: Source) -> bool:
@@ -560,14 +551,14 @@ class RoomController:
             now = clock.now()
             self.power.devices.settle()
             self._update_sources(now)
-            for role in self.power.roles.values():
-                if self.power.role_demand(role):
-                    role.last_demand = now
-                    role.force_off = False
-                    role.stop_since = None
-                elif role.last_demand is None:
+            for node in self.power.nodes.values():
+                if self.power.needed(node):
+                    node.last_demand = now
+                    node.force_off = False
+                    node.stop_since = None
+                elif node.last_demand is None:
                     # first look (e.g. after a restart): start the run-down now
-                    role.last_demand = now
+                    node.last_demand = now
 
             if self.manual and not any(self.power.devices.is_on(e) for e in self.power.devices.entities):
                 # manual mode ends when everything is off; what is still active
@@ -580,7 +571,7 @@ class RoomController:
             if not self.sequence.running and not self.manual:
                 if self.auto_power and self.power.devices.missing():
                     self.sequence.start(None)
-                await self.power.devices.async_auto_off(now, OFF_ORDER)
+                await self.power.devices.async_auto_off(now, self.power.off_order)
             if not self.manual:
                 # the inputs follow the source in use (chosen outside the lock: an
                 # input's pause must not hold the room up)
@@ -666,23 +657,23 @@ class RoomController:
         if src.powered_at is not None and not self._just_turned_on(src):
             src.powered_at = None
             if not self.source_playing(src):
-                for role in self.power.roles.values():
-                    if SOURCE_AUDIO in role.sources and not self.power.role_demand(role):
-                        role.force_off = True  # its run-down is over
-        # its speakers (the player's own hardware plug goes off after it)
-        audio_roles = [r for r in self.power.roles.values() if SOURCE_AUDIO in r.sources and r.key != ROLE_AUDIO_HOST]
+                for node in self.power.nodes.values():
+                    if SOURCE_AUDIO in node.sources and not self.power.needed(node):
+                        node.force_off = True  # its run-down is over
+        # its devices (the player's own hardware plug goes off after it)
+        audio_nodes = [n for n in self.power.nodes.values() if SOURCE_AUDIO in n.sources and n.device is not None]
         if (
             src.off_sent
             or not self._started
-            or not audio_roles
+            or not audio_nodes
             or not automatic
             or self.player_state(src) not in POWERED_STATES
             or self.source_playing(src)
             or self._just_turned_on(src)
             or src.backend.groups_of(src.player)
             # not yet reported (e.g. after a restart): no "off" to follow
-            or not all(self.power.devices.is_available(e) for r in audio_roles for e in r.entities if self.power.devices.kind(e) == "plug")
-            or any(self.power.devices.node_on(r) or self.power.role_demand(r) for r in audio_roles)
+            or not all(self.power.devices.is_available(e) for n in audio_nodes for e in n.entities if self.power.devices.kind(e) == "plug")
+            or any(self.power.devices.node_on(n) or self.power.needed(n) for n in audio_nodes)
         ):
             return
         _LOGGER.info("%s: %s goes off with its speakers", self.entry.title, src.player)
@@ -696,13 +687,13 @@ class RoomController:
             self.status = STATUS_ERROR
         elif self.manual:
             self.status = STATUS_MANUAL
-        elif any(r.stop_since is not None and self.power.devices.node_on(r) for r in self.power.roles.values()):
+        elif any(n.stop_since is not None and self.power.devices.node_on(n) for n in self.power.nodes.values()):
             self.status = STATUS_STOPPING
         elif not self.auto_power:
             self.status = STATUS_DISABLED
         elif any(self.source_playing(s) and not s.suppressed for s in self.sources.values()):
             self.status = STATUS_PLAYING
-        elif any(self.power.role_demand(r) for r in self.power.roles.values()) or any(
+        elif any(self.power.needed(n) for n in self.power.nodes.values()) or any(
             self.source_active(s) for s in self.sources.values()
         ):
             self.status = STATUS_ON
@@ -817,10 +808,10 @@ class RoomController:
         self.source_watch.note_request(key)
         src = self.sources[key]
         src.suppressed = False
-        for role in self.power.roles.values():
-            if key in role.sources:
-                role.force_off = False
-                role.stop_since = None
+        for node in self.power.nodes.values():
+            if key in node.sources:
+                node.force_off = False
+                node.stop_since = None
         if self.data.get("last_source") != key:
             self.data["last_source"] = key
             self._save()
@@ -840,9 +831,9 @@ class RoomController:
             not src.suppressed
             and self.source_ready(src)
             and all(
-                self.power.devices.node_fully_on(r)
-                for r in self.power.roles.values()
-                if key in r.sources and self.night.role_enabled(r.key)
+                self.power.devices.node_fully_on(n)
+                for n in self.power.nodes.values()
+                if key in n.sources and self.night.enabled(n)
             )
         )
 
@@ -946,16 +937,16 @@ class RoomController:
         for src in self.sources.values():
             if self.source_active_raw(src) or src.backend.groups_of(src.player):
                 src.suppressed = True
-        for role in self.power.roles.values():
-            if self.power.devices.node_on(role):
-                role.force_off = True
+        for node in self.power.nodes.values():
+            if self.power.devices.node_on(node):
+                node.force_off = True
         for src in self.sources.values():
             await self._source_off(src)
         # after the stop: a fade's volume comes back only once the player is quiet
         await self.sleep.async_cancel(REASON_ROOM_OFF)
-        for role in self.power.roles.values():
-            if self.power.devices.node_on(role):
-                role.force_off = True
+        for node in self.power.nodes.values():
+            if self.power.devices.node_on(node):
+                node.force_off = True
         self.sequence.cancel()
         await self.async_update("turn_off")
 
@@ -968,10 +959,9 @@ class RoomController:
             hub = get_hub(self.hass)
             if hub is not None:
                 await hub.async_update("quiet")
-            for key in (ROLE_BASS, ROLE_AUDIO):
-                role = self.power.roles.get(key)
-                if role is not None and self.power.devices.node_on(role):
-                    role.force_off = True  # honoured once nothing else needs the speakers
+            for node in self.power.sound_nodes():
+                if self.power.devices.node_on(node):
+                    node.force_off = True  # honoured once nothing else needs the speakers
         elif (hub := get_hub(self.hass)) is not None:
             hub.async_schedule("quiet")
         await self.async_update("quiet")
@@ -986,12 +976,27 @@ class RoomController:
         self._save()
         await self.async_update("auto_power")
 
-    async def async_set_number(self, key: str, value: float) -> None:
-        await self.async_set_setting(key, float(value))
-
     async def async_set_setting(self, key: str, value: Any) -> None:
-        """A value set on the device (config entity)."""
+        """A setting of the room (checked by the caller)."""
         self.data[key] = value
+        self._save()
+        await self.async_update(key)
+        if key == "night_max_volume":
+            await self.night.async_limit_changed()
+        elif key.startswith("preset_") and (name := key.removeprefix("preset_")) in PRESETS:
+            await self.volume.async_preset_changed(name)
+
+    async def async_set_device_setting(self, device_id: str, key: str, value: Any) -> None:
+        """A setting of one of the room's devices (checked by the caller)."""
+        self.data.setdefault("devices", {}).setdefault(device_id, {})[key] = value
+        self._save()
+        if key == "night_off":
+            self.night.async_cut_disabled()  # set off at night during the night: off now, as with night mode
+        await self.async_update(key)
+
+    async def async_set_source_setting(self, source: str, key: str, value: Any) -> None:
+        """A setting of a player for the plug of its hardware (checked by the caller)."""
+        self.data.setdefault("sources", {}).setdefault(source, {})[key] = value
         self._save()
         await self.async_update(key)
 

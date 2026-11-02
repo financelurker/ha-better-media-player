@@ -48,6 +48,7 @@ from .const import (
     VOLUME_ENTITY_DOMAINS,
     VOLUME_PLAYERS,
 )
+from .model import merge_v3, options_v3
 from .flow_cabling import CablingSteps, prune, validate_connections
 from .players import is_group, suggested_role
 from .players.music_assistant import MusicAssistant
@@ -303,7 +304,7 @@ def _area_suggestions(hass: HomeAssistant, area_id: str | None) -> dict[str, str
 
 
 class BetterMediaPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
-    VERSION = 3
+    VERSION = 4
 
     def __init__(self) -> None:
         self._options: dict[str, Any] = {}
@@ -372,7 +373,7 @@ class BetterMediaPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
     async def _finish(self, _user_input=None) -> ConfigFlowResult:
-        options = {**DEFAULTS, **self._options}
+        options = merge_v3({}, {**DEFAULTS, **self._options})  # (a new room: nothing taken over)
         return self.async_create_entry(
             title=self._title, data={CONF_ENTRY_TYPE: ENTRY_TYPE_ROOM}, options=options
         )
@@ -386,7 +387,10 @@ class BetterMediaPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class BetterMediaPlayerOptionsFlow(CablingSteps, OptionsFlow):
-    """Menu: each section on its own (and the cabling), then save."""
+    """Menu: each section on its own (and the cabling), then save.
+
+    The steps show the room as roles (display, speakers, subwoofer) and save it
+    as devices (model.py); editing the devices themselves comes with the panel."""
 
     def __init__(self) -> None:
         self._options: dict[str, Any] | None = None
@@ -394,7 +398,7 @@ class BetterMediaPlayerOptionsFlow(CablingSteps, OptionsFlow):
     @property
     def options(self) -> dict[str, Any]:
         if self._options is None:
-            self._options = {**DEFAULTS, **self.config_entry.options}
+            self._options = {**DEFAULTS, **options_v3(self.config_entry.options)}
         return self._options
 
     async def async_step_init(self, user_input=None) -> ConfigFlowResult:
@@ -406,7 +410,7 @@ class BetterMediaPlayerOptionsFlow(CablingSteps, OptionsFlow):
             return self.async_abort(reason="invalid_config")
         if validate_connections(self.hass, self.options):
             return self.async_abort(reason="invalid_cabling")
-        return self.async_create_entry(data=self.options)
+        return self.async_create_entry(data=merge_v3(self.config_entry.options, self.options))
 
     async def _section(self, step_id: str, user_input) -> ConfigFlowResult:
         schema = schema_step(step_id)

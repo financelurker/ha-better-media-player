@@ -42,7 +42,7 @@ It is a custom integration in the spirit of Better Thermostat: you tell it what 
 
 A page of its own in Home Assistant's sidebar shows every room as a drawing: its players, its devices, how they are cabled, and what each player needs when it starts. In this release it only shows; rooms are still set up in the integration's options. [More about the panel](https://github.com/financelurker/ha-better-media-player/blob/main/docs/designer.md).
 
-![The panel: a room's devices and cables, the film's route highlighted](https://raw.githubusercontent.com/financelurker/ha-better-media-player/main/docs/images/panel.png?v=31aa9dcb12)
+![The panel: a room's devices and cables, the film's route highlighted](https://raw.githubusercontent.com/financelurker/ha-better-media-player/main/docs/images/panel.png?v=2bd3baa7b8)
 
 ## Is it for you?
 
@@ -89,14 +89,14 @@ Without the button: HACS → ⋮ → **Custom repositories** → add `https://gi
 
 1. Read [Before you start](https://github.com/financelurker/ha-better-media-player/blob/main/docs/setup.md): every plug and device belongs to exactly one controller.
 2. Settings → Devices & services → Add integration → **Better Media Player** → **A room**, once per room: its media players, its devices and where its volume is set.
-3. Use the room player `media_player.<room>` like any media player: press play and the room powers up. How the room behaves (times, night mode, presets, …) is set on its device; the defaults are a good start.
+3. Use the room player `media_player.<room>` like any media player: press play and the room powers up. How the room behaves (times, night mode, presets, …) are its settings, shown in the panel and set with the action `better_media_player.set_setting`; the defaults are a good start.
 4. For follow me, or to change the dynamic controls, add **Central settings** once as well.
 
 ## Documentation
 
 | Page | Content |
 |---|---|
-| [Setup](https://github.com/financelurker/ha-better-media-player/blob/main/docs/setup.md) | what the setup asks, examples, the settings on the room's device |
+| [Setup](https://github.com/financelurker/ha-better-media-player/blob/main/docs/setup.md) | what the setup asks, examples, the room's device and its settings |
 | [How the room behaves](https://github.com/financelurker/ha-better-media-player/blob/main/docs/room.md) | power button and sources, order, run-downs, devices instead of plugs, standby, switched by hand |
 | [Cabling and inputs](https://github.com/financelurker/ha-better-media-player/blob/main/docs/devices.md) | connections, inputs, CEC, supported setups |
 | [The panel](https://github.com/financelurker/ha-better-media-player/blob/main/docs/designer.md) | the rooms as drawings: devices, cables, routes, settings |

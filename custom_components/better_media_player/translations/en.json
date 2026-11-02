@@ -435,110 +435,11 @@
       },
       "night_mode": {
         "name": "Night mode"
-      },
-      "display_standby": {
-        "name": "Display: wait for standby"
-      },
-      "audio_standby": {
-        "name": "Speakers: wait for standby"
-      },
-      "prewarm": {
-        "name": "Follow me: prewarm speakers"
-      },
-      "wake_detect_left": {
-        "name": "Wake: detect leaving the room"
-      },
-      "dynamic_controls": {
-        "name": "Dynamic controls"
       }
     },
     "number": {
-      "display_run_down": {
-        "name": "Display run-down"
-      },
-      "audio_run_down": {
-        "name": "Speaker run-down"
-      },
-      "host_run_down": {
-        "name": "Player hardware run-down"
-      },
-      "video_idle_timeout": {
-        "name": "Video idle timeout"
-      },
       "sleep_timer": {
         "name": "Sleep timer"
-      },
-      "night_video_idle_timeout": {
-        "name": "Night: video idle timeout"
-      },
-      "night_display_run_down": {
-        "name": "Night: display run-down"
-      },
-      "night_max_volume": {
-        "name": "Night: maximum volume"
-      },
-      "preset_quiet": {
-        "name": "Preset: Quiet"
-      },
-      "preset_normal": {
-        "name": "Preset: Normal"
-      },
-      "preset_loud": {
-        "name": "Preset: Loud"
-      },
-      "preset_party": {
-        "name": "Preset: Party"
-      },
-      "start_timeout": {
-        "name": "Start timeout"
-      },
-      "display_on_wait": {
-        "name": "Wait after display on"
-      },
-      "audio_on_wait": {
-        "name": "Wait after speakers on"
-      },
-      "host_on_wait": {
-        "name": "Wait after player plug on"
-      },
-      "display_standby_w": {
-        "name": "Display standby below"
-      },
-      "display_standby_max": {
-        "name": "Display: wait for standby at most"
-      },
-      "audio_standby_w": {
-        "name": "Speakers standby below"
-      },
-      "audio_standby_max": {
-        "name": "Speakers: wait for standby at most"
-      },
-      "preset_fade": {
-        "name": "Preset fade"
-      },
-      "sleep_fade": {
-        "name": "Sleep timer fade-out"
-      },
-      "snooze_minutes": {
-        "name": "Snooze time"
-      },
-      "night_fade_in": {
-        "name": "Night: fade back up"
-      },
-      "presence_run_down": {
-        "name": "Follow me: leave after"
-      },
-      "volume_offset": {
-        "name": "Follow me: volume offset"
-      },
-      "default_volume": {
-        "name": "Follow me: default volume"
-      },
-      "hide_delay": {
-        "name": "Hide delay"
-      },
-      "announce_video_lower": {
-        "name": "Announcement: lower film by"
       }
     },
     "button": {
@@ -572,26 +473,8 @@
           "manual": "Manual"
         }
       },
-      "power_on_preset": {
-        "name": "Power-on preset",
-        "state": {
-          "none": "None",
-          "quiet": "Quiet",
-          "normal": "Normal",
-          "loud": "Loud",
-          "party": "Party"
-        }
-      },
       "handover": {
         "name": "Hand over to"
-      },
-      "announce_video": {
-        "name": "Announcement during video",
-        "state": {
-          "pause": "Pause the film",
-          "overlay": "Overlay",
-          "lower": "Turn the film down"
-        }
       }
     }
   },
@@ -747,6 +630,42 @@
           "description": "A chime before the announcement (default: the player's setting)."
         }
       }
+    },
+    "set_setting": {
+      "name": "Set a setting",
+      "description": "Changes a setting of a room, of one of its devices, or a central one. It takes effect at once and is kept.",
+      "fields": {
+        "entity_id": {
+          "name": "Room",
+          "description": "The room's player. Leave empty for a central setting."
+        },
+        "device": {
+          "name": "Device",
+          "description": "A device of the room (its id, e.g. display, or its name), for a device's setting."
+        },
+        "setting": {
+          "name": "Setting",
+          "description": "The setting's key, e.g. night_max_volume, run_down, default_volume. The list is in the documentation (Reference)."
+        },
+        "value": {
+          "name": "Value",
+          "description": "A number, true / false, or one of the setting's choices."
+        }
+      }
+    },
+    "get_settings": {
+      "name": "Get the settings",
+      "description": "Returns the settings of a room and its devices, or the central ones (as the action's response).",
+      "fields": {
+        "entity_id": {
+          "name": "Room",
+          "description": "The room's player. Leave empty for the central settings."
+        },
+        "device": {
+          "name": "Device",
+          "description": "Only this device of the room (its id or name)."
+        }
+      }
     }
   },
   "selector": {
@@ -887,6 +806,27 @@
     },
     "announce_no_room": {
       "message": "No room player of Better Media Player among the targets."
+    },
+    "settings_not_a_room": {
+      "message": "{entity} is not a room of Better Media Player."
+    },
+    "settings_no_device": {
+      "message": "The room {room} has no device {device} (its devices: {devices})."
+    },
+    "settings_unknown": {
+      "message": "There is no setting {setting} here (known: {known})."
+    },
+    "settings_needs_device": {
+      "message": "{setting} is a device's setting: give the device as well."
+    },
+    "settings_bad_value": {
+      "message": "{setting} takes: {expected}."
+    },
+    "settings_no_central": {
+      "message": "The central entry of Better Media Player is not set up."
+    },
+    "settings_needs_room": {
+      "message": "A device ({device}) belongs to a room: give the room's player as well."
     }
   },
   "device_automation": {
@@ -927,6 +867,10 @@
     "follow_player_disabled": {
       "title": "Follow me: follow-me player disabled",
       "description": "The follow-me player `{entity}` is disabled. Enable it again, or choose another under **Configure** of the central settings (Settings → Devices & services → Better Media Player)."
+    },
+    "removed_entities": {
+      "title": "{room}: settings now set by an action",
+      "description": "Since this version a room's settings are no longer entities; they are set in the panel or with the action `better_media_player.set_setting` (read with `better_media_player.get_settings`). These removed entities are still used:\n\n{entities}\n\nChange those automations and scripts to the action (see the documentation, Automations). This note goes away once nothing uses them any more."
     }
   }
 }

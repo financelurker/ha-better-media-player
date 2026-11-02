@@ -1,25 +1,15 @@
-"""Volume preset, power-on preset, handover and announcements of a room."""
+"""Volume preset and handover of a room."""
 
 from __future__ import annotations
 
 from homeassistant.components.select import SelectEntity
-from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import BetterMediaPlayerConfigEntry
-from .const import (
-    ANNOUNCE_VIDEO_MODES,
-    CONF_ANNOUNCE_VIDEO,
-    CONF_POWER_ON_PRESET,
-    PRESET_MANUAL,
-    PRESET_NONE,
-    PRESETS,
-    SOURCE_AUDIO,
-    SOURCE_VIDEO,
-)
+from .const import PRESET_MANUAL
 from .room.controller import RoomController
-from .entity import BetterMediaPlayerEntity, ControlEntity, prune_entities
+from .entity import ControlEntity, prune_entities
 from .room import get_rooms
 
 
@@ -29,45 +19,13 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     ctrl = entry.runtime_data
-    # always there: the presets can be offered later (number entities)
+    # always there: the presets can be offered later (settings)
     entities: list[SelectEntity] = [
         VolumePresetSelect(entry, ctrl, "volume_preset"),
-        PowerOnPresetSelect(entry, ctrl, CONF_POWER_ON_PRESET),
         HandoverSelect(entry, ctrl, "handover"),
     ]
-    if SOURCE_VIDEO in ctrl.sources and SOURCE_AUDIO in ctrl.sources:
-        entities.append(AnnounceVideoSelect(entry, ctrl, CONF_ANNOUNCE_VIDEO))
     prune_entities(hass, entry, "select", entities)
     async_add_entities(entities)
-
-
-class AnnounceVideoSelect(BetterMediaPlayerEntity, SelectEntity):
-    """A film while the music player announces: paused, overlaid or turned down."""
-
-    _attr_entity_category = EntityCategory.CONFIG
-    _attr_options = ANNOUNCE_VIDEO_MODES
-
-    @property
-    def current_option(self) -> str:
-        return self.ctrl.setting(CONF_ANNOUNCE_VIDEO)
-
-    async def async_select_option(self, option: str) -> None:
-        await self.ctrl.async_set_setting(CONF_ANNOUNCE_VIDEO, option)
-
-
-class PowerOnPresetSelect(BetterMediaPlayerEntity, SelectEntity):
-    """The room's volume whenever it comes on (none: as it was)."""
-
-    _attr_entity_category = EntityCategory.CONFIG
-    _attr_options = [PRESET_NONE, *PRESETS]
-
-    @property
-    def current_option(self) -> str:
-        value = self.ctrl.setting(CONF_POWER_ON_PRESET)
-        return value if value in self._attr_options else PRESET_NONE
-
-    async def async_select_option(self, option: str) -> None:
-        await self.ctrl.async_set_setting(CONF_POWER_ON_PRESET, option)
 
 
 class VolumePresetSelect(ControlEntity, SelectEntity):

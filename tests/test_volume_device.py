@@ -15,7 +15,7 @@ from custom_components.better_media_player.const import (
 )
 
 from .conftest import AMP, AVR, FOLLOW, KITCHEN, KITCHEN_OCC, KODI, LIVING_OCC, MUSIC, SPEAKERS, setup_room
-from .helpers import NIGHT, ROOM, room_volume, set_night, settle, tick, vol
+from .helpers import NIGHT, ROOM, change_room, room_volume, set_night, settle, tick, vol
 
 
 def _sets(home, entity_id):
@@ -357,10 +357,7 @@ async def _set_room(hass, volume):
 
 
 async def _to_device_mode(hass, entry):
-    hass.config_entries.async_update_entry(
-        entry, options={**entry.options, CONF_VOLUME_CONTROL: VOLUME_DEVICE, CONF_VOLUME_ENTITY: AVR}
-    )
-    await hass.async_block_till_done()
+    await change_room(hass, entry, **{CONF_VOLUME_CONTROL: VOLUME_DEVICE, CONF_VOLUME_ENTITY: AVR})
 
 
 # ----------------------------------------------- follow me with a volume device

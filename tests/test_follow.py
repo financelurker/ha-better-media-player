@@ -36,7 +36,7 @@ from .conftest import (
     setup_hub,
     setup_room,
 )
-from .helpers import KROOM, ROOM, follow_from, quiet_leaves_and_cuts_speakers, tick
+from .helpers import KROOM, ROOM, follow_from, get_settings, quiet_leaves_and_cuts_speakers, roles, tick
 
 START = "button.living_room_follow_me"
 FOLLOW_STOP = "button.living_room_stop_follow_me"
@@ -420,9 +420,9 @@ async def test_old_central_entry_is_migrated(hass, home):
     reg.async_get_or_create("button", DOMAIN, f"{entry.entry_id}_start_follow", config_entry=entry)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
-    assert entry.version == 3
+    assert entry.version == 4
     assert dict(entry.options) == {CONF_FOLLOW_PLAYER: FOLLOW}
-    assert float(hass.states.get("number.better_media_player_follow_me_default_volume").state) == 30
+    assert (await get_settings(hass, entity_id=None))["settings"]["default_volume"] == 30
     assert reg.async_get_entity_id("button", DOMAIN, f"{entry.entry_id}_start_follow") is None
 
 
@@ -432,7 +432,7 @@ async def test_room_follow_options(hass, home):
     result = await hass.config_entries.options.async_configure(result["flow_id"], {"next_step_id": "devices"})
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {"display": entry.options["display"], "speakers": entry.options["speakers"], "bass": entry.options["bass"],
+        {"display": roles(entry)["display"], "speakers": roles(entry)["speakers"], "bass": roles(entry)["bass"],
          "actions": {}, "standby": {}, "follow": {CONF_OCCUPANCY: [LIVING_OCC]}},
     )
     result = await hass.config_entries.options.async_configure(result["flow_id"], {"next_step_id": "save"})

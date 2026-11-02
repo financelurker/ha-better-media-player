@@ -15,6 +15,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.setup import async_setup_component
 
 from custom_components.better_media_player.const import (
+    CENTRAL_SETTINGS,
     CONF_CONNECTIONS,
     CONF_DISPLAY,
     CONF_ENTRY_TYPE,
@@ -22,10 +23,12 @@ from custom_components.better_media_player.const import (
     DOMAIN,
     ENTRY_TYPE_ROOM,
 )
+from custom_components.better_media_player.model import DEVICE_SETTINGS, ROOM_SETTINGS, SPECS, options_v4
 from custom_components.better_media_player.panel import PANEL_URL, async_setup_panel
 from custom_components.better_media_player.panel.view import routes_of
 
 from .conftest import AVR, BASS, KODI, LG, MUSIC, SPEAKERS, TV, TV_POWER, room_options, setup_hub, setup_kitchen, setup_room
+from .helpers import set_setting
 
 CEC_ROOM = {
     CONF_DISPLAY: [LG],
@@ -75,19 +78,24 @@ async def test_a_room_from_today_s_options(hass, home, hass_ws_client):
         "devices": ["display", "speakers", "subwoofer"],
         "cables": [],
         "direct": ["display", "speakers", "subwoofer"],
+        "order": ["display", "speakers", "subwoofer"],
+        "picture": ["display"],
         "inputs": {},
     }
     assert room["routes"]["audio"]["devices"] == ["speakers", "subwoofer"]
     assert room["volume"] == {"where": "players"} and room["layout"] == {}
 
 
-async def test_the_room_s_settings_are_its_configuration_entities(hass, home, hass_ws_client):
+async def test_the_room_s_and_its_devices_settings(hass, home, hass_ws_client):
     await setup_room(hass)
+    await set_setting(hass, "night_max_volume", 25)
+    await set_setting(hass, "run_down", 15, device="display")
     (room,) = (await _get(hass_ws_client))["rooms"]
-    settings = {s["key"]: s for s in room["settings"]}
-    assert settings["display_run_down"]["state"] == "10.0" and settings["display_run_down"]["unit"] == "min"
-    assert all(s["entity_id"].split(".")[0] in ("number", "select", "switch") for s in room["settings"])
-    assert "sleep_timer" not in settings  # an everyday control, not a setting
+    assert room["settings"] == {**ROOM_SETTINGS, "night_max_volume": 25}
+    devices = {d["id"]: d for d in room["devices"]}
+    assert devices["display"]["settings"]["run_down"] == 15
+    assert devices["speakers"]["settings"]["run_down"] == 2
+    assert set(devices["subwoofer"]["settings"]) == set(DEVICE_SETTINGS)
 
 
 async def test_cabled_room_routes_inputs_and_cec(hass, home, hass_ws_client):
@@ -107,7 +115,9 @@ async def test_cabled_room_routes_inputs_and_cec(hass, home, hass_ws_client):
     video, audio = room["routes"]["video"], room["routes"]["audio"]
     assert video["devices"] == ["display", "speakers"] and video["cables"] == [0, 1] and video["direct"] == []
     assert video["inputs"] == {"display": {"input": "HDMI 2", "mode": "cec"}, "speakers": {"input": "TV/ARC", "mode": "cec"}}
-    assert audio == {"devices": ["speakers"], "cables": [2], "direct": [], "inputs": {"speakers": {"input": "NET", "mode": "bmp"}}}
+    assert video["order"] == ["display", "speakers"] and video["picture"] == ["display"]
+    assert audio == {"devices": ["speakers"], "cables": [2], "direct": [], "order": ["speakers"], "picture": [],
+                     "inputs": {"speakers": {"input": "NET", "mode": "bmp"}}}
 
 
 async def test_central_entry_and_rooms_by_name(hass, home, hass_ws_client):
@@ -116,7 +126,7 @@ async def test_central_entry_and_rooms_by_name(hass, home, hass_ws_client):
     await setup_kitchen(hass)
     result = await _get(hass_ws_client)
     assert result["central"]["follow_player"] == "media_player.all_players_follow"
-    assert {s["key"] for s in result["central"]["settings"]} >= {"default_volume", "hide_delay"}
+    assert result["central"]["settings"] == CENTRAL_SETTINGS
     assert [r["name"] for r in result["rooms"]] == ["Kitchen", "Living Room"]
 
 
@@ -144,6 +154,7 @@ def test_route_of_a_draft_with_passive_devices():
     assert routes["video"]["devices"] == ["mix", "spk", "split", "sub", "tv"]
     assert routes["video"]["cables"] == [0, 1, 3, 4, 5] and routes["video"]["direct"] == []
     assert routes["audio"]["devices"] == ["mix", "spk", "split", "sub"]  # the TV stays off
+    assert routes["video"]["order"] == ["tv", "spk", "sub"], "the picture first; mixer and splitter are not switched"
     assert routes["audio"]["cables"] == [2, 3, 4, 5]
 
 
@@ -160,7 +171,7 @@ async def test_route_command(hass, hass_ws_client):
     )
     msg = await client.receive_json()
     assert msg["success"]
-    assert msg["result"]["routes"]["audio"] == {"devices": ["spk"], "cables": [], "direct": ["spk"], "inputs": {}}
+    assert msg["result"]["routes"]["audio"] == {"devices": ["spk"], "cables": [], "direct": ["spk"], "order": ["spk"], "picture": [], "inputs": {}}
 
 
 async def test_layout_is_kept_in_the_room(hass, home, hass_ws_client, hass_storage):
@@ -235,7 +246,8 @@ def test_panel_texts_exist_in_every_language():
     de = json.loads((front / "i18n" / "de.json").read_text())
     assert set(de) == set(en)
     code = (front / "bmp-panel.js").read_text()
-    used = set(re.findall(r'\bt\("([a-z_.]+)"', code))
+    used = set(re.findall(r'\bt\(\s*"([a-z_.]+)"', code))
+    used |= {k for pair in re.findall(r'"(value\.\w+)"\s*:\s*"(value\.\w+)"', code) for k in pair}  # t(on ? a : b)
     used |= {f"count.{w}{s}" for w in re.findall(r'_count\("(\w+)"', code) for s in ("", "_one")}
     # built keys: kinds, sources, signals and modes by their values
     for prefix, values in {
@@ -244,18 +256,13 @@ def test_panel_texts_exist_in_every_language():
         "legend": ("picture", "sound"),
         "mode": ("bmp", "cec", "never"),
         "tab": ("wiring", "settings"),
+        "setting": (*ROOM_SETTINGS, *DEVICE_SETTINGS, *CENTRAL_SETTINGS),
+        "choice": tuple(x for spec in SPECS.values() if isinstance(spec, list) for x in spec),
     }.items():
         used |= {f"{prefix}.{v}" for v in values}
     assert used - set(en) == set()
     for key, text in en.items():  # same placeholders in both languages
         assert set(re.findall(r"\{(\w+)\}", text)) == set(re.findall(r"\{(\w+)\}", de[key])), key
-
-
-async def test_settings_named_without_the_room(hass, home, hass_ws_client):
-    await setup_room(hass)
-    (room,) = (await _get(hass_ws_client))["rooms"]
-    names = {s["key"]: s["name"] for s in room["settings"]}
-    assert names["display_run_down"] == "Display run-down"  # not "Living Room Display run-down"
 
 
 async def test_area_of_the_room_s_device_else_the_one_chosen(hass, home, hass_ws_client):
@@ -270,9 +277,10 @@ async def test_area_of_the_room_s_device_else_the_one_chosen(hass, home, hass_ws
 
 async def test_a_room_not_loaded_is_shown_from_its_options(hass, home, hass_ws_client):
     assert await async_setup_component(hass, DOMAIN, {})
-    MockConfigEntry(domain=DOMAIN, title="Attic", data={CONF_ENTRY_TYPE: ENTRY_TYPE_ROOM}, options=room_options(), version=3).add_to_hass(hass)
+    MockConfigEntry(domain=DOMAIN, title="Attic", data={CONF_ENTRY_TYPE: ENTRY_TYPE_ROOM}, options=options_v4(room_options()), version=4).add_to_hass(hass)
     (room,) = (await _get(hass_ws_client))["rooms"]
     assert room["loaded"] is False and room["layout"] == {}
+    assert room["settings"] is None and room["devices"][0]["settings"] is None
     assert [d["id"] for d in room["devices"]] == ["display", "speakers", "subwoofer"]
 
 
@@ -293,7 +301,7 @@ async def test_cables_to_a_device_the_room_no_longer_has(hass, home, hass_ws_cli
 @pytest.mark.parametrize(
     ("options", "expected"),
     [
-        ({"volume_control": "device", "volume_entity": AVR}, {"where": "device", "entity": AVR}),
+        ({"volume_control": "device", "volume_entity": AVR}, {"where": "device", "device": "speakers"}),
         ({"volume_control": "players", "volume_entity": AVR}, {"where": "players"}),  # an entity left over
     ],
 )
