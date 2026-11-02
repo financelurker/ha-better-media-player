@@ -7,6 +7,9 @@ from datetime import datetime
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
+from homeassistant.util import dt as dt_util
+from homeassistant.util import slugify
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import BetterMediaPlayerConfigEntry, is_hub
@@ -31,7 +34,43 @@ async def async_setup_entry(
     ]
     if ctrl.follow.capable:
         entities.append(FollowStateSensor(entry, ctrl, "follow_state"))
-    async_add_entities(entities)
+    off_at = [OffAtSensor(entry, ctrl, key) for key in ctrl.power.nodes]
+    # a device removed from the room takes its sensor along
+    keep = {e.unique_id for e in off_at}
+    reg = er.async_get(hass)
+    for item in er.async_entries_for_config_entry(reg, entry.entry_id):
+        if item.domain == "sensor" and item.unique_id.endswith(OFF_AT) and item.unique_id not in keep:
+            reg.async_remove(item.entity_id)
+    async_add_entities(entities + off_at)
+
+
+OFF_AT = "_off_at"
+
+
+class OffAtSensor(BetterMediaPlayerEntity, SensorEntity):
+    """When a device (or a player's hardware plug) goes off after its run-down;
+    unknown while none is planned (needed, off, kept on, automatic off)."""
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    def __init__(self, entry, ctrl, key: str) -> None:
+        super().__init__(entry, ctrl, f"{key}{OFF_AT}")
+        self._key = key
+        node = ctrl.power.nodes[key]
+        if node.device is None:
+            self._attr_translation_key = f"{node.sources[0]}_host_off_at"
+        elif node.device.get("name"):
+            self._attr_translation_key = "device_off_at"
+            self._attr_translation_placeholders = {"device": node.device["name"]}
+        else:
+            self._attr_translation_key = f"{node.device['kind']}_off_at"
+        # the entity id from the device's id (it stays when the device is renamed)
+        self.entity_id = f"sensor.{slugify(entry.title)}_{key}{OFF_AT}"
+
+    @property
+    def native_value(self) -> datetime | None:
+        at = self.ctrl.run_down_at.get(self._key)
+        return dt_util.utc_from_timestamp(at) if at is not None else None
 
 
 class StatusSensor(BetterMediaPlayerEntity, SensorEntity):

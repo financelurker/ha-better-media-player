@@ -1,4 +1,4 @@
-"""Auto-power, quiet and night mode switches."""
+"""Auto-power, keep on, quiet and night mode switches."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     ctrl = entry.runtime_data
-    entities: list[SwitchEntity] = [AutoPowerSwitch(entry, ctrl, "auto_power")]
+    entities: list[SwitchEntity] = [AutoPowerSwitch(entry, ctrl, "auto_power"), KeepOnSwitch(entry, ctrl, "keep_on")]
     if ctrl.audio_player is not None:
         entities.append(QuietSwitch(entry, ctrl, "quiet"))
     entities.append(NightModeSwitch(entry, ctrl, "night_mode"))
@@ -41,6 +41,28 @@ class AutoPowerSwitch(BetterMediaPlayerEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self.ctrl.async_set_auto_power(False)
+
+
+class KeepOnSwitch(ControlEntity, SwitchEntity):
+    """On: nothing is switched off automatically (run-down, night, idle player);
+    what is on stays on. Starting still switches on. Stays on until turned off
+    or All off (also over a restart).
+
+    Always shown: it is set ahead too (before the room stops)."""
+
+    @property
+    def usable(self) -> bool:
+        return True
+
+    @property
+    def is_on(self) -> bool:
+        return self.ctrl.keep_on
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self.ctrl.async_set_keep_on(True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self.ctrl.async_set_keep_on(False)
 
 
 class QuietSwitch(ControlEntity, SwitchEntity):

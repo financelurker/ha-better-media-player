@@ -145,7 +145,10 @@ async def test_device_triggers(hass, home, freezer):
     device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, entry.entry_id)})
     triggers = await async_get_device_automations(hass, DeviceAutomationType.TRIGGER, [device.id])
     types = sorted(t["type"] for t in triggers[device.id] if t["domain"] == DOMAIN)
-    assert types == ["night_mode_off", "night_mode_on", "source_audio", "source_changed", "source_off", "source_video"]
+    assert types == [
+        "night_mode_off", "night_mode_on", "run_down_cancelled", "run_down_off", "run_down_started",
+        "source_audio", "source_changed", "source_off", "source_video",
+    ]
     types = [t for t in types if t.startswith("source")]  # (the night mode's: test_night.py)
 
     hits: list[str] = []
@@ -257,7 +260,8 @@ async def test_device_triggers_of_a_room_that_is_not_loaded(hass, home, freezer)
     await hass.async_block_till_done()
     triggers = await async_get_device_automations(hass, DeviceAutomationType.TRIGGER, [device.id])
     assert {t["type"] for t in triggers[device.id] if t["domain"] == DOMAIN} == {
-        "source_changed", "source_video", "source_audio", "source_off", "night_mode_on", "night_mode_off"
+        "source_changed", "source_video", "source_audio", "source_off", "night_mode_on", "night_mode_off",
+        "run_down_started", "run_down_cancelled", "run_down_off",
     }
 
 

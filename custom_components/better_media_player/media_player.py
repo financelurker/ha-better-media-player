@@ -375,7 +375,7 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
         await self.ctrl.async_turn_on()
 
     async def async_turn_off(self) -> None:
-        await self.ctrl.async_turn_off()
+        await self.ctrl.async_turn_off(all_off=True)
 
     async def async_select_source(self, source: str) -> None:
         for key in self.ctrl.sources:

@@ -1,5 +1,5 @@
-"""Device triggers of a room: its source changes (see room/source_event.py) and its
-night mode (see room/night.py)."""
+"""Device triggers of a room: its source changes (see room/source_event.py), its
+night mode (see room/night.py) and its devices' run-down (see room/controller.py)."""
 
 from __future__ import annotations
 
@@ -20,6 +20,7 @@ from .const import (
     DOMAIN,
     ENTRY_TYPE_HUB,
     EVENT_NIGHT_MODE,
+    EVENT_RUN_DOWN,
     EVENT_SOURCE_CHANGED,
     SOURCE_AUDIO,
     SOURCE_VIDEO,
@@ -34,6 +35,9 @@ TRIGGERS: dict[str, tuple[str, dict[str, Any]]] = {
     "source_off": (EVENT_SOURCE_CHANGED, {"reason": "off"}),
     "night_mode_on": (EVENT_NIGHT_MODE, {"night_mode": True}),
     "night_mode_off": (EVENT_NIGHT_MODE, {"night_mode": False}),
+    "run_down_started": (EVENT_RUN_DOWN, {"type": "started"}),
+    "run_down_cancelled": (EVENT_RUN_DOWN, {"type": "cancelled"}),
+    "run_down_off": (EVENT_RUN_DOWN, {"type": "off"}),
 }
 
 TRIGGER_SCHEMA = DEVICE_TRIGGER_BASE_SCHEMA.extend({vol.Required(CONF_TYPE): vol.In(TRIGGERS)})
