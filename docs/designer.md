@@ -19,7 +19,7 @@ Tested on a local Home Assistant 2026.2 and 2026.10 with the demo integration (s
 
 ## A room's drawing
 
-- **Tiles:** the room's players on the left, its devices to the right of what feeds them: display, speakers, subwoofer. A device with its own CEC switching carries a *CEC* mark. Each tile shows the plug or device that powers it.
+- **Tiles:** the room's players on the left, its devices to the right of what feeds them: display, speakers, subwoofer. A device with its own CEC switching carries a *CEC* mark. Each tile shows the plug or device that powers it. Cables come in on a tile's left dot and go out on its right one; speakers, a subwoofer or an amp have a right dot only when a cable goes on from them (a subwoofer on the speakers' sub out, say).
 - **Cables:** what the room's [cabling](devices.md) describes. Picture is blue, sound orange and dashed; an input to choose is written on the cable (*· CEC* when HDMI-CEC chooses it).
 - **Dotted lines:** a device no cable reaches is fed directly, as in a room without cabling – the display gets the picture, speakers and subwoofer get the sound.
 - **Show route:** pick a player to highlight what it needs when it starts; below the drawing, the order in which the devices come on and the inputs they are switched to. *All* shows every cable.
