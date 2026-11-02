@@ -18,7 +18,8 @@ Home Assistant instance (2026.10.3, English, light theme) with the demo integrat
    hass -c config
    ```
 
-2. Onboard and set up the rooms through the real config flow, then save the dashboard *Rooms*
+2. Onboard, add the integration (its config flow) and set up the rooms as the panel does (`room/create`), then
+   save the dashboard *Rooms*
    (since Home Assistant 2026.10, `/lovelace` shows the new overview):
 
    ```bash
@@ -26,11 +27,11 @@ Home Assistant instance (2026.10.3, English, light theme) with the demo integrat
    python dashboard.py
    ```
 
-   The rooms are set up without an area, which is assigned afterwards: since Home Assistant 2026.6 a new
+   A room's area is set after its entities exist: since Home Assistant 2026.6 a new
    entity id starts with the area's name (`media_player.family_room_family_room` for a room named like its
    area), and the docs show the room's entities as `<domain>.<room>_...`.
 
-3. For the panel's screenshots, describe the Family Room's cabling (through the real options flow):
+3. For the panel's screenshots, describe the Family Room's cabling (as the panel saves it, `room/save`):
 
    ```bash
    python cable_demo.py

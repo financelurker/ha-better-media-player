@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from homeassistant import config_entries
 from homeassistant.components.media_player import MediaPlayerEntityFeature as F
-from homeassistant.data_entry_flow import FlowResultType
-from homeassistant.helpers import entity_registry as er
 
 from custom_components.better_media_player.const import (
     CONF_VOLUME_CONTROL,
@@ -222,64 +219,6 @@ async def test_wake_fades_the_device(hass, home, freezer):
 
 
 # ------------------------------------------------------------------- setup
-
-
-async def test_setup_validation(hass, home):
-    home.avr("on", volume_level=0.3)
-    hass.states.async_set("media_player.no_volume", "on", {"supported_features": int(F.TURN_ON)})
-    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "room"})
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"name": "Living Room"})
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"video_player": KODI, "audio_player": MUSIC, "special": {}}
-    )
-    base = {"actions": {}, "standby": {}, "follow": {}}
-    for data, error in (
-        ({CONF_VOLUME_CONTROL: VOLUME_DEVICE}, "needs_volume_entity"),
-        ({CONF_VOLUME_CONTROL: VOLUME_DEVICE, CONF_VOLUME_ENTITY: MUSIC}, "volume_is_player"),
-        ({CONF_VOLUME_CONTROL: VOLUME_DEVICE, CONF_VOLUME_ENTITY: "media_player.no_volume"}, "no_volume"),
-    ):
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {**base, **data})
-        assert result["type"] is FlowResultType.FORM
-        assert result["errors"] == {CONF_VOLUME_ENTITY: error}
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {**base, CONF_VOLUME_CONTROL: VOLUME_DEVICE, CONF_VOLUME_ENTITY: AVR}
-    )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-
-
-async def test_no_volume_note_with_a_device(hass, home):
-    hass.states.async_set(KODI, "off", {"supported_features": int(F.TURN_ON)})  # Kodi without volume
-    home.avr("on", volume_level=0.3)
-    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "room"})
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"name": "Living Room"})
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"video_player": KODI, "special": {}})
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_VOLUME_CONTROL: VOLUME_DEVICE, CONF_VOLUME_ENTITY: AVR, "actions": {}, "standby": {}, "follow": {}}
-    )
-    assert result["type"] is FlowResultType.CREATE_ENTRY, "no note: the device sets the volume"
-
-
-async def test_a_room_player_cannot_be_the_volume_device(hass, home):
-    from homeassistant import config_entries
-
-    home.group("idle", [], FOLLOW)
-    await setup_room(hass)  # media_player.living_room exists
-    assert er.async_get(hass).async_get(ROOM).platform == DOMAIN
-    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "room"})
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"name": "Kitchen"})
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"audio_player": KITCHEN, "special": {}})
-    sections = {"actions": {}, "standby": {}, "follow": {}}
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_VOLUME_CONTROL: VOLUME_DEVICE, CONF_VOLUME_ENTITY: ROOM, **sections}
-    )
-    assert result["errors"] == {CONF_VOLUME_ENTITY: "volume_is_room"}
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_VOLUME_CONTROL: VOLUME_DEVICE, CONF_VOLUME_ENTITY: FOLLOW, **sections}
-    )
-    assert result["errors"] == {CONF_VOLUME_ENTITY: "group_player"}
 
 
 # ------------------------------------------------------ groups and follow me

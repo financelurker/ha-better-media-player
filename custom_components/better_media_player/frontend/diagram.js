@@ -16,8 +16,8 @@ export function nodesOf(room, t) {
   const sources = room.sources.map((s) => ({
     id: s.id,
     kind: "player",
-    name: s.name || s.player,
-    sub: s.player,
+    name: s.name || s.player || t(`source.${s.id}`),
+    sub: s.player || "",
     source: s,
   }));
   const devices = room.devices.map((d) => {
@@ -117,4 +117,13 @@ const ICONS = {
 };
 export function iconPath(kind) {
   return ICONS[kind] || ICONS.player;
+}
+
+// tiles added since the last arrangement: below whatever they would overlap
+export function unstack(nodes, fresh) {
+  const overlaps = (a, b) => a !== b && Math.abs(a.x - b.x) < W + 20 && Math.abs(a.y - b.y) < H + 20;
+  for (const n of nodes.filter((x) => fresh.has(x.id))) {
+    while (nodes.some((o) => overlaps(n, o))) n.y += ROWGAP / 2;
+  }
+  return nodes;
 }

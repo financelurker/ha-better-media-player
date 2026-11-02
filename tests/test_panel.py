@@ -228,7 +228,7 @@ async def test_panel_registered_where_the_frontend_runs(hass):
     assert kw["frontend_url_path"] == PANEL_URL and kw["require_admin"] is True
     assert kw["module_url"] == "/better_media_player_panel/1.4.0/bmp-panel.js"
     # view only: the integration's gear still opens its options (no config panel)
-    assert "config_panel_domain" not in kw
+    assert kw["config_panel_domain"] == DOMAIN, "Configure of an entry opens the panel"
 
 
 async def test_no_panel_without_the_frontend(hass):
@@ -240,27 +240,38 @@ async def test_no_panel_without_the_frontend(hass):
 
 
 def test_panel_texts_exist_in_every_language():
-    """Every text the panel uses is in English, and German has the same keys."""
+    """Every text the panel uses is in English, German has the same keys, and nothing is left unused."""
     front = Path(__file__).parent.parent / "custom_components" / "better_media_player" / "frontend"
     en = json.loads((front / "i18n" / "en.json").read_text())
     de = json.loads((front / "i18n" / "de.json").read_text())
     assert set(de) == set(en)
-    code = (front / "bmp-panel.js").read_text()
-    used = set(re.findall(r'\bt\(\s*"([a-z_.]+)"', code))
-    used |= {k for pair in re.findall(r'"(value\.\w+)"\s*:\s*"(value\.\w+)"', code) for k in pair}  # t(on ? a : b)
+    code = "".join(p.read_text() for p in front.glob("*.js"))
+    backend = "".join((front.parent / "panel" / f).read_text() for f in ("edit.py", "ws.py"))
+    used = set(re.findall(r'\bt\(\s*"([a-z_.]+)"', code)) | set(re.findall(r'_t\(\s*"([a-z_.]+)"', code))
+    used |= set(re.findall(r'"([a-z]+\.[a-z_]+)"', code)) & set(en)  # (chosen: a ? "x.y" : "x.z")
     used |= {f"count.{w}{s}" for w in re.findall(r'_count\("(\w+)"', code) for s in ("", "_one")}
-    # built keys: kinds, sources, signals and modes by their values
+    problems = set(re.findall(r'(?:err|hint)\("(\w+)"', backend)) | set(re.findall(r'"code": "(\w+)"', backend))
+    problems |= set(re.findall(r'code: "(\w+)"', code))  # the panel's own (a player not chosen yet …)
+    kinds = ("display", "receiver", "amp", "speakers", "subwoofer", "switch", "mixer", "splitter")
+    # built keys: by their values
     for prefix, values in {
-        "kind": ("player", "display", "speakers", "subwoofer", "receiver", "amp", "mixer", "splitter", "switch"),
+        "kind": ("player", *kinds),
         "source": ("video", "audio"),
         "legend": ("picture", "sound"),
         "mode": ("bmp", "cec", "never"),
         "tab": ("wiring", "settings"),
         "setting": (*ROOM_SETTINGS, *DEVICE_SETTINGS, *CENTRAL_SETTINGS),
         "choice": tuple(x for spec in SPECS.values() if isinstance(spec, list) for x in spec),
+        "problem": tuple(problems),
+        "add.player": ("_video", "_audio"),
+        "add.kind": tuple(f"_{k}" for k in kinds),
+        "insp.passive": ("_mixer", "_splitter"),
+        "insp.mode": ("_bmp", "_cec", "_never"),
+        "settings.group": ("_night", "_presets", "_times", "_announce", "_sleep", "_follow"),
     }.items():
-        used |= {f"{prefix}.{v}" for v in values}
+        used |= {f"{prefix}.{v}" if not v.startswith("_") else f"{prefix}{v}" for v in values}
     assert used - set(en) == set()
+    assert set(en) - used == set(), "texts nothing uses"
     for key, text in en.items():  # same placeholders in both languages
         assert set(re.findall(r"\{(\w+)\}", text)) == set(re.findall(r"\{(\w+)\}", de[key])), key
 

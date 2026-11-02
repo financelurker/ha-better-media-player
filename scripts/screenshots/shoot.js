@@ -164,36 +164,6 @@ async function shotDialog(page, file) {
     console.log('device');
   }
 
-  if (want('options')) {
-    await page.setViewportSize({ width: 1400, height: 1500 });
-    await page.goto(`${BASE}/config/integrations/integration/better_media_player`);
-    await settle(page, 3000);
-    await page.screenshot({ path: `${OUT}/_integration.png` });
-    // the cog / "Configure" button of the entry
-    // (the Family Room entry; the entries are listed by name)
-    const row = page.locator('ha-config-entry-row').filter({ hasText: 'Family Room' }).first();
-    const btn = row.getByRole('button', { name: /configure/i }).first();
-    if (await btn.count()) {
-      await btn.click({ force: true });
-    } else {
-      await page.locator('ha-icon-button[label*="Configure" i], ha-button:has-text("Configure")').first().click();
-    }
-    await settle(page, 2500);
-    await shotDialog(page, 'options-menu.png');
-    for (const [label, file] of [['Media players', 'options-players.png'], ['Devices and volume', 'options-devices.png']]) {
-      if (!(await page.getByText(label, { exact: true }).count())) {  // the volume note in between
-        await page.getByRole('button', { name: /^(submit|next|ok)$/i }).first().click({ force: true });
-        await settle(page, 2000);
-      }
-      await page.getByText(label, { exact: true }).first().click({ force: true });
-      await settle(page, 2500);
-      await shotDialog(page, file);
-      await page.getByRole('button', { name: /^(submit|next)$/i }).first().click({ force: true });
-      await settle(page, 2000);
-    }
-    await page.keyboard.press('Escape');
-  }
-
   if (want('mobile')) {
     const m = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, colorScheme: 'light', isMobile: true, hasTouch: true });
     await m.addCookies(await ctx.cookies());
@@ -215,6 +185,14 @@ async function shotDialog(page, file) {
     await panel.locator('.chip', { hasText: 'Film' }).click();
     await page.waitForTimeout(500);
     await panel.screenshot({ path: `${OUT}/panel.png` });
+    // a device's details (editing), on its own page width
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await panel.locator('g.node', { hasText: 'Display' }).click();
+    await page.waitForTimeout(600);
+    await panel.screenshot({ path: `${OUT}/panel-device.png` });
+    await panel.locator('.inspector .close').click();
+    await page.setViewportSize({ width: 1400, height: 760 });
+    await page.waitForTimeout(400);
     await panel.locator('.tabs button', { hasText: 'Room & behaviour' }).click();
     await page.waitForTimeout(800);
     await panel.screenshot({ path: `${OUT}/panel-settings.png` });

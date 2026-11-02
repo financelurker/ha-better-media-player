@@ -7,16 +7,21 @@ calculation that switches the room.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
-from homeassistant.const import ATTR_FRIENDLY_NAME
+from homeassistant.components.media_player import MediaPlayerEntityFeature
+from homeassistant.const import ATTR_FRIENDLY_NAME, ATTR_SUPPORTED_FEATURES
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 
 from ..const import CENTRAL_SETTINGS, CONF_AREA, CONF_FOLLOW_PLAYER, CONF_OCCUPANCY, DOMAIN
 from ..devices.graph import route
+from ..players import suggested_role
 from ..devices.model import Edge, Mode, Node, Signal
 from ..model import (
     DEVICE_SETTINGS,
@@ -78,17 +83,31 @@ def routes_of(sources: list[dict], devices: list[dict], cables: list[dict]) -> d
     return out
 
 
-def _area(hass: HomeAssistant, entry: ConfigEntry) -> str | None:
-    """The room's area: its device's (set in Home Assistant), else the one chosen at setup."""
+def _offers_onoff(hass: HomeAssistant, player: str) -> bool | None:
+    state = hass.states.get(player)
+    if state is None:
+        return None
+    return bool(int(state.attributes.get(ATTR_SUPPORTED_FEATURES, 0) or 0) & MediaPlayerEntityFeature.TURN_ON)
+
+
+def setup_version(entry: ConfigEntry) -> str:
+    """Changes when the room's setup or name changes (another window, an action):
+    the panel does not save over it."""
+    raw = json.dumps({"title": entry.title, "options": entry.options}, sort_keys=True, default=str)
+    return hashlib.sha1(raw.encode()).hexdigest()[:12]
+
+
+def area_of(hass: HomeAssistant, entry: ConfigEntry) -> str | None:
+    """The room's area (id): its device's (set in Home Assistant), else the one chosen at setup."""
     device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, entry.entry_id)})
     area_id = (device.area_id if device else None) or entry.options.get(CONF_AREA)
-    area = ar.async_get(hass).async_get_area(area_id) if area_id else None
-    return area.name if area else None
+    return area_id if area_id and ar.async_get(hass).async_get_area(area_id) else None
 
 
 def room_view(hass: HomeAssistant, entry: ConfigEntry, data: dict | None, layout: dict | None = None) -> dict[str, Any]:
     """A room as the panel shows it (data: its stored settings, None while not loaded)."""
     o = entry.options
+    area_id = area_of(hass, entry)
     sources = [
         {
             "id": key,
@@ -96,6 +115,9 @@ def room_view(hass: HomeAssistant, entry: ConfigEntry, data: dict | None, layout
             "name": _name(hass, s["player"]),
             "needs": [str(x) for x in NEEDS[key]],
             "host": s.get("host") or None,
+            "onoff": s.get("onoff") or "auto",
+            # what the player offers (the panel says what "auto" does with it)
+            "offers_onoff": _offers_onoff(hass, s["player"]),
             "on_action": s.get("on_action") or None,
             "off_action": s.get("off_action") or None,
             # the settings of its hardware plug (with one, while the room is loaded)
@@ -118,8 +140,10 @@ def room_view(hass: HomeAssistant, entry: ConfigEntry, data: dict | None, layout
     return {
         "entry_id": entry.entry_id,
         "name": entry.title,
+        "version": setup_version(entry),
         "loaded": entry.state is ConfigEntryState.LOADED,
-        "area": _area(hass, entry),
+        "area_id": area_id,
+        "area": area.name if (area := ar.async_get(hass).async_get_area(area_id or "")) else None,
         "sources": sources,
         "devices": devices,
         "cables": cables,
@@ -139,3 +163,21 @@ def central_view(hass: HomeAssistant, entry: ConfigEntry, data: dict | None) -> 
         "follow_player": entry.options.get(CONF_FOLLOW_PLAYER) or None,
         "settings": {k: data.get(k, v) for k, v in CENTRAL_SETTINGS.items()} if data is not None else None,
     }
+
+
+def player_suggestions(hass: HomeAssistant) -> dict[str, dict[str, str]]:
+    """Per area, the players of known systems (Kodi, Music Assistant) a new player of
+    a room in that area is proposed with: {area_id: {"video" | "audio": entity_id}}."""
+    ent_reg = er.async_get(hass)
+    dev_reg = dr.async_get(hass)
+    found: dict[str, dict[str, str]] = {}
+    for entry in ent_reg.entities.values():
+        if entry.domain != "media_player" or entry.disabled or entry.platform == DOMAIN:
+            continue
+        area_id = entry.area_id
+        if area_id is None and entry.device_id:
+            device = dev_reg.async_get(entry.device_id)
+            area_id = device.area_id if device else None
+        if area_id and (role := suggested_role(hass, entry)) is not None:
+            found.setdefault(area_id, {}).setdefault(role, entry.entity_id)
+    return found

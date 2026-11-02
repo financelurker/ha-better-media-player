@@ -1,142 +1,49 @@
-"""Config and options flow: what is connected (how a room behaves is set on its device)."""
+"""Setup: "Add integration" sets up the central entry; rooms come from the panel."""
 
 from __future__ import annotations
 
 from homeassistant import config_entries
-from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
-from homeassistant.helpers import area_registry as ar
-from homeassistant.helpers import entity_registry as er
 
-from custom_components.better_media_player.const import (
-    CONF_AREA,
-    CONF_AUDIO_HOST,
-    CONF_AUDIO_PLAYER,
-    CONF_DISPLAY,
-    CONF_ENTRY_TYPE,
-    CONF_SPEAKERS,
-    CONF_VIDEO_PLAYER,
-    DOMAIN,
-    ENTRY_TYPE_ROOM,
-)
-from custom_components.better_media_player.model import options_v3
+from custom_components.better_media_player.const import CONF_ENTRY_TYPE, DOMAIN, ENTRY_TYPE_HUB, ENTRY_TYPE_ROOM
 
-from .conftest import GROUP, KODI, LIVING_OCC, MUSIC, SPEAKERS, TV, setup_room
-from .helpers import get_settings
-
-PLAYERS = {"special": {}}
-DEVICES = {"actions": {}, "standby": {}, "follow": {}}
+from .conftest import FOLLOW, setup_room
 
 
-async def _start(hass: HomeAssistant, area: str | None = None):
+async def test_add_integration_sets_up_the_central_entry(hass, home):
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
-    assert result["type"] is FlowResultType.MENU
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "room"})
+    assert result["type"] is FlowResultType.FORM and result["step_id"] == "user"
+    assert result["description_placeholders"] == {"panel": "/better-media-player"}
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"] == {CONF_ENTRY_TYPE: ENTRY_TYPE_HUB} and result["options"] == {}
+
+
+async def test_with_a_central_entry_it_points_to_the_panel(hass, home):
+    home.group("idle", [], FOLLOW)
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+    await hass.config_entries.flow.async_configure(result["flow_id"], {"follow_player": FOLLOW})
+    await hass.async_block_till_done()
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+    assert result["type"] is FlowResultType.ABORT and result["reason"] == "use_panel"
+
+
+async def test_rooms_alone_still_let_the_central_entry_be_added(hass, home):
+    """A room set up before (or only rooms): "Add integration" adds the central entry."""
+    await setup_room(hass)
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     assert result["type"] is FlowResultType.FORM
-    data = {"name": "Living Room"}
-    if area:
-        data[CONF_AREA] = area
-    return await hass.config_entries.flow.async_configure(result["flow_id"], data)
 
 
-async def test_full_flow(hass, home):
-    result = await _start(hass)
-    assert result["step_id"] == "players"
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_VIDEO_PLAYER: KODI, CONF_AUDIO_PLAYER: MUSIC, **PLAYERS}
-    )
-    assert result["step_id"] == "devices"
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"],
-        {CONF_DISPLAY: [TV], CONF_SPEAKERS: [SPEAKERS], "actions": {}, "standby": {}, "follow": {"occupancy": [LIVING_OCC]}},
-    )
+async def test_a_room_from_the_panel(hass, home):
+    options = {"sources": [{"id": "audio", "player": "media_player.office_player"}], "devices": [], "cables": [], "volume": {"where": "players"}}
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "panel"}, data={"title": "Office", "options": options})
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["title"] == "Living Room"
-    assert result["data"] == {CONF_ENTRY_TYPE: ENTRY_TYPE_ROOM}
-    assert set(result["options"]) == {"sources", "devices", "cables", "volume", "occupancy"}, "no times, waits or other behaviour"
-    assert options_v3(result["options"]) == {
-        CONF_VIDEO_PLAYER: KODI,
-        CONF_AUDIO_PLAYER: MUSIC,
-        CONF_DISPLAY: [TV],
-        CONF_SPEAKERS: [SPEAKERS],
-        "occupancy": [LIVING_OCC],
-        "volume_control": "players",
-    }, "only what is connected"
-    await hass.async_block_till_done()
-    assert hass.states.get("media_player.living_room") is not None
-    assert (await get_settings(hass))["devices"]["speakers"]["run_down"] == 2  # the device's default
+    entry = result["result"]
+    assert (entry.title, entry.data, dict(entry.options), entry.version) == ("Office", {CONF_ENTRY_TYPE: ENTRY_TYPE_ROOM}, options, 4)
 
 
-async def test_validation(hass, home):
-    home.group("idle", [])
-    result = await _start(hass)
-    flow = result["flow_id"]
-
-    result = await hass.config_entries.flow.async_configure(flow, PLAYERS)
-    assert result["errors"] == {CONF_VIDEO_PLAYER: "no_player"}
-
-    result = await hass.config_entries.flow.async_configure(flow, {CONF_AUDIO_PLAYER: GROUP, **PLAYERS})
-    assert result["errors"] == {CONF_AUDIO_PLAYER: "group_player"}
-
-    result = await hass.config_entries.flow.async_configure(flow, {CONF_AUDIO_PLAYER: MUSIC, **PLAYERS})
-    assert result["step_id"] == "devices"
-    result = await hass.config_entries.flow.async_configure(flow, {CONF_DISPLAY: [TV], **DEVICES})
-    assert result["errors"] == {CONF_DISPLAY: "display_needs_video"}
-    result = await hass.config_entries.flow.async_configure(flow, {CONF_SPEAKERS: [MUSIC], **DEVICES})
-    assert result["errors"] == {CONF_SPEAKERS: "device_is_player"}
-    result = await hass.config_entries.flow.async_configure(
-        flow, {CONF_SPEAKERS: [SPEAKERS], "actions": {"bass_on_action": "script.sub_on"}, "standby": {}, "follow": {}}
-    )
-    assert result["errors"] == {"actions": "needs_both_actions"}
-    result = await hass.config_entries.flow.async_configure(flow, {CONF_SPEAKERS: [SPEAKERS], **DEVICES})
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-
-
-async def test_an_error_in_a_section_is_shown_at_the_section(hass, home):
-    result = await _start(hass)
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_VIDEO_PLAYER: KODI, "special": {CONF_AUDIO_HOST: "switch.kodi_box_plug"}}
-    )
-    assert result["errors"] == {"special": "needs_player"}
-
-
-async def test_area_preselects_players(hass, home):
-    area = ar.async_get(hass).async_create("Living Room")
-    reg = er.async_get(hass)
-    kodi = reg.async_get_or_create("media_player", "kodi", "kodi1", suggested_object_id="kodi")
-    music = reg.async_get_or_create("media_player", "music_assistant", "ma1", suggested_object_id="office_player")
-    reg.async_update_entity(kodi.entity_id, area_id=area.id)
-    reg.async_update_entity(music.entity_id, area_id=area.id)
-
-    result = await _start(hass, area.id)
-    assert result["step_id"] == "players"
-    schema = result["data_schema"].schema
-    suggested = {str(k): k.description.get("suggested_value") for k in schema if k.description}
-    assert suggested[CONF_VIDEO_PLAYER] == kodi.entity_id
-    assert suggested[CONF_AUDIO_PLAYER] == music.entity_id
-
-
-async def test_options_flow(hass, home):
+async def test_no_options_flow_any_more(hass, home):
+    """Configure leads to the panel (config_panel_domain), not to a dialog."""
     entry = await setup_room(hass)
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    assert result["type"] is FlowResultType.MENU
-    assert result["menu_options"] == ["room", "players", "devices", "cabling", "save"]
-    result = await hass.config_entries.options.async_configure(result["flow_id"], {"next_step_id": "devices"})
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_DISPLAY: [TV], CONF_SPEAKERS: [SPEAKERS], "actions": {}, "standby": {}, "follow": {"occupancy": [LIVING_OCC]}}
-    )
-    assert result["type"] is FlowResultType.MENU
-    result = await hass.config_entries.options.async_configure(result["flow_id"], {"next_step_id": "save"})
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    await hass.async_block_till_done()
-    assert entry.options["occupancy"] == [LIVING_OCC]
-    assert [d["id"] for d in entry.options["devices"]] == ["display", "speakers"]  # the subwoofer cleared
-
-
-async def test_options_show_the_sections_values(hass, home):
-    entry = await setup_room(hass, occupancy=[LIVING_OCC])
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(result["flow_id"], {"next_step_id": "devices"})
-    sections = {str(k): v for k, v in result["data_schema"].schema.items()}
-    follow = {str(k): k.description.get("suggested_value") for k in sections["follow"].schema.schema if k.description}
-    assert follow == {"occupancy": [LIVING_OCC]}
+    assert not entry.supports_options

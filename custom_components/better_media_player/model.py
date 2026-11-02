@@ -2,7 +2,8 @@
 
 Setup (options, a change reloads the room):
 
-    sources   the players: {"id": "video" | "audio", "player", "host", "on_action", "off_action"}
+    sources   the players: {"id": "video" | "audio", "player", "host", "onoff", "on_action",
+              "off_action"}; onoff: how the room switches the player itself (SOURCE_ONOFF)
     devices   what is switched or passed through: {"id", "kind", "name", "power": {"plugs",
               "devices", "actions": [on, off] | None, "sensors"}, "control": {"on", "off",
               "fallback", "timeout"}, "inputs": {"entity", "actions", "pause"} | None,
@@ -79,6 +80,9 @@ NEEDS = {SOURCE_VIDEO: (Signal.PICTURE, Signal.SOUND), SOURCE_AUDIO: (Signal.SOU
 # ids that are not a device's: the sources and the nodes of their hardware plugs
 RESERVED_IDS = (SOURCE_VIDEO, SOURCE_AUDIO, ROLE_VIDEO_HOST, ROLE_AUDIO_HOST)
 HOST_OF = {SOURCE_VIDEO: ROLE_VIDEO_HOST, SOURCE_AUDIO: ROLE_AUDIO_HOST}
+# how the room switches a player itself (its hardware plug comes before): auto = its
+# own on/off if it offers one, else its own actions; player; actions; none (never)
+SOURCE_ONOFF = ("auto", "player", "actions", "none")
 
 # --------------------------------------------------------------------- settings
 
@@ -332,7 +336,7 @@ def options_v4(old: dict) -> dict:
                 (d for d in devices if d["id"] == "display"), None
             )
         if owner is None:  # players only: a device of its own for the volume
-            owner = {"id": "volume", "kind": "amp", "name": None, "power": {"plugs": [], "devices": [], "actions": None, "sensors": []},
+            owner = {"id": "volume", "kind": "amp", "name": None, "power": None,  # (switched by nobody: passive)
                      "control": None, "inputs": None, "volume": None}
             devices.append(owner)
         owner["volume"] = entity
@@ -406,82 +410,6 @@ def device_setting(data: dict, device: dict, key: str) -> Any:
     """A device's setting: stored, else its kind's first value."""
     stored = (data.get("devices") or {}).get(device["id"]) or {}
     return stored[key] if key in stored else device_defaults(device["kind"])[key]
-
-
-def options_v3(options: dict) -> dict:
-    """The roles' view of a room (for the setup dialog until the panel edits; only
-    what the roles can hold: the display, speakers and subwoofer devices)."""
-    old: dict[str, Any] = {}
-    for s in options.get(OPT_SOURCES) or []:
-        player_k, on_k, off_k, host_k = SOURCE_CONF[s["id"]]
-        old[player_k] = s["player"]
-        for k, v in ((host_k, s.get("host")), (on_k, s.get("on_action")), (off_k, s.get("off_action"))):
-            if v:
-                old[k] = v
-    conf_of = {v: k for k, v in ROLE_IDS.items()}
-    for d in devices_of(options):
-        conf = conf_of.get(d["id"])
-        if conf is None:
-            continue
-        p = d.get("power") or {}
-        entities = [*(p.get("plugs") or []), *(p.get("devices") or [])]
-        if entities:
-            old[conf] = entities
-        if p.get("actions"):
-            on_k, off_k = ROLE_ACTIONS[conf]
-            old[on_k], old[off_k] = p["actions"]
-        if ROLE_POWER[conf] and p.get("sensors"):
-            old[ROLE_POWER[conf]] = list(p["sensors"])
-        if conf in INPUT_ROLES:
-            c = d.get("control") or {}
-            for key, value in (("power_on", c.get("on")), ("power_off", c.get("off"))):
-                if value and value != "bmp":
-                    old[role_conf(conf, key)] = value
-            if c.get("fallback"):
-                old[role_conf(conf, "cec_fallback")] = True
-            if c.get("timeout") and float(c["timeout"]) != Control().timeout:
-                old[role_conf(conf, "cec_timeout")] = c["timeout"]
-            i = d.get("inputs") or {}
-            if i.get("entity"):
-                old[role_conf(conf, "inputs")] = i["entity"]
-            if i.get("actions"):
-                old[role_conf(conf, "input_actions")] = dict(i["actions"])
-            if i.get("pause"):
-                old[role_conf(conf, "input_pause")] = i["pause"]
-    end_of = {v: k for k, v in END_IDS.items()}
-    connections = [
-        {CONN_FROM: end_of[c["from"]], CONN_TO: end_of[c["to"]], CONN_SIGNALS: list(c["signals"]),
-         CONN_INPUT: c.get("input"), CONN_MODE: c.get("mode") or "bmp"}
-        for c in options.get(OPT_CABLES) or []
-        if c["from"] in end_of and c["to"] in end_of
-    ]
-    if connections:
-        old[CONF_CONNECTIONS] = connections
-    entity = volume_entity(options)
-    old[CONF_VOLUME_CONTROL] = VOLUME_DEVICE if entity else "players"
-    if entity:
-        old[CONF_VOLUME_ENTITY] = entity
-    if options.get(CONF_OCCUPANCY):
-        old[CONF_OCCUPANCY] = list(options[CONF_OCCUPANCY])
-    if options.get(CONF_AREA):
-        old[CONF_AREA] = options[CONF_AREA]
-    return old
-
-
-def merge_v3(previous: dict, old: dict) -> dict:
-    """The setup dialog's roles back into the devices: what only the devices know
-    (names, a volume on a device that is not the room's) is kept."""
-    new = options_v4(old)
-    before = {d["id"]: d for d in devices_of(previous)}
-    room_volume_was = (previous.get(OPT_VOLUME) or {}).get("device")
-    for d in new[OPT_DEVICES]:
-        was = before.get(d["id"]) or {}
-        d["name"] = was.get("name")
-        if d.get("volume") is None and was.get("volume") and d["id"] != room_volume_was:
-            d["volume"] = was["volume"]  # (the room's volume taken away in the dialog goes)
-        if d.pop("volume_migrated", False) and was.get("volume_migrated") and was.get("volume") == d.get("volume"):
-            d["volume_migrated"] = True  # only the migration places it by a guess
-    return new
 
 
 # ------------------------------------------------------------ entities in a setup

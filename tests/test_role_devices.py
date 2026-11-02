@@ -326,15 +326,6 @@ async def test_a_device_woken_over_cec_during_the_start_is_no_manual_mode(hass, 
     assert not ctrl.manual
 
 
-async def test_a_room_player_is_no_role_device(hass, home):
-    from custom_components.better_media_player.config_flow import _validate
-
-    from .conftest import room_options
-
-    await setup_room(hass)
-    assert _validate(hass, room_options(display=[ROOM])) == {"display": "device_is_room"}
-
-
 async def test_a_tv_turned_on_by_hand_from_unavailable_is_manual(hass, home, freezer):
     hass.states.async_set(LG, "unavailable")  # e.g. a TV that drops off the network when off
     entry = await setup_room(hass, display=[LG])
@@ -381,20 +372,6 @@ async def test_music_powers_a_shared_device_through_the_display_plug(hass, home,
     await tick(hass, freezer, 10)
     assert home.on(TV)
     assert _state(hass, LG) == "on"
-
-
-async def test_a_host_plug_used_by_a_role_is_shown_in_the_devices_step(hass, home):
-    from homeassistant.data_entry_flow import FlowResultType
-
-    entry = await setup_room(hass, video_host="switch.kodi_box_plug")
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(result["flow_id"], {"next_step_id": "devices"})
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {"display": [TV, "switch.kodi_box_plug"], "speakers": [SPEAKERS], "actions": {}, "standby": {}, "follow": {}},
-    )
-    assert result["type"] is FlowResultType.FORM
-    assert result["errors"] == {"display": "duplicate_device"}
 
 
 # -------------------------------- devices on their own, failed starts, actions
@@ -462,12 +439,3 @@ async def test_an_unavailable_plug_does_not_restart_the_start_forever(hass, home
     home.kodi("playing")
     await tick(hass, freezer, 20)
     assert _state(hass, "sensor.living_room_status") == "playing"
-
-
-async def test_display_actions_need_a_video_player(hass, home):
-    from custom_components.better_media_player.config_flow import _validate
-
-    from .conftest import room_options
-
-    options = room_options(video_player=None, display=None, display_on_action="script.a", display_off_action="script.b")
-    assert _validate(hass, options).get("display") == "display_needs_video"

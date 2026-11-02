@@ -15,7 +15,6 @@ from custom_components.better_media_player.const import (
     CONF_DEFAULT_VOLUME,
     CONF_ENTRY_TYPE,
     CONF_FOLLOW_PLAYER,
-    CONF_OCCUPANCY,
     DOMAIN,
     ENTRY_TYPE_HUB,
 )
@@ -36,7 +35,7 @@ from .conftest import (
     setup_hub,
     setup_room,
 )
-from .helpers import KROOM, ROOM, follow_from, get_settings, quiet_leaves_and_cuts_speakers, roles, tick
+from .helpers import KROOM, ROOM, follow_from, get_settings, quiet_leaves_and_cuts_speakers, tick
 
 START = "button.living_room_follow_me"
 FOLLOW_STOP = "button.living_room_stop_follow_me"
@@ -391,8 +390,7 @@ async def test_hub_flow_and_single_instance(hass, home):
     home.group("idle", [], FOLLOW)
     hass.states.async_set("media_player.radio", "idle")
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "hub"})
-    assert result["step_id"] == "hub"
+    assert result["step_id"] == "user"
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_FOLLOW_PLAYER: "media_player.radio"})
     assert result["errors"] == {CONF_FOLLOW_PLAYER: "not_a_group"}
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_FOLLOW_PLAYER: FOLLOW})
@@ -401,10 +399,8 @@ async def test_hub_flow_and_single_instance(hass, home):
     await hass.async_block_till_done()
 
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "hub"})
     assert result["type"] is FlowResultType.ABORT
-    assert result["reason"] == "hub_exists"
-
+    assert result["reason"] == "use_panel", "rooms are set up in the panel"
 
 async def test_old_central_entry_is_migrated(hass, home):
     home.group("idle", [], FOLLOW)
@@ -424,22 +420,6 @@ async def test_old_central_entry_is_migrated(hass, home):
     assert dict(entry.options) == {CONF_FOLLOW_PLAYER: FOLLOW}
     assert (await get_settings(hass, entity_id=None))["settings"]["default_volume"] == 30
     assert reg.async_get_entity_id("button", DOMAIN, f"{entry.entry_id}_start_follow") is None
-
-
-async def test_room_follow_options(hass, home):
-    entry = await setup_room(hass)
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(result["flow_id"], {"next_step_id": "devices"})
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {"display": roles(entry)["display"], "speakers": roles(entry)["speakers"], "bass": roles(entry)["bass"],
-         "actions": {}, "standby": {}, "follow": {CONF_OCCUPANCY: [LIVING_OCC]}},
-    )
-    result = await hass.config_entries.options.async_configure(result["flow_id"], {"next_step_id": "save"})
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    await hass.async_block_till_done()
-    assert entry.options[CONF_OCCUPANCY] == [LIVING_OCC]
-    assert hass.states.get("sensor.living_room_follow") is not None
 
 
 def _n(home, service, eid=None):
