@@ -23,7 +23,7 @@ from custom_components.better_media_player.const import (
     DOMAIN,
     ENTRY_TYPE_ROOM,
 )
-from custom_components.better_media_player.model import DEVICE_SETTINGS, ROOM_SETTINGS, SPECS, options_v4
+from custom_components.better_media_player.model import DEVICE_SETTINGS, ROOM_SETTINGS, SOURCE_SETTINGS, SPECS, options_v4
 from custom_components.better_media_player.panel import PANEL_URL, async_setup_panel
 from custom_components.better_media_player.panel.view import routes_of
 
@@ -89,12 +89,12 @@ async def test_a_room_from_today_s_options(hass, home, hass_ws_client):
 async def test_the_room_s_and_its_devices_settings(hass, home, hass_ws_client):
     await setup_room(hass)
     await set_setting(hass, "night_max_volume", 25)
-    await set_setting(hass, "run_down", 15, device="display")
+    await set_setting(hass, "on_wait", 15, device="display")
     (room,) = (await _get(hass_ws_client))["rooms"]
     assert room["settings"] == {**ROOM_SETTINGS, "night_max_volume": 25}
     devices = {d["id"]: d for d in room["devices"]}
-    assert devices["display"]["settings"]["run_down"] == 15
-    assert devices["speakers"]["settings"]["run_down"] == 2
+    assert devices["display"]["settings"]["on_wait"] == 15
+    assert devices["speakers"]["settings"]["on_wait"] == 0
     assert set(devices["subwoofer"]["settings"]) == set(DEVICE_SETTINGS)
 
 
@@ -260,7 +260,7 @@ def test_panel_texts_exist_in_every_language():
         "legend": ("picture", "sound"),
         "mode": ("bmp", "cec", "never"),
         "tab": ("wiring", "settings"),
-        "setting": (*ROOM_SETTINGS, *DEVICE_SETTINGS, *CENTRAL_SETTINGS),
+        "setting": (*ROOM_SETTINGS, *DEVICE_SETTINGS, *SOURCE_SETTINGS, *CENTRAL_SETTINGS),
         "choice": tuple(x for spec in SPECS.values() if isinstance(spec, list) for x in spec),
         "problem": tuple(problems),
         "add.player": ("_video", "_audio"),

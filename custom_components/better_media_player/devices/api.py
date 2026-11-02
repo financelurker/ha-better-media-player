@@ -34,6 +34,9 @@ class NodeOwner(Protocol):
     def run_down(self, node: Node) -> float:
         """Seconds the node stays on after its demand ended."""
 
+    def waits(self, node: Node) -> bool:
+        """The node, due to go off, waits a little longer (e.g. for something else first)."""
+
     def standby(self, node: Node) -> Standby | None:
         """Wait for standby before its plugs go off (None: no waiting)."""
 

@@ -34,7 +34,7 @@ async def music_then_stop(hass, home, freezer):
     assert home.on(SPEAKERS)
     home.music("paused")
     await hass.async_block_till_done()
-    await tick(hass, freezer, 1)
+    await tick(hass, freezer, 16)  # (shown once it held a moment)
     return dt_util.utcnow()
 
 
@@ -46,23 +46,24 @@ async def keep_on(hass, on: bool = True):
 # ------------------------------------------------------------------ off at
 
 
-async def test_off_at_is_the_end_of_the_run_down(hass, home, freezer):
+async def test_off_at_is_the_end_of_the_idle_timeout(hass, home, freezer):
+    """Nothing plays: the devices it needs go off when its idle timeout ends."""
     await setup_room(hass)
     seen = events(hass)
     home.music("playing")
     await hass.async_block_till_done()
     await tick(hass, freezer, 5)
-    assert off_at(hass, "speakers") is None, "needed: none planned"
+    assert off_at(hass, "speakers") is None, "it plays: none planned"
     home.music("paused")
     await hass.async_block_till_done()
-    stopped = dt_util.utcnow()
-    await tick(hass, freezer, 1)
+    paused = dt_util.utcnow()
+    await tick(hass, freezer, 16)
     for dev in ("speakers", "subwoofer"):
-        assert abs(off_at(hass, dev) - (stopped + timedelta(minutes=2))) <= timedelta(seconds=10)
+        assert abs(off_at(hass, dev) - (paused + timedelta(minutes=30))) <= timedelta(seconds=10)
     assert off_at(hass, "display") is None, "off: none planned"
     assert seen == [{"type": "started", "devices": {k: off_at(hass, k).isoformat() for k in ("speakers", "subwoofer")}}]
 
-    await tick(hass, freezer, 130)
+    await tick(hass, freezer, 30 * 60, step=30)
     assert not home.on(SPEAKERS) and not home.on(BASS)
     assert off_at(hass, "speakers") is None
     assert sorted((e["device"], e["name"]) for e in seen if e["type"] == "off") == [("speakers", "Speakers"), ("subwoofer", "Subwoofer")]
@@ -79,17 +80,17 @@ async def test_needed_again_cancels_it(hass, home, freezer):
     assert seen[-1] == {"type": "cancelled", "devices": ["speakers", "subwoofer"], "reason": "needed"}
 
 
-async def test_at_night_the_night_run_down(hass, home, freezer):
+async def test_at_night_the_night_idle_timeout(hass, home, freezer):
     await setup_room(hass)
     home.kodi("playing")
     await hass.async_block_till_done()
     await tick(hass, freezer, 5)
     await set_night(hass)
-    home.kodi("off")
+    home.kodi("paused")
     await hass.async_block_till_done()
-    stopped = dt_util.utcnow()
-    await tick(hass, freezer, 1)
-    assert abs(off_at(hass, "display") - (stopped + timedelta(minutes=1))) <= timedelta(seconds=10)
+    paused = dt_util.utcnow()
+    await tick(hass, freezer, 16)
+    assert abs(off_at(hass, "display") - (paused + timedelta(minutes=5))) <= timedelta(seconds=10)
 
 
 async def test_all_off_is_no_run_down(hass, home, freezer):
@@ -122,7 +123,7 @@ async def test_a_removed_device_takes_its_sensor_along(hass, home):
 # ------------------------------------------------------------------ keep on
 
 
-async def test_keep_on_holds_the_run_down(hass, home, freezer):
+async def test_keep_on_holds_the_idle_timeout(hass, home, freezer):
     entry = await setup_room(hass)
     seen = events(hass)
     await music_then_stop(hass, home, freezer)
@@ -130,10 +131,10 @@ async def test_keep_on_holds_the_run_down(hass, home, freezer):
     assert seen[-1] == {"type": "cancelled", "devices": ["speakers", "subwoofer"], "reason": "kept_on"}
     assert off_at(hass, "speakers") is None
     assert hass.states.get(STATUS).state == "kept_on"
-    await tick(hass, freezer, 30 * 60, step=60)
+    await tick(hass, freezer, 60 * 60, step=60)
     assert home.on(SPEAKERS) and home.on(BASS)
 
-    # a start still switches on; the end of it runs down nothing
+    # a start still switches on; turned off, nothing goes off
     home.kodi("playing")
     await hass.async_block_till_done()
     await tick(hass, freezer, 5)
@@ -144,15 +145,15 @@ async def test_keep_on_holds_the_run_down(hass, home, freezer):
     assert home.on(TV)
     assert entry.runtime_data.keep_on, "stays on until turned off"
 
-    # turned off: runs down from now (not from its last need)
+    # turned off: what nothing needs goes at once, the paused music holds anew
     await keep_on(hass, False)
-    await tick(hass, freezer, 60)
-    assert home.on(SPEAKERS)
-    await tick(hass, freezer, 80)
-    assert not home.on(SPEAKERS)
-    assert home.on(TV)
-    await tick(hass, freezer, 9 * 60, step=30)
+    await tick(hass, freezer, 5)
     assert not home.on(TV)
+    assert home.on(SPEAKERS)
+    await tick(hass, freezer, 29 * 60, step=60)
+    assert home.on(SPEAKERS), "its idle timeout counts from now"
+    await tick(hass, freezer, 70, step=5)
+    assert not home.on(SPEAKERS)
 
 
 async def test_keep_on_set_ahead_and_over_a_reload(hass, home, freezer):
@@ -224,7 +225,7 @@ async def test_the_sensor_keeps_its_id_when_the_device_is_renamed(hass, home):
 
 
 async def test_a_device_turned_off_before_its_time_is_no_run_down(hass, home, freezer):
-    """A TV turned off with its remote while it runs down: not "switched off after its run-down"."""
+    """A TV turned off with its remote while Kodi is paused: not "switched off after its run-down"."""
     hass.states.async_set(LG, "off")
     await setup_room_devices(hass, [device("display", "display", devices=[LG])], [{"from": "video", "to": "display", "signals": ["picture"]}])
     seen = events(hass)
@@ -232,7 +233,7 @@ async def test_a_device_turned_off_before_its_time_is_no_run_down(hass, home, fr
     await hass.async_block_till_done()
     await tick(hass, freezer, 5)
     assert hass.states.get(LG).state == "on"
-    home.kodi("off")
+    home.kodi("paused")
     await hass.async_block_till_done()
     await tick(hass, freezer, 60, step=5)
     assert seen and seen[-1]["type"] == "started"
@@ -280,7 +281,7 @@ async def test_a_start_is_no_run_down(hass, home, freezer):
     for _ in range(5):
         await tick(hass, freezer, 1)
         assert off_at(hass, "display") is None
-    home.kodi("idle")
+    home.kodi("playing")
     await hass.async_block_till_done()
     await tick(hass, freezer, 3)
     assert home.on(TV)

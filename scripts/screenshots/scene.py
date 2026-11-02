@@ -27,8 +27,6 @@ async def main(scene: str) -> None:
             for e in ("media_player.family_room", "media_player.bedroom"):
                 await call("media_player", "turn_off", {"entity_id": e})
             return
-        await call("number", "set_value", {"entity_id": "number.family_room_display_run_down",
-                                           "value": 0 if scene == "music" else 10})
         await call("media_player", "select_source", {**room, "source": "Kodi" if scene == "movie" else "Family Room Player"})
         await asyncio.sleep(3)
         await call("media_player", "media_play", room)

@@ -53,24 +53,23 @@ async def test_start_timeout_rolls_back(hass, home, freezer):
     assert hass.states.get("sensor.living_room_status").state == "error"
 
 
-async def test_a_failed_start_restarts_the_run_down_of_what_was_on(hass, home, freezer):
-    """The TV was still running down; a start that fails leaves it on for a full
-    run-down from the start (it was wanted again), not for the rest of the old one."""
+async def test_a_failed_start_leaves_on_what_music_still_needs(hass, home, freezer):
+    """Music paused (it holds the speakers); a film that does not start switches off
+    only what it switched on."""
     await setup_room(hass)
-    home.kodi("playing")
+    home.music("playing")
     await hass.async_block_till_done()
     await tick(hass, freezer, 5)
-    home.kodi("off")  # film over: the TV runs down (10 min)
+    home.music("paused")
     await hass.async_block_till_done()
-    await tick(hass, freezer, 8 * 60, step=30)
-    assert home.on(TV)
+    await tick(hass, freezer, 5)
+    entry_data = hass.config_entries.async_entries("better_media_player")[0].runtime_data
+    entry_data.data["last_source"] = "video"
     await hass.services.async_call("media_player", "turn_on", {"entity_id": ROOM}, blocking=True)
     await hass.async_block_till_done()
+    assert home.on(TV)
     await tick(hass, freezer, 100)  # Kodi never answers (timeout 90 s)
     assert hass.states.get("sensor.living_room_status").state == "error"
-    await tick(hass, freezer, 3 * 60, step=30)  # the old run-down would be over by now
-    assert home.on(TV)
-    await tick(hass, freezer, 7 * 60, step=30)
     assert not home.on(TV)
 
 
@@ -95,8 +94,9 @@ async def test_music_auto_on_and_run_down(hass, home, freezer):
     assert call_order(home, [SPEAKERS, BASS], "turn_on") == [SPEAKERS, BASS]
 
     home.music("paused")
-    await tick(hass, freezer, 60)
-    assert home.on(SPEAKERS), "run-down (2 min) not over yet"
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 29 * 60, step=60)
+    assert home.on(SPEAKERS), "nothing plays: on for the idle timeout (30 min)"
     await tick(hass, freezer, 70)
     assert not home.on(SPEAKERS) and not home.on(BASS)
     assert call_order(home, [SPEAKERS, BASS], "turn_off") == [BASS, SPEAKERS]
@@ -122,16 +122,17 @@ async def test_shared_speakers_stay_on_for_kodi(hass, home, freezer):
     assert home.on(SPEAKERS) and home.on(TV)
 
 
-async def test_kodi_off_display_run_down_longer_than_speakers(hass, home, freezer):
+async def test_kodi_turned_off_everything_goes_off(hass, home, freezer):
+    """Off means off: the sound first, then the picture."""
     await setup_room(hass)
     home.kodi("playing")
     await hass.async_block_till_done()
+    await tick(hass, freezer, 5)
     home.kodi("off")
-    await tick(hass, freezer, 130)
-    assert not home.on(SPEAKERS)
-    assert home.on(TV), "display run-down is 10 min"
-    await tick(hass, freezer, 480)
-    assert not home.on(TV)
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 5)
+    assert not home.on(SPEAKERS) and not home.on(TV)
+    assert call_order(home, [SPEAKERS, TV], "turn_off") == [SPEAKERS, TV]
 
 
 async def test_video_idle_timeout_turns_kodi_off(hass, home, freezer):
@@ -339,15 +340,17 @@ async def test_late_device_report_is_not_manual(hass, home, freezer):
     assert hass.states.get("sensor.living_room_status").state == "playing"
 
 
-async def test_restart_with_plugs_on_runs_down(hass, home, freezer):
+async def test_restart_with_plugs_on(hass, home, freezer):
+    """The music player stopped with its speakers on: it holds them for the idle
+    timeout (from the restart); the TV no player uses goes at once."""
     hass.states.async_set(SPEAKERS, "on")
     hass.states.async_set(TV, "on")
     await setup_room(hass)
-    assert hass.states.get("sensor.living_room_status").state == "run_down"
-    await tick(hass, freezer, 130)
-    assert not home.on(SPEAKERS)
-    await tick(hass, freezer, 500)
+    await tick(hass, freezer, 5)
     assert not home.on(TV)
+    assert home.on(SPEAKERS)
+    await tick(hass, freezer, 30 * 60, step=60)
+    assert not home.on(SPEAKERS)
 
 
 async def test_player_behind_host_plug(hass, home, freezer):
@@ -363,10 +366,12 @@ async def test_player_behind_host_plug(hass, home, freezer):
     home.music("idle")  # player booted
     await hass.async_block_till_done()
     assert home.on(SPEAKERS)
-    assert entry.runtime_data.status == "run_down"  # on, but nothing plays yet
+    assert entry.runtime_data.status == "on"  # on, nothing plays yet: it holds
 
-    await tick(hass, freezer, 130)  # nothing played: speakers + hardware run down
+    await tick(hass, freezer, 30 * 60, step=60)  # nothing played: the speakers go
     assert not home.on(SPEAKERS)
+    assert home.on("switch.kodi_box_plug"), "the hardware waits (off_wait, 2 min)"
+    await tick(hass, freezer, 130)
     assert not home.on("switch.kodi_box_plug")
 
 

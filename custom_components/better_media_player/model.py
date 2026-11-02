@@ -1,4 +1,4 @@
-"""A room's setup (options, entry version 4) and how it behaves (settings in its store).
+"""A room's setup (options, entry version 4.2) and how it behaves (settings in its store).
 
 Setup (options, a change reloads the room):
 
@@ -18,7 +18,8 @@ central entry's (CENTRAL_SETTINGS) in its own store.
 
 Before version 4 the devices were three fixed roles (display, speakers, subwoofer)
 and the behaviour was set through configuration entities; options_v4 and
-migrate_store turn such a room into this model without changing what it does.
+migrate_store turn such a room into this model. Version 4.2: one idle timeout
+for every player instead of each device's run-down (migrate_store_4_2).
 """
 
 from __future__ import annotations
@@ -88,8 +89,8 @@ SOURCE_ONOFF = ("auto", "player", "actions", "none")
 
 # the room's settings and their first values
 ROOM_SETTINGS: dict[str, Any] = {
-    "video_idle_timeout": 30,  # min, 0 = never
-    "night_video_idle_timeout": 5,  # min
+    "idle_timeout": 30,  # min nothing plays (paused, stopped, a menu): the room goes off; 0 = never
+    "night_idle_timeout": 5,  # min
     "night_max_volume": 30,  # %, 0 = no limit
     "night_fade_in": 2,  # min, back to the room volume after the night
     **{f"preset_{name}": value for name, value in PRESET_DEFAULTS.items()},  # %
@@ -107,17 +108,16 @@ ROOM_SETTINGS: dict[str, Any] = {
 }
 
 # a device's settings
-DEVICE_SETTINGS = ("run_down", "night_run_down", "on_wait", "standby", "standby_w", "standby_max", "night_off")
-# a player's, for the plug of its hardware (only a source with one)
-SOURCE_SETTINGS: dict[str, Any] = {"run_down": 2, "on_wait": 0}  # min, s
+DEVICE_SETTINGS = ("on_wait", "standby", "standby_w", "standby_max", "night_off")
+# a player's, for the plug of its hardware (only a source with one): wait after the
+# player is off before the plug goes off (its system shuts down), wait after it is on
+SOURCE_SETTINGS: dict[str, Any] = {"off_wait": 2, "on_wait": 0}  # min, s
 
 
 def device_defaults(kind: str) -> dict[str, Any]:
-    """A device's first settings (a display runs down longer, a subwoofer is off at night)."""
+    """A device's first settings (a subwoofer is off at night)."""
     display = kind == "display"
     return {
-        "run_down": 10 if display else 2,  # min
-        "night_run_down": 1 if display else None,  # min, None = as by day (a display: soon off at night)
         "on_wait": 0,  # s after switching on before the next device
         "standby": False,  # wait for standby before the plug goes off (power sensors)
         "standby_w": 5.0 if display else 3.0,  # W, at or below: standby
@@ -128,8 +128,8 @@ def device_defaults(kind: str) -> dict[str, Any]:
 
 # what a setting accepts: (min, max) for numbers, a list of choices, or bool
 SPECS: dict[str, tuple[float, float] | list[str] | type] = {
-    "video_idle_timeout": (0, 480),
-    "night_video_idle_timeout": (0, 480),
+    "idle_timeout": (0, 480),
+    "night_idle_timeout": (0, 480),
     "night_max_volume": (0, 100),
     "night_fade_in": (0, 30),
     **{f"preset_{name}": (0, 100) for name in PRESETS},
@@ -144,8 +144,7 @@ SPECS: dict[str, tuple[float, float] | list[str] | type] = {
     "volume_offset": (-50, 50),
     "prewarm": bool,
     "wake_detect_left": bool,
-    "run_down": (0, 120),
-    "night_run_down": (0, 120),
+    "off_wait": (0, 120),
     "on_wait": (0, 120),
     "standby": bool,
     "standby_w": (0, 200),
@@ -160,8 +159,6 @@ SPECS: dict[str, tuple[float, float] | list[str] | type] = {
 def check_value(key: str, value: Any) -> Any:
     """The value for a setting, or ValueError (with the reason)."""
     spec = SPECS[key]
-    if key == "night_run_down" and value is None:
-        return None  # as by day
     # the reason names what it takes, without words (it stands in every language's message)
     if spec is bool:
         if isinstance(value, str) and value.lower() in _BOOL_TEXT:  # e.g. an input_boolean's state
@@ -352,10 +349,8 @@ def options_v4(old: dict) -> dict:
 
 
 # the role settings of version 3 (in the store) and the devices they go to
+# (the run-downs are gone with version 4.2: the idle timeout instead)
 _ROLE_SETTINGS = {
-    "display_run_down": (("display", "run_down"),),
-    "audio_run_down": (("speakers", "run_down"), ("subwoofer", "run_down")),
-    "night_display_run_down": (("display", "night_run_down"),),
     "display_on_wait": (("display", "on_wait"),),
     "audio_on_wait": (("speakers", "on_wait"),),
     "display_standby": (("display", "standby"),),
@@ -370,8 +365,13 @@ _ROLE_SETTINGS = {
 
 def migrate_store(data: dict, options: dict) -> dict:
     """The room's stored values of version 3: role settings go to the devices,
-    the hardware plug's to the players."""
+    the hardware plug's to the players (as version 4.2)."""
     data = dict(data)
+    for old in ("display_run_down", "audio_run_down", "night_display_run_down"):
+        data.pop(old, None)
+    for old, new in _RENAMED_4_2.items():
+        if old in data:
+            data[new] = data.pop(old)
     devices = {d["id"]: d for d in devices_of(options)}
     per_device: dict[str, dict] = {k: dict(v) for k, v in (data.get("devices") or {}).items()}
     for old, targets in _ROLE_SETTINGS.items():
@@ -385,7 +385,7 @@ def migrate_store(data: dict, options: dict) -> dict:
     # a player's hardware plug: the room's value goes to each player that has one
     hosted = [s["id"] for s in options.get(OPT_SOURCES) or [] if s.get("host")]
     per_source: dict[str, dict] = {k: dict(v) for k, v in (data.get("sources") or {}).items()}
-    for old, key in (("host_run_down", "run_down"), ("host_on_wait", "on_wait")):
+    for old, key in (("host_run_down", "off_wait"), ("host_on_wait", "on_wait")):
         value = data.pop(old, ENTITY_DEFAULTS[old])
         for source in hosted:
             per_source.setdefault(source, {})[key] = value
@@ -397,6 +397,32 @@ def migrate_store(data: dict, options: dict) -> dict:
             (f"{ACTION_ID}.{ids[k.split('.', 1)[1]]}" if k.startswith(f"{ACTION_ID}.") and k.split(".", 1)[1] in ids else k): v
             for k, v in assumed.items()
         }
+    return data
+
+
+# version 4.2: the idle timeout is every player's; no run-down of the devices
+_RENAMED_4_2 = {"video_idle_timeout": "idle_timeout", "night_video_idle_timeout": "night_idle_timeout"}
+
+
+def migrate_store_4_2(data: dict) -> dict:
+    """The room's stored values of version 4.1 (only in pre-releases): the idle
+    timeout's new names, the players' plug run-down is their off_wait, the
+    devices' run-downs go."""
+    data = dict(data)
+    for old, new in _RENAMED_4_2.items():
+        if old in data:
+            data[new] = data.pop(old)
+    data["devices"] = {
+        k: {key: v for key, v in values.items() if key not in ("run_down", "night_run_down")}
+        for k, values in (data.get("devices") or {}).items()
+    }
+    sources = {}
+    for k, values in (data.get("sources") or {}).items():
+        values = dict(values)
+        if "run_down" in values:
+            values["off_wait"] = values.pop("run_down")
+        sources[k] = values
+    data["sources"] = sources
     return data
 
 

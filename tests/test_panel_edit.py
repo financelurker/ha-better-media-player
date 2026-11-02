@@ -180,7 +180,7 @@ def test_what_a_kind_cannot_have_is_left_out():
 async def test_settings_are_checked_too(hass, home, hass_ws_client):
     await setup_hub(hass)
     problems = await _validate(
-        hass_ws_client, draft(), settings={"room": {"night_max_volume": 120, "nonsense": 1}, "devices": {"display": {"run_down": -1}}}
+        hass_ws_client, draft(), settings={"room": {"night_max_volume": 120, "nonsense": 1}, "devices": {"display": {"on_wait": -1}}}
     )
     assert codes(problems) == {"bad_setting", "unknown_setting"}
     assert check_room(hass, None, SETUP_SCHEMA(draft()), {"room": {}, "devices": {}, "sources": {"video": {"standby": True}}})[0]["code"] == "unknown_setting"
@@ -204,12 +204,12 @@ async def test_settings_only_take_effect_without_a_reload(hass, home, hass_ws_cl
     res = await _ws(
         hass_ws_client, type="better_media_player/room/save", entry_id=entry.entry_id, version=room["version"],
         name="Living Room", area_id=None, setup=_setup_of(room),
-        settings={"room": {"night_max_volume": 20}, "devices": {"display": {"run_down": 12}}},
+        settings={"room": {"night_max_volume": 20}, "devices": {"display": {"on_wait": 12}}},
     )
     assert res["result"]["saved"], res
     assert entry.runtime_data is controller, "no reload"
     got = await get_settings(hass)
-    assert got["settings"]["night_max_volume"] == 20 and got["devices"]["display"]["run_down"] == 12
+    assert got["settings"]["night_max_volume"] == 20 and got["devices"]["display"]["on_wait"] == 12
 
 
 async def test_only_what_was_changed_is_sent_and_written(hass, home, hass_ws_client):
@@ -274,14 +274,14 @@ async def test_a_changed_setup_reloads_the_room(hass, home, hass_ws_client):
     res = await _ws(
         hass_ws_client, type="better_media_player/room/save", entry_id=entry.entry_id, version=room["version"],
         name="Lounge", area_id=None, setup=setup,
-        settings={"devices": {"receiver": {"run_down": 7}}},
+        settings={"devices": {"receiver": {"on_wait": 7}}},
     )
     assert res["result"]["saved"], res
     await hass.async_block_till_done()
     assert entry.title == "Lounge"
     assert [d["id"] for d in entry.options["devices"]] == ["display", "speakers", "subwoofer", "receiver"]
     assert entry.runtime_data.power.on_order == ["display", "receiver", "subwoofer", "speakers"], "the subwoofer: fed directly"
-    assert (await get_settings(hass, entity_id=ROOM))["devices"]["receiver"]["run_down"] == 7, "kept over the reload"
+    assert (await get_settings(hass, entity_id=ROOM))["devices"]["receiver"]["on_wait"] == 7, "kept over the reload"
     assert res["result"]["version"] != room["version"]
 
 
@@ -340,13 +340,13 @@ async def test_create_and_delete_a_room(hass, home, hass_ws_client):
         hass_ws_client, type="better_media_player/room/create", name="Kitchen", area_id=None,
         setup={"sources": [{"id": "audio", "player": KITCHEN}], "devices": [{"id": "speakers", "kind": "speakers", "power": {"plugs": ["switch.kitchen_speakers"]}}],
                "cables": [], "volume": {"where": "players"}},
-        settings={"room": {"prewarm": False}, "devices": {"speakers": {"run_down": 4}}},
+        settings={"room": {"prewarm": False}, "devices": {"speakers": {"on_wait": 4}}},
     )
     assert res["result"]["saved"], res
     entry = hass.config_entries.async_get_entry(res["result"]["entry_id"])
     assert entry.title == "Kitchen" and entry.version == 4
     got = await get_settings(hass, entity_id="media_player.kitchen")
-    assert got["settings"]["prewarm"] is False and got["devices"]["speakers"]["run_down"] == 4
+    assert got["settings"]["prewarm"] is False and got["devices"]["speakers"]["on_wait"] == 4
     res = await _ws(hass_ws_client, type="better_media_player/room/delete", entry_id=entry.entry_id)
     assert res["success"]
     assert hass.config_entries.async_get_entry(entry.entry_id) is None

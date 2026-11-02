@@ -8,7 +8,7 @@ What the room does by itself: the power button and sources, the order of the dev
 
 - **On** starts the last used source; the first time after setup that is the video player. The last source survives restarts.
 - **Source** selects video or music explicitly. The other source is stopped (Kodi off, music leaves its group or is paused).
-- **Off** (or **All off**): leave a Music Assistant group with `media_player.unjoin` (if it was the last member, Music Assistant pauses the group), otherwise stop direct playback; turn the video player off; switch all plugs and devices off in order. A player that takes a while to stop does not switch the room back on; only new playback does.
+- **Off** (or **All off**): leave a Music Assistant group with `media_player.unjoin` (if it was the last member, Music Assistant pauses the group), otherwise stop direct playback; turn the video player off; switch all plugs and devices off in order (a player's hardware plug once the player is off – at most a minute – and its `off_wait`). A player that takes a while to stop does not switch the room back on; only new playback does.
 - **Volume and transport** go to the player that is currently active.
 
 ## Order
@@ -16,34 +16,43 @@ What the room does by itself: the power button and sources, the order of the dev
 | | Sequence |
 |---|---|
 | **On** | player hardware plug → display → wake the player and wait until it is ready → speakers → subwoofer |
-| **Off** | subwoofer → speakers → display → player hardware plug |
+| **Off** | subwoofer → speakers → (the player, when its idle timeout ran out) → display → player hardware plug |
 
-In general: what shows the picture comes on before the player, the sound after it; each from the player on along the [cabling](devices.md) (a receiver before the subwoofer behind it). A device's `on_wait` holds the next one back. Off in the reverse order.
+In general: what shows the picture comes on before the player, the sound after it; each from the player on along the [cabling](devices.md) (a receiver before the subwoofer behind it). A device's `on_wait` holds the next one back. Off in the reverse order: the sound first (an amplifier before what feeds it, so nothing pops), the player's hardware plug last.
 
 If the player is not ready within the start timeout (90 s), everything switched on is switched off again and the room reports an error.
 
 ## When devices go off
 
-| Device | Needed while … | Run-down (default) |
-|---|---|---|
-| Display | the video player is on (menu, paused, playing) | 10 min |
-| Speakers, subwoofer | the video player is on **or** music is playing | 2 min |
-| Player hardware | its player is active | 2 min |
+One rule for every player:
 
-Each device has its own run-down (`run_down`, and `night_run_down` at night), so does a player's hardware plug (the player's `run_down`) ([Reference](reference.md#settings)).
+| The player … | The room |
+|---|---|
+| plays | everything it needs stays on |
+| does not play – paused, stopped, at the end of the list, in its menu, turned on without playing | everything stays on until the **idle timeout** ends (`idle_timeout`, 30 min; at night `night_idle_timeout`, 5 min; 0 = never). Then everything goes off at once: the sound devices first, then the player (one the room turns off), then the picture, the player's hardware plug last |
+| is turned off (by you, in its app, with its remote) | everything it needed goes off at once, in the same order |
 
-Paused music is not demand: the speakers switch off after the run-down and on again when playback resumes. A video player that sits idle in its menu is turned off after 30 min.
+- Playing again before the idle timeout ends keeps everything on; the next pause starts it anew.
+- A device another player still uses stays on (e.g. the speakers for a film while the music is paused).
+- Choosing another source switches off at once what the new one does not need (the display after a film, when music starts).
+- Follow me leaving the room (nobody there for its presence time): its speakers go off at once.
+- A player the room does not switch off (*Switched on and off by: None*, or music without on/off) stays as it is; only its devices go off.
+- The picture waits for the player to go off (at most a minute): a TV that the player turns off over HDMI-CEC goes with it.
+- A player's hardware plug waits `off_wait` (2 min) after its player is off, so its system can shut down.
+- A dropout of the player (unavailable for a moment) is no stop: it counts as not playing.
+- After a restart of Home Assistant a player that does not play holds anew (music only while its speakers are on). Until a player has reported (at most 5 min), what is on stays on.
+- Choosing a source starts its player: it holds until it plays, also while it still reports off.
 
-**When it goes off:** each switched device (and a player's hardware plug) has a sensor `sensor.<room>_<device>_off_at`, the time its run-down ends (its last need plus its run-down; at night its night run-down). A dashboard shows it as a countdown. If the device still waits after that (for its standby, or for a device that goes off before it), the time stays until it is off. `unknown` while no switching off is planned: needed, off, kept on, automatic power off, manual mode. Automations get the run-down's start, its cancelling and each device switched off as [device triggers](automations.md#run-down).
+**When it goes off:** each switched device (and a player's hardware plug) has a sensor `sensor.<room>_<device>_off_at`: the end of the idle timeout once nothing plays (a player's plug: plus its `off_wait`). A dashboard shows it as a countdown. If the device still waits after that (for its standby, or for the player), the time stays until it is off. `unknown` while no switching off is planned: it plays, off, no idle timeout, kept on, automatic power off, manual mode. Automations get the start, its cancelling and each device switched off as [device triggers](automations.md#run-down).
 
 ## Keep on
 
-`switch.<room>_keep_on` keeps what is on on: nothing is switched off automatically – no run-down (devices and a player's hardware), no device off at night, no idle video player turned off, no music player going off with its speakers, nothing an announcement brought up. Starting still switches on what a player needs (unlike *Automatic power* off, which switches nothing at all).
+`switch.<room>_keep_on` keeps what is on on: nothing is switched off automatically – the idle timeout does not end, no device off at night, no device that nothing needs, no player's hardware plug, nothing an announcement brought up. Starting still switches on what a player needs (unlike *Automatic power* off, which switches nothing at all).
 
-- It stays on until it is turned off or *All off* is pressed (also the room player's off); also over a restart. Turned off, what is on runs down from then on.
+- It stays on until it is turned off or *All off* is pressed (also the room player's off); also over a restart. Turned off, what nothing needs goes off at once; a player that does not play holds again for its idle timeout, from then on.
 - Set it ahead too, e.g. during a film, so nothing goes off afterwards.
 - A room off that you did not press yourself (sleep timer, the end of a wake, a handover to another room) stops the players; kept on, the devices stay on. Quiet mode still switches the speakers off: you asked for it.
-- The room's status is `kept_on` while devices are on and none is needed.
+- The room's status is `kept_on` while devices are on and nothing plays.
 - Turned on while something is going off: what was not yet switched off stays on (a device already switched off, waiting for its plug, goes on off).
 - A start that fails still switches off what it switched on: that was off before.
 
@@ -65,7 +74,7 @@ Display, speakers and subwoofer can also be devices that turn themselves on and 
 
 ## Wait for standby
 
-With power sensors and a plug for the device (and its setting `standby` on), a plug is cut only after its device has drawn less than the threshold for 30 s, at most after the maximum wait. Useful for OLED TVs that run panel care in standby. A TV that never goes to standby on its own (no CEC) gains nothing from this; then only the run-down applies.
+With power sensors and a plug for the device (and its setting `standby` on), a plug is cut only after its device has drawn less than the threshold for 30 s, at most after the maximum wait. Useful for OLED TVs that run panel care in standby. A TV that never goes to standby on its own (no CEC) gains nothing from this.
 
 ## Switched by hand
 

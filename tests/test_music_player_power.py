@@ -37,20 +37,20 @@ async def test_turned_on_in_music_assistant_brings_the_speakers_up(hass, home, f
     assert home.on(SPEAKERS)
 
 
-async def test_on_but_nothing_plays_goes_off_after_the_run_down(hass, home, freezer):
+async def test_on_but_nothing_plays_goes_off_after_the_idle_timeout(hass, home, freezer):
     await _room(hass, home)
     home.music("idle")
     await hass.async_block_till_done()
-    await tick(hass, freezer, 60)
-    assert home.on(SPEAKERS)
-    await tick(hass, freezer, 75)  # speaker run-down: 2 min
-    assert hass.states.get(MUSIC).state == "off", "turned off with the room"
-    await tick(hass, freezer, 15)
-    assert not home.on(SPEAKERS), "no second run-down"
-    assert not home.on(BASS)
+    await tick(hass, freezer, 29 * 60, step=60)
+    assert home.on(SPEAKERS) and hass.states.get(MUSIC).state == "idle"
+    await tick(hass, freezer, 70, step=5)  # idle timeout: 30 min
+    assert not home.on(SPEAKERS) and not home.on(BASS)
+    assert hass.states.get(MUSIC).state == "off", "after its speakers"
+    off = [i for i, c in enumerate(home.calls) if c[1] == "turn_off"]
+    assert [home.calls[i][2] for i in off] == [BASS, SPEAKERS, MUSIC]
 
 
-async def test_paused_goes_off_after_the_run_down(hass, home, freezer):
+async def test_paused_goes_off_after_the_idle_timeout(hass, home, freezer):
     await _room(hass, home)
     home.music("playing")
     await hass.async_block_till_done()
@@ -58,7 +58,9 @@ async def test_paused_goes_off_after_the_run_down(hass, home, freezer):
     assert home.on(SPEAKERS)
     home.music("paused")
     await hass.async_block_till_done()
-    await tick(hass, freezer, 150)
+    await tick(hass, freezer, 29 * 60, step=60)
+    assert home.on(SPEAKERS), "paused: it holds"
+    await tick(hass, freezer, 70, step=5)
     assert hass.states.get(MUSIC).state == "off"
     assert not home.on(SPEAKERS)
 
@@ -78,17 +80,16 @@ async def test_playing_again_in_time_keeps_everything_on(hass, home, freezer):
     assert not calls_to(home, MUSIC, "turn_off")
 
 
-async def test_turned_off_in_music_assistant_runs_down(hass, home, freezer):
+async def test_turned_off_in_music_assistant_everything_goes_off(hass, home, freezer):
+    """Off means off: no waiting."""
     await _room(hass, home)
     home.music("playing")
     await hass.async_block_till_done()
     await tick(hass, freezer, 10)
     home.music("off")  # off in the app: Music Assistant stops it
     await hass.async_block_till_done()
-    await tick(hass, freezer, 60)
-    assert home.on(SPEAKERS), "the speakers' run-down"
-    await tick(hass, freezer, 90)
-    assert not home.on(SPEAKERS)
+    await tick(hass, freezer, 5)
+    assert not home.on(SPEAKERS) and not home.on(BASS)
 
 
 async def test_the_room_turns_it_on_and_off(hass, home, freezer):
@@ -131,7 +132,7 @@ async def test_still_on_after_its_turn_off_stays_out(hass, home, freezer):
     home.music("idle")
     await hass.async_block_till_done()
     home.ma_power = False  # (its turn_off does not get through)
-    await tick(hass, freezer, 135)
+    await tick(hass, freezer, 31 * 60, step=60)
     await tick(hass, freezer, 120)
     assert len(calls_to(home, MUSIC, "turn_off")) == 1, "once"
     assert hass.states.get(MUSIC).state == "idle"
@@ -217,19 +218,19 @@ async def test_manual_mode_leaves_it_alone(hass, home, freezer):
     assert hass.states.get(MUSIC).state == "paused"
 
 
-async def test_played_after_turning_on_runs_down_from_the_pause(hass, home, freezer):
+async def test_played_after_turning_on_holds_from_the_pause(hass, home, freezer):
     await _room(hass, home)
     home.music("idle")  # on in the app
     await hass.async_block_till_done()
-    await tick(hass, freezer, 60)
+    await tick(hass, freezer, 20 * 60, step=60)
     home.music("playing")
     await hass.async_block_till_done()
     await tick(hass, freezer, 30)
     home.music("paused")
     await hass.async_block_till_done()
-    await tick(hass, freezer, 90)
-    assert home.on(SPEAKERS), "the run-down counts from the pause"
-    await tick(hass, freezer, 60)
+    await tick(hass, freezer, 29 * 60, step=60)
+    assert home.on(SPEAKERS), "the idle timeout counts from the pause"
+    await tick(hass, freezer, 70, step=5)
     assert not home.on(SPEAKERS)
 
 
@@ -255,14 +256,16 @@ async def test_quiet_cuts_the_speakers_right_away(hass, house, freezer):
     await quiet_leaves_and_cuts_speakers(hass, house)
 
 
-async def test_without_speakers_of_the_room_it_is_left_alone(hass, home, freezer):
+async def test_without_speakers_of_the_room_it_goes_off_after_the_idle_timeout(hass, home, freezer):
     home.ma_power = True
     home.music("playing")
     await setup_room(hass, video_player=None, display=None, speakers=None, bass=None)
     home.music("paused")
     await hass.async_block_till_done()
-    await tick(hass, freezer, 300)
-    assert not calls_to(home, MUSIC, "turn_off"), "no devices to go off with"
+    await tick(hass, freezer, 29 * 60, step=60)
+    assert not calls_to(home, MUSIC, "turn_off")
+    await tick(hass, freezer, 70, step=5)
+    assert calls_to(home, MUSIC, "turn_off"), "no devices: its idle timeout alone"
 
 
 # ----------------------------------------------- restarts, failures, run-downs
@@ -290,7 +293,7 @@ async def test_turned_off_again_after_a_failed_off(hass, home, freezer):
     home.music("idle")
     await hass.async_block_till_done()
     home.ma_power = False  # its first turn_off does not get through
-    await tick(hass, freezer, 135)
+    await tick(hass, freezer, 31 * 60, step=60)
     assert len(calls_to(home, MUSIC, "turn_off")) == 1
     home.ma_power = True
     home.music("playing")  # in use again
@@ -298,8 +301,8 @@ async def test_turned_off_again_after_a_failed_off(hass, home, freezer):
     await tick(hass, freezer, 10)
     home.music("paused")
     await hass.async_block_till_done()
-    await tick(hass, freezer, 150)
-    assert hass.states.get(MUSIC).state == "off", "the next run-down turns it off again"
+    await tick(hass, freezer, 31 * 60, step=60)
+    assert hass.states.get(MUSIC).state == "off", "the next idle timeout turns it off again"
 
 
 async def test_automatic_power_off_cuts_nothing(hass, home, freezer):
@@ -318,28 +321,30 @@ async def test_automatic_power_off_cuts_nothing(hass, home, freezer):
 
 
 async def test_it_goes_off_before_its_hardware_plug(hass, home, freezer):
-    host = "switch.player_plug_2"
+    host = "switch.kodi_box_plug"
     hass.states.async_set(host, "on")  # the player's hardware is up
     home.ma_power = True
     home.music("off")
     entry = await setup_room(hass, video_player=None, display=None, audio_host=host)
     entry.runtime_data.data["last_source"] = "audio"
-    await set_setting(hass, "run_down", 10, device="audio")  # its hardware plug
+    await set_setting(hass, "off_wait", 10, device="audio")  # its hardware plug
     home.music("playing")
     await hass.async_block_till_done()
     await tick(hass, freezer, 10)
     home.music("paused")
     await hass.async_block_till_done()
-    await tick(hass, freezer, 135)  # speakers ran down; the hardware plug's run-down goes on
+    await tick(hass, freezer, 31 * 60, step=60)  # the idle timeout ran out
     assert not home.on(SPEAKERS)
-    assert home.on(host)
-    assert hass.states.get(MUSIC).state == "off", "with its speakers, before its plug"
+    assert hass.states.get(MUSIC).state == "off", "after its speakers, before its plug"
+    assert home.on(host), "the plug waits for it to shut down (off_wait)"
+    await tick(hass, freezer, 10 * 60, step=30)
+    assert not home.on(host)
 
 
-async def test_a_run_down_of_zero_still_brings_the_speakers_up(hass, home, freezer):
+async def test_an_idle_timeout_of_zero_holds_for_ever(hass, home, freezer):
     await _room(hass, home)
-    await set_setting(hass, "run_down", 0, device="speakers")
+    await set_setting(hass, "idle_timeout", 0)
     home.music("idle")
     await hass.async_block_till_done()
-    await tick(hass, freezer, 10)
+    await tick(hass, freezer, 3 * 60 * 60, step=600)
     assert home.on(SPEAKERS)

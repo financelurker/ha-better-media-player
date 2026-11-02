@@ -47,22 +47,24 @@ async def test_music_leaves_the_tv_off(hass, home, freezer):
     assert home.on(SPEAKERS) and home.on(BASS) and not home.on(TV)
 
 
-async def test_each_device_runs_down_on_its_own(hass, home, freezer):
+async def test_after_the_idle_timeout_off_in_order(hass, home, freezer):
+    """What a device feeds goes off before it: the subwoofer before the receiver."""
     home.avr("off")
     await setup_room_devices(hass, DEVICES, CABLES)
-    await set_setting(hass, "run_down", 1, device="sub")
-    await set_setting(hass, "run_down", 5, device="Receiver")  # (by its name)
-    assert (await get_settings(hass))["devices"]["avr"]["run_down"] == 5
+    await set_setting(hass, "on_wait", 5, device="Receiver")  # (by its name)
+    assert (await get_settings(hass))["devices"]["avr"]["on_wait"] == 5
     home.music("playing")
     await hass.async_block_till_done()
-    await tick(hass, freezer, 5)
+    await tick(hass, freezer, 10)
     home.music("paused")
     await hass.async_block_till_done()
+    await tick(hass, freezer, 29 * 60, step=60)
+    assert home.on(BASS) and ("media_player", "turn_off", AVR) not in home.calls
     await tick(hass, freezer, 90, step=5)
     assert not home.on(BASS)
-    assert ("media_player", "turn_off", AVR) not in home.calls
-    await tick(hass, freezer, 4 * 60, step=10)
-    assert ("media_player", "turn_off", AVR) in home.calls, "after its 5 min"
+    assert ("media_player", "turn_off", AVR) in home.calls
+    off = [c[2] for c in home.calls if c[1] == "turn_off"]
+    assert off.index(BASS) < off.index(AVR)
 
 
 async def test_the_room_volume_on_a_device(hass, home, freezer):

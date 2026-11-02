@@ -231,9 +231,10 @@ async def test_a_tv_with_its_own_speakers(hass, home, freezer):
     await hass.async_block_till_done()
     assert _state(hass, LG) == "on", "music needs its speakers"
     await tick(hass, freezer, 60)
-    assert _state(hass, LG) == "on", "the display's run-down does not cut what the speakers need"
+    assert _state(hass, LG) == "on", "the display is not needed, but the speakers are"
     home.music("idle")
-    await tick(hass, freezer, 200)
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 31 * 60, step=60)
     assert _state(hass, LG) == "off"
     assert MUSIC  # (the music player stays the room's)
 

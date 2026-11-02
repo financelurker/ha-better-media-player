@@ -32,7 +32,7 @@ A room's controls that make no sense right now are hidden (`hidden_by: integrati
 
 | Control | Shown while |
 |---|---|
-| All off | the room plays or is on, or a device still has power (run-down, manual mode) |
+| All off | the room plays or is on, or a device still has power (waiting to go off, manual mode) |
 | Sleep timer, Sleep timer +15 min | the room plays or is on, or a sleep timer runs |
 | Sleep timer end | a sleep timer runs |
 | Night mode | always (it is set ahead, also while nothing plays) |

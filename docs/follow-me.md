@@ -29,12 +29,12 @@ While it plays:
 
 - **Prewarm:** the speakers of all follow rooms are switched on, so the sound is there as soon as you walk in.
 - **Join:** a room with presence joins. Its volume is set first: follow me's volume plus the room's offset (e.g. bedroom −10 percentage points).
-- **Leave:** a room without presence leaves after its presence run-down (2 min). When the last room leaves, Music Assistant pauses the group and follow me ends.
+- **Leave:** a room without presence leaves after its presence run-down (2 min); its speakers go off at once. When the last room leaves, Music Assistant pauses the group and follow me ends.
 - **Never steals:** a room that plays something else (directly or in another group) is left alone.
 - **Left out:** rooms with video playing (Kodi; when the video ends the room comes back, and if it was the last room the group resumes, within 3 h), rooms in **quiet** mode (switch per room; leaves at once and cuts the speakers) and rooms turned **off** during the session (until follow me ends).
 - **Unknown presence** (all sensors unavailable) changes nothing, so music does not stop because a sensor integration is down.
-- **Nobody detected** at the start: the start room stays as long as nobody is detected in any follow room; then the normal rules apply, including the run-down. The same goes for a room you add to the group by hand.
-- **Paused by you:** follow me goes on, rooms stay as they are, the prewarmed speakers run down. On resume the rules apply again.
+- **Nobody detected** at the start: the start room stays as long as nobody is detected in any follow room; then the normal rules apply, including the idle timeout. The same goes for a room you add to the group by hand.
+- **Paused by you:** follow me goes on, rooms stay as they are (their speakers for the idle timeout), the prewarmed speakers go off. On resume the rules apply again.
 
 **Stop** follow me with any room's **Stop follow me** button or `better_media_player.stop_follow` (target: a room player). The music goes back to one room: the room you stop it in if it plays along, else the room it was started in (paused music stays paused there); playing music goes on there where it was. All other rooms stop. Stopping while follow me is off gives an error. Follow me also ends by itself when the follow-me player is stopped in Music Assistant.
 

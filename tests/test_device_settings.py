@@ -27,7 +27,7 @@ async def test_get_settings_of_a_room_and_its_devices(hass, home):
     assert got["settings"] == ROOM_SETTINGS
     assert set(got["devices"]) == {"display", "speakers", "subwoofer"}
     assert all(set(d) == set(DEVICE_SETTINGS) for d in got["devices"].values())
-    assert got["devices"]["display"]["run_down"] == 10 and got["devices"]["speakers"]["run_down"] == 2
+    assert got["devices"]["display"]["on_wait"] == 0 and got["devices"]["speakers"]["standby_w"] == 3.0
     assert got["devices"]["subwoofer"]["night_off"] is True and got["devices"]["display"]["night_off"] is False
     assert (await get_settings(hass, device="display"))["devices"].keys() == {"display"}
 
@@ -38,17 +38,19 @@ async def test_a_device_by_its_name(hass, home):
     devices[0]["name"] = "TV"
     hass.config_entries.async_update_entry(entry, options={**entry.options, "devices": devices})
     await hass.async_block_till_done()
-    await set_setting(hass, "run_down", 20, device="TV")
-    assert (await get_settings(hass, device=devices[0]["id"]))["devices"][devices[0]["id"]]["run_down"] == 20
+    await set_setting(hass, "on_wait", 20, device="TV")
+    assert (await get_settings(hass, device=devices[0]["id"]))["devices"][devices[0]["id"]]["on_wait"] == 20
 
 
 @pytest.mark.parametrize(
     ("data", "key"),
     [
         ({"setting": "nonsense", "value": 1}, "settings_unknown"),
-        ({"setting": "run_down", "value": 1}, "settings_needs_device"),
+        ({"setting": "on_wait", "value": 1}, "settings_needs_device"),
         ({"setting": "night_max_volume", "value": 1, "device": "display"}, "settings_unknown"),
-        ({"setting": "run_down", "value": 1, "device": "beamer"}, "settings_no_device"),
+        ({"setting": "on_wait", "value": 1, "device": "beamer"}, "settings_no_device"),
+        ({"setting": "run_down", "value": 1, "device": "display"}, "settings_unknown"),  # gone: idle_timeout
+        ({"setting": "video_idle_timeout", "value": 10}, "settings_unknown"),  # now idle_timeout
         ({"setting": "night_max_volume", "value": 101}, "settings_bad_value"),
         ({"setting": "night_max_volume", "value": "loud"}, "settings_bad_value"),
         ({"setting": "prewarm", "value": 1}, "settings_bad_value"),
@@ -68,11 +70,12 @@ async def test_what_the_action_refuses(hass, home, data, key):
     assert (await get_settings(hass))["settings"] == ROOM_SETTINGS, "nothing changed"
 
 
-async def test_night_run_down_back_to_as_by_day(hass, home):
+async def test_the_idle_timeout(hass, home):
     await setup_room(hass)
-    await set_setting(hass, "night_run_down", 1, device="display")
-    await set_setting(hass, "night_run_down", None, device="display")
-    assert (await get_settings(hass))["devices"]["display"]["night_run_down"] is None
+    await set_setting(hass, "idle_timeout", 45)
+    await set_setting(hass, "night_idle_timeout", 0)
+    got = (await get_settings(hass))["settings"]
+    assert (got["idle_timeout"], got["night_idle_timeout"]) == (45, 0)
 
 
 async def test_central_settings_need_the_central_entry(hass, home):
@@ -173,9 +176,8 @@ async def test_room_options_move_to_the_device(hass, home, hass_storage):
     assert entry.version == 4
     assert set(entry.options) == {"sources", "devices", "cables", "volume", "occupancy"}
     got = await get_settings(hass)
-    assert got["devices"]["speakers"]["run_down"] == 4, "set on the entity: it stays"
-    assert got["devices"]["subwoofer"]["run_down"] == 4, "the speakers' run-down was the subwoofer's too"
-    assert got["devices"]["display"]["run_down"] == 12, "changed in the options before: it wins"
+    assert entry.minor_version == 2
+    assert "run_down" not in got["devices"]["speakers"], "no run-down any more: the idle timeout"
     assert got["devices"]["display"]["on_wait"] == 3
     assert got["settings"]["sleep_fade"] == 7
     assert got["settings"]["prewarm"] is False
@@ -240,15 +242,15 @@ async def test_the_settings_of_a_player_s_hardware_plug(hass, home, freezer):
     hass.states.async_set("switch.kodi_box_plug", "off")
     await setup_room(hass, video_host="switch.kodi_box_plug")
     got = await get_settings(hass)
-    assert got["sources"] == {"video": {"run_down": 2, "on_wait": 0}}, "only a player with a plug for its hardware"
+    assert got["sources"] == {"video": {"off_wait": 2, "on_wait": 0}}, "only a player with a plug for its hardware"
     await set_setting(hass, "on_wait", 4, device="video")
-    await set_setting(hass, "run_down", 7, device=hass.states.get(KODI).attributes.get("friendly_name") or "video")
+    await set_setting(hass, "off_wait", 7, device=hass.states.get(KODI).attributes.get("friendly_name") or "video")
     assert (await get_settings(hass, device="video")) == {
-        "settings": ROOM_SETTINGS, "devices": {}, "sources": {"video": {"run_down": 7, "on_wait": 4}},
+        "settings": ROOM_SETTINGS, "devices": {}, "sources": {"video": {"off_wait": 7, "on_wait": 4}},
     }
     for data, key in (
         ({"setting": "standby", "value": True, "device": "video"}, "settings_unknown"),
-        ({"setting": "run_down", "value": 1, "device": "audio"}, "settings_no_device"),  # no plug for its hardware
+        ({"setting": "off_wait", "value": 1, "device": "audio"}, "settings_no_device"),  # no plug for its hardware
     ):
         with pytest.raises(ServiceValidationError) as err:
             await hass.services.async_call(DOMAIN, "set_setting", {"entity_id": ROOM, **data}, blocking=True)
@@ -259,7 +261,7 @@ async def test_values_as_automations_give_them(hass, home):
     """A device needs its room; on / off as text (an input_boolean's state); whole numbers stay whole."""
     await setup_room(hass)
     with pytest.raises(ServiceValidationError) as err:
-        await hass.services.async_call(DOMAIN, "set_setting", {"device": "display", "setting": "run_down", "value": 3}, blocking=True)
+        await hass.services.async_call(DOMAIN, "set_setting", {"device": "display", "setting": "on_wait", "value": 3}, blocking=True)
     assert err.value.translation_key == "settings_needs_room"
     await set_setting(hass, "prewarm", "off")
     await set_setting(hass, "night_max_volume", "25")  # a template's result

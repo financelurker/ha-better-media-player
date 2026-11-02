@@ -171,7 +171,8 @@ def role_conf(role: str, key: str) -> str:
 CONF_DISPLAY_RUN_DOWN = "display_run_down"  # min
 CONF_AUDIO_RUN_DOWN = "audio_run_down"  # min
 CONF_HOST_RUN_DOWN = "host_run_down"  # min
-CONF_VIDEO_IDLE_TIMEOUT = "video_idle_timeout"  # min, 0 = never
+CONF_VIDEO_IDLE_TIMEOUT = "video_idle_timeout"  # min (up to version 4.1)
+CONF_IDLE_TIMEOUT = "idle_timeout"  # min, 0 = never
 CONF_START_TIMEOUT = "start_timeout"  # s
 CONF_DISPLAY_ON_WAIT = "display_on_wait"  # s
 CONF_HOST_ON_WAIT = "host_on_wait"  # s
@@ -179,7 +180,8 @@ CONF_AUDIO_ON_WAIT = "audio_on_wait"  # s
 CONF_SLEEP_FADE = "sleep_fade"  # min, default fade of the sleep timer
 
 # --- Night mode ------------------------------------------------------------------
-CONF_NIGHT_VIDEO_IDLE_TIMEOUT = "night_video_idle_timeout"  # min
+CONF_NIGHT_VIDEO_IDLE_TIMEOUT = "night_video_idle_timeout"  # min (up to version 4.1)
+CONF_NIGHT_IDLE_TIMEOUT = "night_idle_timeout"  # min
 CONF_NIGHT_DISPLAY_RUN_DOWN = "night_display_run_down"  # min
 CONF_NIGHT_MAX_VOLUME = "night_max_volume"  # %, 0 = no limit
 CONF_NIGHT_FADE_IN = "night_fade_in"  # min, back to the room volume afterwards

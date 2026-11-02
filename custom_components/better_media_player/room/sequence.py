@@ -58,6 +58,8 @@ class PowerSequence:
                 return
             self.cancel()
         self.source = source
+        if source is not None and (src := ctrl.sources.get(source)) is not None:
+            ctrl.begin_use(src)  # started by the room: in use (it holds until it plays)
         # background task: may wait for a slow player, must not block HA
         self.task = ctrl.hass.async_create_background_task(
             self._run(source), f"{DOMAIN}_{ctrl.entry.entry_id}_start", eager_start=False
@@ -111,6 +113,8 @@ class PowerSequence:
             _LOGGER.warning("%s: start failed: %s", ctrl.entry.title, err)
             ctrl.error = str(err)
             ctrl.not_run_down(switched, "start_failed")
+            if src is not None:
+                ctrl.end_use(src)
             await power.devices.async_take_down(switched)
         finally:
             if asyncio.current_task() is self.task:

@@ -341,7 +341,7 @@
         },
         "setting": {
           "name": "Einstellung",
-          "description": "Der Schlüssel der Einstellung, z. B. night_max_volume, run_down, default_volume. Die Liste steht in der Doku (Reference)."
+          "description": "Der Schlüssel der Einstellung, z. B. night_max_volume, idle_timeout, default_volume. Die Liste steht in der Doku (Reference)."
         },
         "value": {
           "name": "Wert",

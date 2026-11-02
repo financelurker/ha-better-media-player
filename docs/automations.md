@@ -51,8 +51,8 @@ action: better_media_player.set_setting
 data:
   entity_id: media_player.living_room
   device: display             # or its name
-  setting: run_down
-  value: 15                   # min
+  setting: on_wait
+  value: 5                    # s
 ```
 
 ```yaml
@@ -71,7 +71,7 @@ Read them, e.g. to put a setting back later:
   response_variable: room
 - action: notify.notify
   data:
-    message: "Night limit {{ room.settings.night_max_volume }} %, TV run-down {{ room.devices.display.run_down }} min"
+    message: "Night limit {{ room.settings.night_max_volume }} %, off after {{ room.settings.idle_timeout }} min without playback"
 ```
 
 The response: `settings` (the room's) and `devices` (each device's, by its id); without a room player only `settings` (the central ones). A value outside the setting's range, an unknown setting or device fail the action with the reason. All settings: [Reference](reference.md#settings).
@@ -211,15 +211,15 @@ action:
 
 ## Run-down
 
-The event `better_media_player_run_down` (with `entity_id`, `entry_id`, `room`) tells what the room's [run-down](room.md#when-devices-go-off) does:
+The event `better_media_player_run_down` (with `entity_id`, `entry_id`, `room`) tells when the room's devices [go off](room.md#when-devices-go-off): the run-down is the time until then, from when nothing plays (the idle timeout).
 
 | `type` | When | Data |
 |---|---|---|
-| `started` | devices begin to run down (once for those starting together) | `devices`: device ID → when it goes off |
-| `cancelled` | devices stop running down while still on, or before their time | `devices`: the IDs; `reason`: `needed`, `kept_on`, `all_off` (the button or the room player's off), `room_off` (a room off you did not press: sleep timer, end of a wake, handover), `manual`, `switched_off` (by hand, before its time), `automatic_off` |
+| `started` | nothing plays (for 10 s: not between two items): an off is planned, or its time changed (e.g. night mode) – once for the devices together | `devices`: device ID → when it goes off |
+| `cancelled` | the off no longer comes, or the device went off before its time | `devices`: the IDs; `reason`: `needed` (it plays again), `kept_on`, `all_off` (the button or the room player's off), `room_off` (a room off you did not press: sleep timer, end of a wake, handover), `manual`, `switched_off` (by hand, before its time), `automatic_off` |
 | `off` | a device went off after its run-down (one event per device) | `device`: its ID, `name` (its kind if it has none) |
 
-A start is no run-down: what it switches on is not counted until its player is there (nor when the start fails and switches it off again). After a restart of Home Assistant the run-down starts anew, without a new `started`.
+A start is no run-down: what it switches on is not counted until its player is there (nor when the start fails and switches it off again); once it is there and does not play (Kodi in its menu), the idle timeout runs. After a restart of Home Assistant it starts anew, without a new `started`.
 
 The same as device triggers: *Run-down started*, *Run-down cancelled*, *Device switched off after its run-down*. A warning shortly before: a time trigger on the device's `off_at` sensor with an offset.
 
