@@ -38,7 +38,6 @@
   "route.on_cec": "on by CEC",
   "route.direct": "fed directly",
   "insp.click": "Click a device or a cable to see how it is set up.",
-  "insp.migrated": "No cables are described yet: the players feed the devices directly (dotted lines), as before.",
   "insp.entity": "Player",
   "insp.host": "Plug of its hardware",
   "insp.power": "Power",
@@ -262,5 +261,13 @@
   "problem.nothing_switches": "{device}: choose its plug, the device that switches itself or its own actions – or make it passive.",
   "insp.cec_timeout": "Wait for CEC at most",
   "insp.input_pause": "Pause after choosing an input",
-  "insp.id_taken": "The ID {id} is taken or reserved."
+  "insp.id_taken": "The ID {id} is taken or reserved.",
+  "over.title": "Cabling not described yet",
+  "over.text": "Players and devices are here (a room set up with v1.2.0 is taken over like this). Until cables are described, the room works as before: the players feed the devices directly (dotted lines) – the picture to the display, the sound to speakers, subwoofer, receiver and amplifier.",
+  "over.passive": "Taken over as cables, the room keeps working the same. From there, insert mixers or splitters, or let BMP choose inputs.",
+  "over.volume": "Room volume: it was set on {entity}, which belongs to no device of the room; it is now the volume of {device}. If it belongs to another device, give that device the volume and use it as the room's volume.",
+  "over.button": "Take over the dotted lines as cables",
+  "over.after": "An unsaved change: check it, then Save (or Discard).",
+  "over.cable": "A new cable: click the dot on the right of a tile, then the tile it plugs into.",
+  "over.move": "Drag a tile to move it; the arrangement changes nothing in how the room works."
 }

@@ -38,7 +38,6 @@
   "route.on_cec": "an per CEC",
   "route.direct": "direkt versorgt",
   "insp.click": "Ein Gerät oder Kabel anklicken, um zu sehen, wie es eingerichtet ist.",
-  "insp.migrated": "Noch keine Kabel beschrieben: Die Player versorgen die Geräte direkt (gepunktete Linien), wie bisher.",
   "insp.entity": "Player",
   "insp.host": "Steckdose seiner Hardware",
   "insp.power": "Strom",
@@ -262,5 +261,13 @@
   "problem.nothing_switches": "{device}: Steckdose, selbst schaltendes Gerät oder eigene Aktionen wählen – oder auf passiv stellen.",
   "insp.cec_timeout": "Höchstens auf CEC warten",
   "insp.input_pause": "Pause nach der Eingangswahl",
-  "insp.id_taken": "Die ID {id} ist vergeben oder reserviert."
+  "insp.id_taken": "Die ID {id} ist vergeben oder reserviert.",
+  "over.title": "Verkabelung noch nicht beschrieben",
+  "over.text": "Player und Geräte sind da (so wird ein mit v1.2.0 eingerichteter Raum übernommen). Solange keine Kabel beschrieben sind, arbeitet der Raum wie bisher: Die Player versorgen die Geräte direkt (gepunktete Linien) – das Bild das Display, den Ton Lautsprecher, Subwoofer, Receiver und Verstärker.",
+  "over.passive": "Als Kabel übernommen, arbeitet der Raum genauso weiter. Von dort aus Mixer oder Splitter einfügen oder BMP Eingänge wählen lassen.",
+  "over.volume": "Raumlautstärke: Sie war auf {entity} eingestellt, das zu keinem Gerät des Raums gehört; jetzt ist es die Lautstärke von {device}. Gehört es zu einem anderen Gerät, diesem die Lautstärke geben und sie als Raumlautstärke nehmen.",
+  "over.button": "Gepunktete Linien als Kabel übernehmen",
+  "over.after": "Eine ungespeicherte Änderung: prüfen, dann Speichern (oder Verwerfen).",
+  "over.cable": "Ein neues Kabel: den Punkt rechts an einer Kachel anklicken, dann die Kachel, in die es geht.",
+  "over.move": "Eine Kachel ziehen, um sie zu verschieben; die Anordnung ändert nichts daran, wie der Raum arbeitet."
 }

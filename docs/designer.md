@@ -28,6 +28,7 @@ Tested on a local Home Assistant 2026.10 with the demo integration (simulated de
 - **Tiles:** the room's players on the left, its devices to the right of what feeds them. A device switched by HDMI-CEC carries a *CEC* mark, the one the room's volume is set on *Room volume*. Each tile shows the plug or device that powers it; a passive one (mixer, splitter, passive speakers) has a dashed frame.
 - **Cables:** what the room's [cabling](devices.md) describes. Picture is blue, sound orange and dashed; an input to choose is written on the cable (*· CEC* when HDMI-CEC chooses it).
 - **Dotted lines:** a device no cable reaches is fed directly, as in a room without cabling – a display gets the picture, speakers, subwoofer, receiver and amplifier get the sound.
+- **A room without cables** (as one set up with v1.2.0 is taken over) works through these dotted lines. *Take over the dotted lines as cables* (on the right, with nothing picked) turns them into cables – the room works the same – so the cabling can be changed from there: a mixer or splitter in between, inputs to choose. It is an unsaved change until Save.
 - **Show route:** pick a player to highlight what it needs when it starts; below the drawing, the order in which the devices come on and the inputs they are switched to. *All* shows every cable.
 - **Problems** of the room are listed above the drawing; a tile with an error has a red frame.
 
@@ -35,7 +36,7 @@ Tested on a local Home Assistant 2026.10 with the demo integration (simulated de
 
 - **+ Add** (above the drawing): a player (video or music; at most one each, a player of the room's area is proposed) or a device: display, AV receiver / soundbar, amplifier, speakers, subwoofer, HDMI switch, mixer, splitter, passive speakers.
 - **A cable:** click the right dot of a tile, then the tile it plugs into (Esc cancels). What it carries is proposed from the two ends.
-- **Details:** click a tile or a cable, and they open on the right (× closes them). Entities and the area are picked with Home Assistant's own selector (search by name, area or ID; only entities that fit the field are offered).
+- **Details:** click a tile or a cable, and they open on the right (× goes back to the room's overview there). Entities and the area are picked with Home Assistant's own selector (search by name, area or ID; only entities that fit the field are offered).
 
 | Details of | What you set |
 |---|---|
