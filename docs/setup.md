@@ -38,7 +38,7 @@ Each room is a device (Settings → Devices & services → Better Media Player �
 
 ![Device page](images/device.png)
 
-How the room behaves – times, waits, standby, night mode, volume presets and follow me – are the room's settings, each device of the room has its own (run-down, wait after on, standby, off at night). The [panel](designer.md) shows them; the action `better_media_player.set_setting` changes one, at once and kept ([examples](automations.md#settings)). To start, you can leave them all at their defaults. All of them, with their defaults: [Reference](reference.md#settings).
+How the room behaves – times, waits, standby, night mode, volume presets and follow me – are the room's settings, each device of the room has its own (wait after on, standby, off at night). The [panel](designer.md) shows them; the action `better_media_player.set_setting` changes one, at once and kept ([examples](automations.md#settings)). To start, you can leave them all at their defaults. All of them, with their defaults: [Reference](reference.md#settings).
 
 The **Central settings** (follow me's player and default volume, dynamic controls, hide delay) are on the panel's page *General*, or set with the action, without a room.
 

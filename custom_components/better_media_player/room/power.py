@@ -2,11 +2,14 @@
 
 node     A device of the room (model.py: display, receiver, speakers, …) or the
          hardware plug of one of its players (video_host / audio_host).
-demand   A node is demanded while a source whose route it is on is active.
-run-down After the demand ends, a node stays on for its device's run-down.
+demand   A node is demanded while a source whose route it is on is in use: it
+         plays, or nothing plays for less than the idle timeout (paused,
+         stopped, a menu; the controller's hold). Then it goes off at once; a
+         player's plug waits off_wait after the player is off (it shuts down).
 order    Players' plugs first, then what carries the picture, then the player,
          then the sound devices: each group from the source on (a receiver before
-         the speakers it drives); off the other way round.
+         the speakers it drives); off the other way round, the player between the
+         sound and the picture (a player the room turns off).
 
 The nodes belong to the device layer (devices/), which switches them; the
 room owns them and answers what only it knows: demand, run-down, standby, and
@@ -34,7 +37,6 @@ from ..model import (
     NEEDS,
     OPT_CABLES,
     control_of,
-    device_defaults,
     device_setting,
     devices_of,
     inputs_of,
@@ -130,14 +132,6 @@ class RoomPower:
         receiver, subwoofer, …), without the player's plug."""
         return [n for n in self.nodes.values() if n.device is not None and not n.picture and source in n.sources]
 
-    def sound_run_down(self) -> float:
-        """s the music's devices run down (the longest; a music player turned on
-        stays up at least this long)."""
-        nodes = self.sound_nodes()
-        if not nodes:  # (no devices: as long as a speaker's first run-down)
-            return float(device_defaults("speakers")["run_down"]) * 60.0
-        return max(self.run_down(n) for n in nodes)
-
     def device_setting(self, node: RoomNode, key: str) -> Any:
         return device_setting(self.ctrl.data, node.device, key)
 
@@ -152,7 +146,7 @@ class RoomPower:
 
     @property
     def automatic(self) -> bool:
-        """Devices run down (and go off): not while the room is kept on."""
+        """Devices go off by themselves: not while the room is kept on."""
         return self.ctrl.auto_power and not self.ctrl.keep_on
 
     def demanded(self, node: Node) -> bool:
@@ -167,13 +161,19 @@ class RoomPower:
         return float(value or 0)
 
     def run_down(self, node: Node) -> float:
+        """A device goes off once no player uses it; a player's plug waits for the
+        player to shut down."""
         n = self.nodes[node.key]
         if n.device is None:
-            return float(self.host_setting(n, "run_down") or 0) * 60.0
-        minutes = self.device_setting(n, "run_down")
-        if self.ctrl.night.active and (night := self.device_setting(n, "night_run_down")) is not None:
-            minutes = night
-        return float(minutes or 0) * 60.0
+            return float(self.host_setting(n, "off_wait") or 0) * 60.0
+        return 0.0
+
+    def waits(self, node: Node) -> bool:
+        """The picture goes off after the player: one whose idle timeout ran out
+        waits for its sound devices first, then for being off (a TV that the
+        player turns off over HDMI-CEC goes with it)."""
+        n = self.nodes[node.key]
+        return n.picture and any(self.ctrl.player_going_off(self.ctrl.sources[s]) for s in n.sources if s in self.ctrl.sources)
 
     def standby(self, node: Node) -> Standby | None:
         n = self.nodes[node.key]
@@ -218,7 +218,30 @@ class RoomPower:
         return self.devices.held
 
     def needed(self, node: RoomNode) -> bool:
-        """Demanded right now (without its run-down)."""
+        """Demanded right now."""
+        return self._needed(node, False)
+
+    def needed_playing(self, node: RoomNode) -> bool:
+        """Needed by more than a player that does not play (one that plays, a wake, …)."""
+        return self._needed(node, True)
+
+    def hold_end(self, node: RoomNode) -> float | None:
+        """When a needed node goes off: only players that do not play need it (the
+        end of their idle timeout); None: needed for longer (it plays, …)."""
+        if not self.needed(node):
+            return None
+        ctrl = self.ctrl
+        if self._needed(node, True):
+            return None  # needed by more than a hold
+        # (no end: no idle timeout, kept on, automatic power off – for every player alike)
+        ends = [e for s in node.sources if (src := ctrl.sources.get(s)) is not None and src.in_use and (e := ctrl.hold_end(src)) is not None]
+        if not ends:
+            return None
+        end = max(ends)
+        return end + self.run_down(node) if node.device is None else end
+
+    def _needed(self, node: RoomNode, playing: bool) -> bool:
+        """playing: needed without the holds (a player that does not play)."""
         ctrl = self.ctrl
         if not ctrl.night.enabled(node):
             return False  # night mode: e.g. no subwoofer
@@ -228,11 +251,16 @@ class RoomPower:
             return True  # an announcement plays
         if ctrl.follow.prewarm and not ctrl.quiet and self.prewarms(node):
             return True
-        return any(
-            ctrl.source_active(ctrl.sources[s]) or ctrl._just_turned_on(ctrl.sources[s])
-            for s in node.sources
-            if s in ctrl.sources
-        )
+        for s in node.sources:
+            if (src := ctrl.sources.get(s)) is None:
+                continue
+            if src.in_use and (not playing or src.hold_since is None):  # (playing: it plays)
+                return True
+            if node.device is None and self.devices.node_on(node) and ctrl.player_shutting_down(src):
+                return True  # a player's plug: not while the player is still on
+            if self.devices.node_on(node) and ctrl.not_reported(src):
+                return True  # (after a restart: kept until its player reported)
+        return False
 
     def prewarms(self, node: RoomNode) -> bool:
         """Follow me prewarms the music's sound devices and the music player's plug."""

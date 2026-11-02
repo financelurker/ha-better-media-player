@@ -54,6 +54,8 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from ..const import (
+    CONF_IDLE_TIMEOUT,
+    CONF_NIGHT_IDLE_TIMEOUT,
     EVENT_RUN_DOWN,
     KIND_NAMES,
     DOMAIN,
@@ -95,12 +97,16 @@ from .. import clock
 
 _LOGGER = logging.getLogger(__name__)
 
-# a music player turned on (power control): its speakers are up at least this long
-MIN_ON_SECONDS = 30
+# the player waits at most this long for its sound devices, the picture as long for
+# the player to go off (then each goes anyway)
+PLAYER_OFF_SECONDS = 60
+# a hold is shown (sensors, events) once it lasted this long (not between two items)
+HOLD_SETTLE_SECONDS = 10
+# after a restart, what is on stays on this long for a player that has not reported yet
+FIRST_LOOK_SECONDS = 300
 OWN_CONTEXTS = 50
 
 PLAYING_STATES = {MediaPlayerState.PLAYING, MediaPlayerState.BUFFERING}
-IDLE_STATES = {MediaPlayerState.ON, MediaPlayerState.IDLE}
 # a suppressed source is released only when it has really stopped
 # ("standby": for players that still report it; its MediaPlayerState member is deprecated)
 VIDEO_STOPPED = {STATE_OFF, STATE_STANDBY}
@@ -120,9 +126,15 @@ class Source:
     backend: PlayerBackend  # what its system can do (players/)
     # runtime
     suppressed: bool = False
-    idle_since: float | None = None
-    powered_at: float | None = None  # a music player with power control was turned on
-    off_sent: bool = False  # ... and turned off by the room (once, until it is off)
+    # in use: it plays, or nothing plays since hold_since for less than the idle
+    # timeout (expired: it ran out; None: not known yet, the first look)
+    in_use: bool | None = None
+    hold_since: float | None = None
+    expired: bool = False
+    expired_at: float | None = None
+    begun: bool = False  # the room started it and it has not been on yet (e.g. "off" until it plays)
+    off_sent_at: float | None = None  # the room turned it off (once, until it is off)
+    going_off: bool = False  # its idle timeout ran out: off after its sound devices, before the picture
 
 
 class RoomController:
@@ -169,7 +181,9 @@ class RoomController:
         self.run_down_at: dict[str, float] = {}
         # switched off by the room, not run down: key -> reason (all_off, room_off, start_failed)
         self._not_run_down: dict[str, str] = {}
+        self._loaded_at = clock.now()  # (a player not reported yet: what is on stays a while)
         self._run_down_seen = False  # (the first look after the start tells nothing)
+        self._hold_seen: dict[str, float] = {}  # since when a device is only held (nothing plays)
         self.error: str | None = None
 
         self.follow = RoomFollow(self)
@@ -357,12 +371,14 @@ class RoomController:
                 and new is not None
                 and old.state == STATE_OFF
                 and new.state in POWERED_STATES
+                and not src.suppressed
             ):
-                src.powered_at = clock.now()  # turned on: its devices come up for a while
-            if new is not None and new.state in (STATE_OFF, *PLAYING_STATES):
-                src.powered_at = None  # off, or it plays: in use as usual
+                src.in_use = True  # turned on (in Music Assistant, say): its devices come up
+                src.hold_since = None
+                src.expired = False
             if new is None or new.state in (STATE_OFF, *PLAYING_STATES, *NOT_AVAILABLE):
-                src.off_sent = False  # off, or in use again: the next run-down turns it off again
+                src.off_sent_at = None  # off, or in use again: the next idle timeout turns it off again
+                src.going_off = False
             was_playing = old is not None and old.state in PLAYING_STATES
             is_playing = new is not None and new.state in PLAYING_STATES
             if is_playing and not was_playing:
@@ -469,15 +485,58 @@ class RoomController:
             return "action"
         return None
 
-    def _just_turned_on(self, src: Source) -> bool:
-        """Turned on (in Music Assistant, say) and nothing plays yet: its devices
-        are up for the speaker run-down."""
-        return (
-            src.powered_at is not None
-            and not src.suppressed
-            and self.player_state(src) in POWERED_STATES
-            and clock.now() - src.powered_at < max(MIN_ON_SECONDS, self.power.sound_run_down())
-        )
+    def idle_timeout(self) -> float:
+        """s nothing may play before the room goes off (0: never)."""
+        key = CONF_NIGHT_IDLE_TIMEOUT if self.night.active else CONF_IDLE_TIMEOUT
+        return float(self.setting(key) or 0) * 60
+
+    def hold_end(self, src: Source) -> float | None:
+        """When the player's hold ends (nothing plays): None while it plays, or
+        while nothing ends it (no idle timeout, kept on, automatic power off)."""
+        timeout = self.idle_timeout()
+        if not src.in_use or src.hold_since is None or timeout <= 0 or self.keep_on or not self.auto_power:
+            return None
+        return src.hold_since + timeout
+
+    def player_going_off(self, src: Source) -> bool:
+        """The player's idle timeout ran out: the room turns it off after its sound
+        devices, and it is not off yet."""
+        if not src.going_off or self.switched_by(src, False) is None:
+            return False
+        if self.player_state(src) not in POWERED_STATES:
+            return False
+        # (sent after its sound devices, at most a minute after the idle timeout)
+        return src.off_sent_at is None or clock.now() - src.off_sent_at < PLAYER_OFF_SECONDS
+
+    def not_reported(self, src: Source) -> bool:
+        """After a restart, the player has not reported yet (for a while)."""
+        return src.in_use is None and clock.now() - self._loaded_at < FIRST_LOOK_SECONDS
+
+    def player_shutting_down(self, src: Source) -> bool:
+        """No longer in use but still on, and the room turns it off: its plug waits."""
+        if src.in_use or self.switched_by(src, False) is None or self.player_state(src) not in POWERED_STATES:
+            return False
+        if src.off_sent_at is not None:
+            return clock.now() - src.off_sent_at < PLAYER_OFF_SECONDS
+        return src.going_off or not src.suppressed
+
+    @callback
+    def begin_use(self, src: Source) -> None:
+        """The room starts the player: in use (nothing plays yet: it holds, also while
+        it still reports off)."""
+        src.in_use = True
+        src.hold_since = None
+        src.expired = False
+        src.begun = True
+
+    @callback
+    def end_use(self, src: Source) -> None:
+        """The player is no longer the room's (e.g. follow me left the room): its
+        devices go off without waiting for the idle timeout."""
+        src.in_use = False
+        src.hold_since = None
+        src.expired = False
+        src.begun = False
 
     def source_active_raw(self, src: Source) -> bool:
         """Active from the player's point of view (ignores suppression)."""
@@ -654,61 +713,103 @@ class RoomController:
             stopped = VIDEO_STOPPED if src.key == SOURCE_VIDEO else AUDIO_STOPPED
             if src.suppressed and self.player_state(src) in stopped:
                 src.suppressed = False
-            if (
-                src.key == SOURCE_VIDEO
-                and not self.keep_on  # (kept on: idle counts from when it ends)
-                and self.source_active(src)
-                and self.player_state(src) in IDLE_STATES
-            ):
-                if src.idle_since is None:
-                    src.idle_since = now
-                key = "night_video_idle_timeout" if self.night.active else "video_idle_timeout"
-                timeout = float(self.data.get(key, 0)) * 60
-                if (
-                    self.auto_power
-                    and timeout > 0
-                    and now - src.idle_since >= timeout
-                ):
-                    _LOGGER.info("%s: %s idle for too long, turning it off", self.entry.title, src.player)
-                    src.idle_since = None
-                    src.suppressed = True
-                    self._spawn(self._source_off(src))
-            else:
-                src.idle_since = None
+            if not self.announce.protects(src.player):  # (an announcement is no use)
+                self._update_use(src, now)
+            if src.key == SOURCE_VIDEO:
+                self._video_follows(src)
             if self.power_controlled(src):
                 self._power_follows(src)
 
+    def _update_use(self, src: Source, now: float) -> None:
+        """In use: it plays, or nothing plays (paused, stopped, its menu) for less
+        than the idle timeout. A player that is off, or that the room stopped, is not."""
+        state = self.player_state(src)
+        first = src.in_use is None
+        if self.source_active(src) and self.source_playing(src):
+            src.in_use, src.hold_since, src.expired, src.begun = True, None, False, False
+            return
+        if first and state in (None, *NOT_AVAILABLE):
+            return  # (not reported yet, e.g. after a restart: the first look is its first state)
+        if src.suppressed or (src.key == SOURCE_AUDIO and not self.follow.group_counts(src)):
+            self.end_use(src)
+            return
+        if state in (STATE_OFF, STATE_STANDBY, None) and not src.begun:
+            self.end_use(src)  # turned off: off means off
+            return
+        if state in POWERED_STATES:
+            src.begun = False
+        if src.key == SOURCE_VIDEO:
+            # on (its menu, paused) is in use; unavailable for a moment goes on
+            candidate = self.source_active(src) or src.begun or (bool(src.in_use) and state in NOT_AVAILABLE)
+        elif first:
+            # the first look (a restart): paused or stopped with its speakers on (or none)
+            sound = self.power.sound_nodes()
+            candidate = state in POWERED_STATES and (not sound or any(self.power.devices.node_on(n) for n in sound))
+        else:
+            candidate = bool(src.in_use) or src.expired or src.begun  # it played (or was turned on)
+        if not candidate:
+            self.end_use(src)
+            return
+        if src.hold_since is None or self.keep_on or not self.auto_power:
+            src.hold_since = now  # (kept on: the idle timeout counts from when it ends)
+        timeout = self.idle_timeout()
+        if not src.expired and timeout > 0 and now - src.hold_since >= timeout:
+            _LOGGER.info("%s: nothing played on %s for %d min, going off", self.entry.title, src.player, timeout // 60)
+            src.expired = True
+            src.expired_at = now
+            if src.key == SOURCE_VIDEO and self.switched_by(src, False) is not None:
+                src.going_off = True  # (off after its sound devices: _video_follows)
+        src.in_use = not src.expired
+
+    def _video_follows(self, src: Source) -> None:
+        """The video player's idle timeout ran out: its sound devices go off first,
+        then the player, then the picture (power.waits)."""
+        if (
+            not src.expired
+            or src.off_sent_at is not None
+            or not self._started
+            or not self.auto_power
+            or self.manual
+            or self.keep_on
+            or self.sequence.running
+            or self.player_state(src) not in POWERED_STATES
+        ):
+            return
+        # (only what the room switches off itself; at most a minute: then it goes anyway)
+        sound = [
+            n for n in self.power.nodes.values()
+            if n.device is not None and not n.picture and SOURCE_VIDEO in n.sources and self.power.devices.off_by_owner(n)
+        ]
+        waiting = clock.now() - (src.expired_at or 0) < PLAYER_OFF_SECONDS
+        if waiting and any(self.power.devices.node_on(n) and not self.power.needed(n) for n in sound):
+            return
+        _LOGGER.info("%s: %s goes off after its sound devices", self.entry.title, src.player)
+        src.suppressed = True
+        self._spawn(self._source_off(src))
+
     def _power_follows(self, src: Source) -> None:
-        """A music player with power control goes off with its devices: turned on
-        but nothing played (its run-down is over: the devices go off with it), or
-        its speakers ran down (paused, stopped). Not in a group (the group
-        decides), nor while its speakers are on or needed (manual mode, a
+        """A music player with power control goes off after its devices: once it is
+        no longer in use (its idle timeout ran out, follow me left) and they are
+        off (without devices: at once). Not in a group (the
+        group decides), nor while its speakers are on or needed (manual mode, a
         wake's snooze)."""
         automatic = self.auto_power and not self.manual and not self.sequence.running and not self.keep_on
-        if src.powered_at is not None and not self._just_turned_on(src):
-            src.powered_at = None
-            if not self.source_playing(src) and not self.keep_on:
-                for node in self.power.nodes.values():
-                    if SOURCE_AUDIO in node.sources and not self.power.needed(node):
-                        node.force_off = True  # its run-down is over
-        # its devices (the player's own hardware plug goes off after it)
         audio_nodes = [n for n in self.power.nodes.values() if SOURCE_AUDIO in n.sources and n.device is not None]
         if (
-            src.off_sent
+            src.off_sent_at is not None
             or not self._started
-            or not audio_nodes
             or not automatic
+            or src.in_use
             or self.player_state(src) not in POWERED_STATES
             or self.source_playing(src)
-            or self._just_turned_on(src)
             or src.backend.groups_of(src.player)
             # not yet reported (e.g. after a restart): no "off" to follow
             or not all(self.power.devices.is_available(e) for n in audio_nodes for e in n.entities if self.power.devices.kind(e) == "plug")
             or any(self.power.devices.node_on(n) or self.power.needed(n) for n in audio_nodes)
         ):
             return
-        _LOGGER.info("%s: %s goes off with its speakers", self.entry.title, src.player)
-        src.off_sent = True
+        _LOGGER.info("%s: %s goes off after its speakers", self.entry.title, src.player)
+        src.off_sent_at = clock.now()
         self._spawn(self._player(src, SERVICE_TURN_OFF))
 
     def _update_status(self) -> None:
@@ -724,12 +825,18 @@ class RoomController:
             self.status = STATUS_DISABLED
         elif any(self.source_playing(s) and not s.suppressed for s in self.sources.values()):
             self.status = STATUS_PLAYING
+        elif (
+            self.keep_on
+            and any(self.power.devices.is_on(e) for e in self.power.devices.entities)
+            and not any(self.power.needed_playing(n) for n in self.power.nodes.values())
+        ):
+            self.status = STATUS_KEPT_ON  # nothing plays: only kept on
         elif any(self.power.needed(n) for n in self.power.nodes.values()) or any(
             self.source_active(s) for s in self.sources.values()
         ):
             self.status = STATUS_ON
         elif any(self.power.devices.is_on(e) for e in self.power.devices.entities):
-            self.status = STATUS_KEPT_ON if self.keep_on else STATUS_RUN_DOWN
+            self.status = STATUS_RUN_DOWN
         else:
             self.status = STATUS_OFF
 
@@ -784,6 +891,7 @@ class RoomController:
 
     async def _source_off(self, src: Source) -> None:
         """Stop a source: leave groups, stop playback, power it down if possible."""
+        self.end_use(src)
         if src.key == SOURCE_AUDIO:
             groups = src.backend.groups_of(src.player)
             if (
@@ -801,6 +909,8 @@ class RoomController:
         if self.player_state(src) in (STATE_OFF, None, *NOT_AVAILABLE):
             return
         how = self.switched_by(src, False)
+        if how is not None:
+            src.off_sent_at = clock.now()  # (its plug and the picture wait for it)
         if how == "player":
             await self._player(src, SERVICE_TURN_OFF)
         elif how == "action":
@@ -932,7 +1042,10 @@ class RoomController:
 
     async def _stop_others(self, source: str) -> None:
         for other in self.sources.values():
-            if other.key == source or not self.source_active_raw(other):
+            if other.key == source:
+                continue
+            self.end_use(other)  # (also one that holds, paused)
+            if not self.source_active_raw(other):
                 continue
             other.suppressed = True
             if other.key == SOURCE_VIDEO:
@@ -1036,7 +1149,9 @@ class RoomController:
                     node.force_off = False
                     node.stop_since = None
         else:
-            # what was kept on runs down from now (not from its last need, maybe hours ago)
+            # what nothing needs goes off now, a player's plug waits from now (not
+            # from its last need, maybe hours ago); a player that does not play
+            # holds anew for its idle timeout
             now = clock.now()
             for node in self.power.nodes.values():
                 if node.last_demand is not None:
@@ -1054,10 +1169,11 @@ class RoomController:
     def _track_run_down(self, now: float) -> None:
         """Which devices run down and when they go off; its triggers.
 
-        A device runs down while it is on, not needed and the room switches it off
-        automatically; its time is its last need plus its run-down. Waiting after
-        that (standby, an earlier device first) keeps the time until it is off.
-        One that is to go off at once (quiet, night) goes off "now"."""
+        A device runs down while it is on and only players that do not play need
+        it (its time: the end of their idle timeout), or while nothing needs it
+        and it waits to go off (its time: its last need; a player's plug: plus its
+        off_wait). Waiting after that (standby, the player first) keeps the time
+        until it is off."""
         devices = self.power.devices
         nodes = self.power.nodes
         cut = dict(self._not_run_down)
@@ -1066,20 +1182,29 @@ class RoomController:
         }
         before = self.run_down_at
         runs: dict[str, float] = {}
+        held: dict[str, float] = {}
         if self.auto_power and not self.manual and not self.keep_on:
             for key, node in nodes.items():
                 if (
                     key in self._not_run_down
                     or node.last_demand is None
                     or not devices.node_on(node)
-                    or self.power.needed(node)
                     or not devices.switches_off(node)  # (never switched off by the room)
                     # a start brings it up: not needed until its player is there
                     or (self.sequence.running and key not in before)
                 ):
                     continue
+                if self.power.needed(node):
+                    if (end := self.power.hold_end(node)) is not None:
+                        # nothing plays: off when the idle timeout ends (shown once it
+                        # lasted a moment: not between two items)
+                        held[key] = self._hold_seen.get(key, now)
+                        if key in before or not self._run_down_seen or now - held[key] >= HOLD_SETTLE_SECONDS:
+                            runs[key] = end
+                    continue
                 runs[key] = min(before.get(key, now), now) if node.force_off else node.last_demand + self.power.run_down(node)
         self.run_down_at = runs
+        self._hold_seen = held
         if not self._run_down_seen:
             # the first look after the start (a restart: the run-down starts anew,
             # what ran down before is no "start")
@@ -1087,7 +1212,11 @@ class RoomController:
             return
         # (to the second, as the sensors show it)
         at = lambda t: dt_util.utc_from_timestamp(int(t)).isoformat()  # noqa: E731
-        started = {k: at(t) for k, t in runs.items() if k not in before}
+        # new, or its time changed while it holds (e.g. night mode: a shorter idle timeout)
+        started = {
+            k: at(t) for k, t in runs.items()
+            if k not in before or (k in held and int(t) != int(before[k]))
+        }
         if started:
             self.async_fire(EVENT_RUN_DOWN, {"type": "started", "devices": started})
         gone = [k for k in before if k not in runs]
@@ -1098,10 +1227,10 @@ class RoomController:
             self.async_fire(EVENT_RUN_DOWN, {"type": "off", "device": key, "name": self.node_name(key) if key in nodes else key})
         kept = [k for k in gone if k not in ran_down]
         if kept:
-            if any(k in nodes and self.power.needed(nodes[k]) for k in kept):
-                reason = "needed"
-            elif self.keep_on:
+            if self.keep_on:
                 reason = "kept_on"
+            elif any(k in nodes and self.power.needed_playing(nodes[k]) for k in kept):
+                reason = "needed"
             elif reasons := [cut[k] for k in kept if k in cut]:
                 reason = "all_off" if "all_off" in reasons else reasons[0]
             elif self.manual:

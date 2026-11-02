@@ -44,6 +44,7 @@ STORED_V3 = {
     "display_standby": True,
     "display_standby_w": 2.5,
     "host_run_down": 6,
+    "video_idle_timeout": 40,
     "night_max_volume": 25,
     "prewarm": False,
     "room_volume": 0.3,
@@ -112,16 +113,16 @@ def test_a_players_only_room_gets_a_device_for_its_volume():
 async def test_a_room_is_migrated(hass, home, hass_storage):
     entry = await _room_v3(hass, hass_storage)
     await _setup(hass, entry)
-    assert entry.version == 4
+    assert (entry.version, entry.minor_version) == (4, 2)
     assert entry.options == options_v4(LIVING_V3)
     got = await get_settings(hass)
-    assert got["devices"]["display"]["run_down"] == 15
+    assert "run_down" not in got["devices"]["display"], "no run-down any more: the idle timeout"
+    assert got["settings"]["idle_timeout"] == 40 and "video_idle_timeout" not in entry.runtime_data.data
     assert got["devices"]["display"]["standby"] is True and got["devices"]["display"]["standby_w"] == 2.5
-    assert got["devices"]["speakers"]["run_down"] == 4 and got["devices"]["subwoofer"]["run_down"] == 4
     assert got["devices"]["speakers"]["standby"] is False, "not set before: the default"
     assert got["devices"]["subwoofer"]["night_off"] is True, "off at night, as the subwoofer was"
     assert got["settings"]["night_max_volume"] == 25 and got["settings"]["prewarm"] is False
-    assert got["sources"] == {"audio": {"run_down": 6, "on_wait": 0}}, "the hardware plug's: to the player that has one"
+    assert got["sources"] == {"audio": {"off_wait": 6, "on_wait": 0}}, "the hardware plug's: to the player that has one"
     assert "host_run_down" not in got["settings"]
     data = entry.runtime_data.data
     assert data["room_volume"] == 0.3
@@ -210,3 +211,29 @@ async def test_a_receiver_that_passes_the_picture_on_stays_one_for_the_sound(has
     assert power.on_order == ["display", "speakers", "subwoofer"]
     assert [n.key for n in power.sound_nodes()] == ["speakers", "subwoofer"]
     assert power.prewarms(power.nodes["speakers"])
+
+
+async def test_a_room_of_a_pre_release_gets_the_idle_timeout(hass, home, hass_storage):
+    """4.1 (only in pre-releases): the idle timeout's new names, the plug's run-down is its
+    off_wait, the devices' run-downs go."""
+    options = options_v4(LIVING_V3)
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="Living Room", entry_id="room1", data={CONF_ENTRY_TYPE: ENTRY_TYPE_ROOM},
+        options=options, version=4, minor_version=1,
+    )
+    entry.add_to_hass(hass)
+    hass_storage[f"{DOMAIN}.room1"] = {"version": 1, "key": f"{DOMAIN}.room1", "data": {
+        "video_idle_timeout": 45, "night_video_idle_timeout": 0, "night_max_volume": 25,
+        "devices": {"display": {"run_down": 15, "night_run_down": 1, "on_wait": 3}, "speakers": {"run_down": 4}},
+        "sources": {"audio": {"run_down": 6, "on_wait": 2}},
+    }}
+    await _setup(hass, entry)
+    assert (entry.version, entry.minor_version) == (4, 2)
+    got = await get_settings(hass)
+    assert (got["settings"]["idle_timeout"], got["settings"]["night_idle_timeout"]) == (45, 0)
+    assert got["settings"]["night_max_volume"] == 25
+    assert got["devices"]["display"]["on_wait"] == 3 and "run_down" not in got["devices"]["display"]
+    assert got["sources"] == {"audio": {"off_wait": 6, "on_wait": 2}}
+    data = entry.runtime_data.data
+    assert not {"video_idle_timeout", "night_video_idle_timeout"} & set(data)
+    assert data["devices"]["display"] == {"on_wait": 3} and data["devices"]["speakers"] == {}

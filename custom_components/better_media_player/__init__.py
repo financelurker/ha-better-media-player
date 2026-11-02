@@ -35,7 +35,7 @@ from .room.controller import RoomController
 from .follow.manager import FollowManager
 from .room import get_rooms
 from .issues import REMOVED_KEY, async_setup_issues, get_checker
-from .model import REMOVED_CENTRAL_ENTITIES, REMOVED_ROOM_ENTITIES, migrate_store, options_v4
+from .model import REMOVED_CENTRAL_ENTITIES, REMOVED_ROOM_ENTITIES, migrate_store, migrate_store_4_2, options_v4
 from .panel import async_setup_panel
 
 type BetterMediaPlayerConfigEntry = ConfigEntry[RoomController | FollowManager]
@@ -69,7 +69,8 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """1 -> 2: the central entry has one follow-me player instead of group policies.
     2 -> 3: values set on the room device (number entities) are no longer options.
     3 -> 4: a room's roles become devices (model.py); the setting entities are
-    removed (set with the action set_setting now)."""
+    removed (set with the action set_setting now).
+    4.1 -> 4.2: one idle timeout for every player, no run-down of the devices."""
     if entry.version > 4:
         return False
     if entry.version == 1:
@@ -126,7 +127,13 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if gone:
             data[REMOVED_KEY] = sorted({*data.get(REMOVED_KEY, []), *gone})
         await store.async_save(data)
-        hass.config_entries.async_update_entry(entry, options=options, version=4)
+        hass.config_entries.async_update_entry(entry, options=options, version=4, minor_version=2)
+    if entry.version == 4 and entry.minor_version < 2:
+        if not is_hub(entry):
+            store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
+            if (data := await store.async_load()) is not None:
+                await store.async_save(migrate_store_4_2(data))
+        hass.config_entries.async_update_entry(entry, minor_version=2)
     return True
 
 

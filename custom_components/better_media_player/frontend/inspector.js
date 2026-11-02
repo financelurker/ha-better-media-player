@@ -72,7 +72,7 @@ function source(p, d, s) {
       ${entityField(p, { label: t("insp.off_action"), value: s.off_action, domains: DOMAINS.action, onChange: (v) => ch(() => { s.off_action = v; }) })}` : nothing}
     ${entityField(p, { label: t("insp.host"), value: s.host, domains: DOMAINS.plug, hint: t("insp.host_hint"), onChange: (v) => ch(() => setHost(d, s, v, p._config.defaults)) })}
     ${s.host && s.settings ? html`<div class="settings">
-        ${["run_down", "on_wait"].map((k) => settingRow(p, k, s.settings[k], (v) => ch(() => { s.settings[k] = v; }), { units: p._units }))}</div>` : nothing}
+        ${["off_wait", "on_wait"].map((k) => settingRow(p, k, s.settings[k], (v) => ch(() => { s.settings[k] = v; }), { units: p._units }))}</div>` : nothing}
     <hr><button class="btn danger" @click=${() => ch(() => { removeSource(d, s.id); p._selected = null; })}>${t("insp.remove_player")}</button>`;
 }
 
@@ -128,7 +128,7 @@ function device(p, d, dev) {
     <div class="field"><span class="lbl">${t("insp.on_routes")}</span><div>${routes.map((s) => p._sourceLabel(s)).join(", ") || "–"}</div></div>
     ${dev.settings ? html`<div class="field"><span class="lbl">${t("insp.settings")}</span><div class="settings">
       ${Object.keys(dev.settings).filter((k) => pw?.sensors?.length || !STANDBY.includes(k)).filter((k) => dev.settings.standby || !["standby_w", "standby_max"].includes(k))
-        .map((k) => settingRow(p, k, dev.settings[k], (v) => ch(() => { dev.settings[k] = v; }), { nullable: k === "night_run_down", units: p._units }))}
+        .map((k) => settingRow(p, k, dev.settings[k], (v) => ch(() => { dev.settings[k] = v; }), { units: p._units }))}
     </div></div>` : nothing}
     <hr><button class="btn danger" @click=${() => ch(() => { removeDevice(d, dev.id); p._selected = null; })}>${t("insp.remove_device")}</button>`;
 }

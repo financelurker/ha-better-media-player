@@ -74,11 +74,11 @@ async def test_all_off_stays_while_something_has_power(hass, home, freezer):
     await setup_room(hass)
     await _music(hass, home, freezer)
     await tick(hass, freezer, 5)
-    await _music(hass, home, freezer, "idle")  # music stopped: speakers run down (2 min)
+    await _music(hass, home, freezer, "idle")  # music stopped: the speakers hold (30 min)
     await tick(hass, freezer, 10)
     assert home.on(SPEAKERS)
     assert _shown(hass) == {ALL_OFF, NIGHT}
-    await tick(hass, freezer, 130, step=5)
+    await tick(hass, freezer, 30 * 60 + 30, step=10)
     assert not home.on(SPEAKERS)
     assert _shown(hass) == {NIGHT}
 

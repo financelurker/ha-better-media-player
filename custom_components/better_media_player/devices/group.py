@@ -186,6 +186,16 @@ class DeviceGroup:
             if self.kind(e) != "plug" and self.control_of(e).on is not Mode.NEVER  # not BMP's to switch on
         )
 
+    def off_by_owner(self, node: Node) -> bool:
+        """The owner switches the node off itself: a plug, or a device it turns off
+        (not one that goes by HDMI-CEC without fallback, or never)."""
+        return any(
+            self.kind(e) == "plug"
+            or (c := self.control_of(e)).off is Mode.BMP
+            or (c.off is Mode.CEC and c.fallback)
+            for e in node.entities
+        )
+
     def switches_off(self, node: Node) -> bool:
         """Something of the node is switched off by the room (a plug, a device not set to "never")."""
         return any(self.control_of(e).off is not Mode.NEVER for e in node.entities)
@@ -221,7 +231,8 @@ class DeviceGroup:
 
         A node waits while an earlier node of the same source is still on and not
         needed (run-down, standby wait, or its off command is still on its way),
-        so e.g. the player's hardware is never cut before the display.
+        so e.g. the player's hardware is never cut before the display; and while
+        its owner says so (e.g. the picture until the player is off).
         """
         holding: list[Node] = []
         for key in order:
@@ -246,7 +257,7 @@ class DeviceGroup:
                 and node.last_demand is not None
                 and now - node.last_demand >= self.owner.run_down(node)
             )
-            if not due or blocked:
+            if not due or blocked or self.owner.waits(node):
                 holding.append(node)
                 continue
             # devices first; their plugs once they are off (or did not within

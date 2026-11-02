@@ -97,7 +97,7 @@ Without the button: HACS → ⋮ → **Custom repositories** → add `https://gi
 | Page | Content |
 |---|---|
 | [Setup](https://github.com/financelurker/ha-better-media-player/blob/main/docs/setup.md) | adding the integration and the rooms, examples, the room's device and its settings |
-| [How the room behaves](https://github.com/financelurker/ha-better-media-player/blob/main/docs/room.md) | power button and sources, order, run-downs (when devices go off, keep on), devices instead of plugs, standby, switched by hand |
+| [How the room behaves](https://github.com/financelurker/ha-better-media-player/blob/main/docs/room.md) | power button and sources, order, when devices go off (one idle timeout, keep on), devices instead of plugs, standby, switched by hand |
 | [Cabling and inputs](https://github.com/financelurker/ha-better-media-player/blob/main/docs/devices.md) | connections, inputs, CEC, supported setups |
 | [The panel](https://github.com/financelurker/ha-better-media-player/blob/main/docs/designer.md) | where rooms are set up: devices, cables, routes, settings, saving |
 | [Room volume](https://github.com/financelurker/ha-better-media-player/blob/main/docs/volume.md) | one volume per room, on an own device, presets |

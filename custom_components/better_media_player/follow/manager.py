@@ -704,6 +704,8 @@ class FollowManager:
         # stays 'backed' until MA really removed it, so it can never turn into an override
         self.session.leaving.add(room.entry.entry_id)
         self.session.empty_since.pop(room.entry.entry_id, None)
+        if (src := room.sources.get(SOURCE_AUDIO)) is not None:
+            room.end_use(src)  # its speakers go off without waiting for the idle timeout
         await self._unjoin(room.audio_player, f"{room.entry.title}: {why}")
 
     @callback

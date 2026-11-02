@@ -175,7 +175,8 @@ async def test_room_going_off_by_itself_ends_timer(hass, home, freezer):
     await _playing_music(hass, home)
     await _set(hass, 60)
     home.music("idle")
-    await tick(hass, freezer, 3 * 60)  # speaker run-down 2 min
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 31 * 60, step=60)  # nothing plays: off after the idle timeout (30 min)
     assert not home.on(SPEAKERS)
     assert hass.states.get(SLEEP).state == "0.0"
     assert [e.data["reason"] for e in events] == ["room_off"]

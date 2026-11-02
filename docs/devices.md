@@ -57,7 +57,7 @@ All setups are tested with simulated devices. **On real devices so far only scen
 
 - **Setup:** display (a TV or monitor without its own control) and speakers / subwoofer on switchable plugs; a video player (Kodi or Better Kodi) and a music player (Music Assistant).
 - **Configuration:** only the room's players and devices; no cabling.
-- **Behaviour:** a film switches the display, wakes Kodi, then speakers and subwoofer; music switches only speakers and subwoofer. Everything goes off after its run-down. No inputs to choose.
+- **Behaviour:** a film switches the display, wakes Kodi, then speakers and subwoofer; music switches only speakers and subwoofer. Nothing plays for the idle timeout, or the player is turned off: everything goes off. No inputs to choose.
 
 ### Scenario A: TV with CEC, AV receiver, Kodi
 

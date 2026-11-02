@@ -6,9 +6,9 @@ import { areaField, entitiesField, entityField, segField, settingRow, textField 
 
 // the room's settings in groups; follow me's only in a room with presence sensors
 const GROUPS = [
-  ["night", ["night_max_volume", "night_video_idle_timeout", "night_fade_in"]],
+  ["night", ["night_max_volume", "night_idle_timeout", "night_fade_in"]],
   ["presets", ["preset_quiet", "preset_normal", "preset_loud", "preset_party", "preset_fade", "power_on_preset"]],
-  ["times", ["video_idle_timeout", "start_timeout"]],
+  ["times", ["idle_timeout", "start_timeout"]],
   ["announce", ["announce_video", "announce_video_lower"]],
   ["sleep", ["sleep_fade", "snooze_minutes"]],
   ["follow", ["presence_run_down", "volume_offset", "prewarm", "wake_detect_left"]],
@@ -41,7 +41,8 @@ export function renderSettings(p, d) {
     </div>
     <div class="card wide"><h3>${t("settings.behaviour")}</h3>
       ${d.settings ? html`<p class="muted">${t("settings.behaviour_hint")}</p>
-        ${GROUPS.filter(([g]) => g !== "follow" || d.occupancy.length).map(([g, keys]) => html`<h4>${t(`settings.group_${g}`)}</h4><div class="settings">
+        ${GROUPS.filter(([g]) => g !== "follow" || d.occupancy.length).map(([g, keys]) => html`<h4>${t(`settings.group_${g}`)}</h4>
+          ${g === "times" ? html`<p class="muted hint">${t("settings.idle_hint")}</p>` : nothing}<div class="settings">
           ${keys.map((k) => settingRow(p, k, d.settings[k], (v) => ch(() => { d.settings[k] = v; }), { units: p._units }))}</div>`)}`
         : html`<p class="muted">${t("settings.not_loaded")}</p>`}
     </div>`;
