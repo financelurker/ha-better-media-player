@@ -110,6 +110,7 @@ class PowerSequence:
         except _StartFailed as err:
             _LOGGER.warning("%s: start failed: %s", ctrl.entry.title, err)
             ctrl.error = str(err)
+            ctrl.not_run_down(switched, "start_failed")
             await power.devices.async_take_down(switched)
         finally:
             if asyncio.current_task() is self.task:

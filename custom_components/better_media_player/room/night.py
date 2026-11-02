@@ -137,7 +137,7 @@ class NightMode:
     def async_cut_disabled(self) -> None:
         """Devices off at night that are on go at once (no run-down); the caller updates."""
         ctrl = self.ctrl
-        if self.active and ctrl.auto_power and not ctrl.manual:
+        if self.active and ctrl.auto_power and not ctrl.manual and not ctrl.keep_on:
             for node in ctrl.power.nodes.values():
                 if not self.enabled(node) and ctrl.power.devices.node_on(node):
                     node.force_off = True

@@ -393,6 +393,11 @@ async def test_entity_ids_match_readme(hass, home):
         "button.living_room_stop_follow_me",
         "select.living_room_volume_preset",
         "select.living_room_hand_over_to",
+        "switch.living_room_keep_on",
+        "sensor.living_room_display_off_at",
+        "sensor.living_room_speakers_off_at",
+        "sensor.living_room_subwoofer_off_at",
+        "sensor.living_room_audio_host_off_at",
     }
 
 

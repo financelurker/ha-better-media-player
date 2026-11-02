@@ -37,7 +37,8 @@
           "stopping": "Wartet auf Standby",
           "manual": "Manuell",
           "error": "Fehler",
-          "disabled": "Automatik aus"
+          "disabled": "Automatik aus",
+          "kept_on": "Angelassen"
         }
       },
       "follow_state": {
@@ -72,6 +73,39 @@
           "playing": "Spielt",
           "snoozed": "Schlummert"
         }
+      },
+      "device_off_at": {
+        "name": "{device} aus um"
+      },
+      "video_host_off_at": {
+        "name": "Video-Player-Hardware aus um"
+      },
+      "audio_host_off_at": {
+        "name": "Musik-Player-Hardware aus um"
+      },
+      "display_off_at": {
+        "name": "Display aus um"
+      },
+      "receiver_off_at": {
+        "name": "AV-Receiver aus um"
+      },
+      "amp_off_at": {
+        "name": "Verstärker aus um"
+      },
+      "speakers_off_at": {
+        "name": "Lautsprecher aus um"
+      },
+      "subwoofer_off_at": {
+        "name": "Subwoofer aus um"
+      },
+      "switch_off_at": {
+        "name": "HDMI-Switch aus um"
+      },
+      "mixer_off_at": {
+        "name": "Mischer aus um"
+      },
+      "splitter_off_at": {
+        "name": "Splitter aus um"
       }
     },
     "binary_sensor": {
@@ -94,6 +128,9 @@
       },
       "night_mode": {
         "name": "Nachtmodus"
+      },
+      "keep_on": {
+        "name": "Anlassen"
       }
     },
     "number": {
@@ -458,7 +495,10 @@
       "source_audio": "Auf Musik gewechselt",
       "source_off": "Quelle aus (kein Player aktiv)",
       "night_mode_on": "Nachtmodus an (Geräte bereit)",
-      "night_mode_off": "Nachtmodus aus (Geräte bereit)"
+      "night_mode_off": "Nachtmodus aus (Geräte bereit)",
+      "run_down_started": "Nachlauf beginnt",
+      "run_down_cancelled": "Nachlauf abgebrochen (wieder gebraucht oder angelassen)",
+      "run_down_off": "Gerät nach dem Nachlauf ausgeschaltet"
     }
   },
   "issues": {

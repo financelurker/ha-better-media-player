@@ -186,6 +186,10 @@ class DeviceGroup:
             if self.kind(e) != "plug" and self.control_of(e).on is not Mode.NEVER  # not BMP's to switch on
         )
 
+    def switches_off(self, node: Node) -> bool:
+        """Something of the node is switched off by the room (a plug, a device not set to "never")."""
+        return any(self.control_of(e).off is not Mode.NEVER for e in node.entities)
+
     def devices_on(self, node: Node) -> bool:
         """A device of the node (not needed by another node) is still on: its plugs wait."""
         needed = self._needed_elsewhere(node)

@@ -432,11 +432,11 @@ async def test_no_second_off_while_turning_off(hass, home, freezer):
     calls = []
     original = ctrl._turn_off
 
-    async def counting():
+    async def counting(reason):
         calls.append(1)
         ctrl.data["sleep"]["ends_at"] = dt_util.utcnow().timestamp() - 1
         await ctrl.sleep._async_step()  # the timer ends while this "off" runs
-        await original()
+        await original(reason)
 
     ctrl._turn_off = counting
     await hass.services.async_call("media_player", "turn_off", {"entity_id": ROOM}, blocking=True)

@@ -251,6 +251,7 @@ ATTR_FADE_MINUTES = "fade_minutes"
 EVENT_SLEEP_TIMER_FINISHED = f"{DOMAIN}_sleep_timer_finished"
 EVENT_SOURCE_CHANGED = f"{DOMAIN}_source_changed"
 EVENT_NIGHT_MODE = f"{DOMAIN}_night_mode"
+EVENT_RUN_DOWN = f"{DOMAIN}_run_down"
 
 # --- Status ------------------------------------------------------------------
 STATUS_OFF = "off"
@@ -262,6 +263,7 @@ STATUS_STOPPING = "stopping"
 STATUS_MANUAL = "manual"
 STATUS_ERROR = "error"
 STATUS_DISABLED = "disabled"
+STATUS_KEPT_ON = "kept_on"
 STATUSES = [
     STATUS_OFF,
     STATUS_STARTING,
@@ -272,7 +274,15 @@ STATUSES = [
     STATUS_MANUAL,
     STATUS_ERROR,
     STATUS_DISABLED,
+    STATUS_KEPT_ON,
 ]
+
+# a device's name where it has none (its "off at" sensor)
+KIND_NAMES = {
+    "display": "Display", "receiver": "AV receiver", "amp": "Amplifier",
+    "speakers": "Speakers", "subwoofer": "Subwoofer", "switch": "HDMI switch",
+    "mixer": "Mixer", "splitter": "Splitter",
+}
 
 # Domains usable as a custom on/off action
 ACTION_DOMAINS = ["script", "button", "input_button", "switch", "scene", "automation"]

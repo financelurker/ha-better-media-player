@@ -175,6 +175,7 @@ data:
 |---|---|---|
 | `better_media_player_source_changed` | the room's source changed ([below](#source-changes)) | *Source changed*, *Switched to video*, *Switched to music*, *Source off* |
 | `better_media_player_night_mode` | night mode, once the devices are up ([details](night-sleep-wake.md#anything-else-at-night)) | *Night mode on (devices up)*, *Night mode off (devices up)* |
+| `better_media_player_run_down` | a [run-down](#run-down) started, was cancelled, or switched a device off | *Run-down started*, *Run-down cancelled (needed again or kept on)*, *Device switched off after its run-down* |
 | `better_media_player_sleep_timer_finished` | the [sleep timer](night-sleep-wake.md#sleep-timer) ended | |
 | `better_media_player_wake_started`, `_wake_failed`, `_wake_finished` | a [wake](night-sleep-wake.md#wake-up) started, failed or ended | |
 
@@ -206,6 +207,32 @@ action:
       entity_id: remote.living_room_ir
     data:
       command: tv_input_hdmi1
+```
+
+## Run-down
+
+The event `better_media_player_run_down` (with `entity_id`, `entry_id`, `room`) tells what the room's [run-down](room.md#when-devices-go-off) does:
+
+| `type` | When | Data |
+|---|---|---|
+| `started` | devices begin to run down (once for those starting together) | `devices`: device ID → when it goes off |
+| `cancelled` | devices stop running down while still on, or before their time | `devices`: the IDs; `reason`: `needed`, `kept_on`, `all_off` (the button or the room player's off), `room_off` (a room off you did not press: sleep timer, end of a wake, handover), `manual`, `switched_off` (by hand, before its time), `automatic_off` |
+| `off` | a device went off after its run-down (one event per device) | `device`: its ID, `name` (its kind if it has none) |
+
+A start is no run-down: what it switches on is not counted until its player is there (nor when the start fails and switches it off again). After a restart of Home Assistant the run-down starts anew, without a new `started`.
+
+The same as device triggers: *Run-down started*, *Run-down cancelled*, *Device switched off after its run-down*. A warning shortly before: a time trigger on the device's `off_at` sensor with an offset.
+
+```yaml
+trigger:
+  - trigger: time
+    at:
+      entity_id: sensor.living_room_display_off_at
+      offset: "-00:01:00"
+action:
+  - action: notify.mobile_app_phone
+    data:
+      message: "The TV goes off in a minute – keep it on?"
 ```
 
 ## Night mode event

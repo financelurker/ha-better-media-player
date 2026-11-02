@@ -14,6 +14,8 @@ Entities, settings and states of a room. `<room>` is the room's part of the enti
 | `binary_sensor.<room>_display_needed` | a device for the picture (display, …) is needed right now |
 | `binary_sensor.<room>_speakers_needed` | a device for the sound (speakers, receiver, subwoofer, …) is needed right now |
 | `switch.<room>_automatic_power` | off: no automatic switching; commands to the room player still work |
+| `switch.<room>_keep_on` | [keep on](room.md#keep-on): nothing is switched off automatically until it is turned off or *All off* |
+| `sensor.<room>_<device>_off_at` | when the device goes off after its [run-down](room.md#when-devices-go-off); `unknown` while none is planned (also for a device the room never switches off). `<device>` is the device's ID (`display`, `speakers`, …; `video_host` / `audio_host` for a player's hardware plug); passive devices have none |
 | `button.<room>_all_off` | same as turning the room player off |
 | `number.<room>_sleep_timer` | sleep timer: minutes left, 0 = off |
 | `button.<room>_sleep_timer_15_min` | sleep timer +15 min (starts one if none runs) |
@@ -114,6 +116,7 @@ The settings were configuration entities on the room's device (`number.<room>_di
 | `manual` | a plug was switched (or a device turned on) by hand; automatic switching paused |
 | `error` | start failed |
 | `disabled` | automatic power is off |
+| `kept_on` | devices on, none needed, [keep on](room.md#keep-on) is on |
 
 ## Follow state
 

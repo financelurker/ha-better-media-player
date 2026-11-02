@@ -12,7 +12,8 @@
           "stopping": "mdi:power-sleep",
           "manual": "mdi:hand-back-right",
           "error": "mdi:alert-circle",
-          "disabled": "mdi:power-plug-off"
+          "disabled": "mdi:power-plug-off",
+          "kept_on": "mdi:power-plug"
         }
       },
       "follow_state": {
@@ -51,6 +52,39 @@
           "playing": "mdi:alarm-check",
           "snoozed": "mdi:alarm-snooze"
         }
+      },
+      "device_off_at": {
+        "default": "mdi:timer-sand"
+      },
+      "video_host_off_at": {
+        "default": "mdi:timer-sand"
+      },
+      "audio_host_off_at": {
+        "default": "mdi:timer-sand"
+      },
+      "display_off_at": {
+        "default": "mdi:timer-sand"
+      },
+      "receiver_off_at": {
+        "default": "mdi:timer-sand"
+      },
+      "amp_off_at": {
+        "default": "mdi:timer-sand"
+      },
+      "speakers_off_at": {
+        "default": "mdi:timer-sand"
+      },
+      "subwoofer_off_at": {
+        "default": "mdi:timer-sand"
+      },
+      "switch_off_at": {
+        "default": "mdi:timer-sand"
+      },
+      "mixer_off_at": {
+        "default": "mdi:timer-sand"
+      },
+      "splitter_off_at": {
+        "default": "mdi:timer-sand"
       }
     },
     "binary_sensor": {
@@ -89,6 +123,13 @@
         "state": {
           "on": "mdi:weather-night",
           "off": "mdi:weather-sunny"
+        }
+      },
+      "keep_on": {
+        "default": "mdi:power-plug-outline",
+        "state": {
+          "on": "mdi:power-plug",
+          "off": "mdi:power-plug-outline"
         }
       }
     },

@@ -495,7 +495,13 @@ class RoomAnnouncer:
         fades, night, self._fades, self._night = self._fades, self._night, 0.0, 0.0
         brought_up, self._brought_up = self._brought_up, set()
         woken, self._woken = self._woken, set()
-        self._off = False
+        off, self._off = self._off, False
+        if ctrl.keep_on:
+            # kept on: what the announcement brought up stays on; a room off
+            # meanwhile (sleep timer, …) still stops the players
+            brought_up = set()
+            if not off:
+                woken = set()
         for key in woken:
             src = ctrl.sources.get(key)
             if src is not None and not ctrl.source_playing(src) and ctrl.player_state(src) not in _NOT_READY:

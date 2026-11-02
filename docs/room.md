@@ -34,6 +34,19 @@ Each device has its own run-down (`run_down`, and `night_run_down` at night), so
 
 Paused music is not demand: the speakers switch off after the run-down and on again when playback resumes. A video player that sits idle in its menu is turned off after 30 min.
 
+**When it goes off:** each switched device (and a player's hardware plug) has a sensor `sensor.<room>_<device>_off_at`, the time its run-down ends (its last need plus its run-down; at night its night run-down). A dashboard shows it as a countdown. If the device still waits after that (for its standby, or for a device that goes off before it), the time stays until it is off. `unknown` while no switching off is planned: needed, off, kept on, automatic power off, manual mode. Automations get the run-down's start, its cancelling and each device switched off as [device triggers](automations.md#run-down).
+
+## Keep on
+
+`switch.<room>_keep_on` keeps what is on on: nothing is switched off automatically – no run-down (devices and a player's hardware), no device off at night, no idle video player turned off, no music player going off with its speakers, nothing an announcement brought up. Starting still switches on what a player needs (unlike *Automatic power* off, which switches nothing at all).
+
+- It stays on until it is turned off or *All off* is pressed (also the room player's off); also over a restart. Turned off, what is on runs down from then on.
+- Set it ahead too, e.g. during a film, so nothing goes off afterwards.
+- A room off that you did not press yourself (sleep timer, the end of a wake, a handover to another room) stops the players; kept on, the devices stay on. Quiet mode still switches the speakers off: you asked for it.
+- The room's status is `kept_on` while devices are on and none is needed.
+- Turned on while something is going off: what was not yet switched off stays on (a device already switched off, waiting for its plug, goes on off).
+- A start that fails still switches off what it switched on: that was off before.
+
 ## Devices instead of plugs
 
 Display, speakers and subwoofer can also be devices that turn themselves on and off, alone or together with plugs (the player hardware stays a plug):

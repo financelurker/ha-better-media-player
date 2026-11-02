@@ -51,8 +51,11 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.storage import Store
+from homeassistant.util import dt as dt_util
 
 from ..const import (
+    EVENT_RUN_DOWN,
+    KIND_NAMES,
     DOMAIN,
     PRESETS,
     SOURCE_AUDIO,
@@ -64,6 +67,7 @@ from ..const import (
     STATUS_OFF,
     STATUS_ON,
     STATUS_PLAYING,
+    STATUS_KEPT_ON,
     STATUS_RUN_DOWN,
     STATUS_STARTING,
     STATUS_STOPPING,
@@ -160,6 +164,12 @@ class RoomController:
 
         self.status = STATUS_OFF
         self.manual = False
+        # the run-down: when each device running down goes off (clock time); the
+        # devices a room off is switching off (not a run-down)
+        self.run_down_at: dict[str, float] = {}
+        # switched off by the room, not run down: key -> reason (all_off, room_off, start_failed)
+        self._not_run_down: dict[str, str] = {}
+        self._run_down_seen = False  # (the first look after the start tells nothing)
         self.error: str | None = None
 
         self.follow = RoomFollow(self)
@@ -591,6 +601,7 @@ class RoomController:
                 if self.auto_power and self.power.devices.missing():
                     self.sequence.start(None)
                 await self.power.devices.async_auto_off(now, self.power.off_order)
+            self._track_run_down(now)
             if not self.manual:
                 # the inputs follow the source in use (chosen outside the lock: an
                 # input's pause must not hold the room up)
@@ -645,6 +656,7 @@ class RoomController:
                 src.suppressed = False
             if (
                 src.key == SOURCE_VIDEO
+                and not self.keep_on  # (kept on: idle counts from when it ends)
                 and self.source_active(src)
                 and self.player_state(src) in IDLE_STATES
             ):
@@ -672,10 +684,10 @@ class RoomController:
         its speakers ran down (paused, stopped). Not in a group (the group
         decides), nor while its speakers are on or needed (manual mode, a
         wake's snooze)."""
-        automatic = self.auto_power and not self.manual and not self.sequence.running
+        automatic = self.auto_power and not self.manual and not self.sequence.running and not self.keep_on
         if src.powered_at is not None and not self._just_turned_on(src):
             src.powered_at = None
-            if not self.source_playing(src):
+            if not self.source_playing(src) and not self.keep_on:
                 for node in self.power.nodes.values():
                     if SOURCE_AUDIO in node.sources and not self.power.needed(node):
                         node.force_off = True  # its run-down is over
@@ -717,7 +729,7 @@ class RoomController:
         ):
             self.status = STATUS_ON
         elif any(self.power.devices.is_on(e) for e in self.power.devices.entities):
-            self.status = STATUS_RUN_DOWN
+            self.status = STATUS_KEPT_ON if self.keep_on else STATUS_RUN_DOWN
         else:
             self.status = STATUS_OFF
 
@@ -936,15 +948,36 @@ class RoomController:
                 elif self.player_supports(other, MediaPlayerEntityFeature.PAUSE):
                     await self._player(other, "media_pause")
 
-    async def async_turn_off(self) -> None:
-        """Explicit "room off": stop sources, then power down in order."""
+    async def async_turn_off(self, all_off: bool = False) -> None:
+        """Room off: stop sources, then power down in order.
+
+        all_off: the user's "All off" (button, the room player's off), which also
+        ends "Keep on". Otherwise (sleep timer, wake, handover) the sources stop and,
+        while the room is kept on, its devices stay on."""
         self.turning_off = True
         try:
-            await self._turn_off()
+            if all_off and self.keep_on:
+                self.data["keep_on"] = False
+                self._save()
+            await self._turn_off("all_off" if all_off else "room_off")
         finally:
             self.turning_off = False
 
-    async def _turn_off(self) -> None:
+    def _cut(self, reason: str) -> None:
+        """Everything on goes off (a room off), unless the room is kept on."""
+        if self.keep_on:
+            return
+        for node in self.power.nodes.values():
+            if self.power.devices.node_on(node):
+                node.force_off = True
+                self._not_run_down[node.key] = reason
+
+    def not_run_down(self, nodes, reason: str) -> None:
+        """The room switches these off, not their run-down (e.g. a failed start)."""
+        for node in nodes:
+            self._not_run_down[node.key] = reason
+
+    async def _turn_off(self, reason: str) -> None:
         await self.wake.async_finish(WAKE_ROOM_OFF)
         self.sequence.cancel()
         self._reset_overrides()
@@ -958,16 +991,12 @@ class RoomController:
         for src in self.sources.values():
             if self.source_active_raw(src) or src.backend.groups_of(src.player):
                 src.suppressed = True
-        for node in self.power.nodes.values():
-            if self.power.devices.node_on(node):
-                node.force_off = True
+        self._cut(reason)
         for src in self.sources.values():
             await self._source_off(src)
         # after the stop: a fade's volume comes back only once the player is quiet
         await self.sleep.async_cancel(REASON_ROOM_OFF)
-        for node in self.power.nodes.values():
-            if self.power.devices.node_on(node):
-                node.force_off = True
+        self._cut(reason)
         self.sequence.cancel()
         await self.async_update("turn_off")
 
@@ -989,6 +1018,99 @@ class RoomController:
 
     async def async_set_night_mode(self, on: bool) -> None:
         await self.night.async_set(on)
+
+    @property
+    def keep_on(self) -> bool:
+        """Keep on: nothing is switched off automatically (until turned off or All off)."""
+        return bool(self.data.get("keep_on"))
+
+    async def async_set_keep_on(self, on: bool) -> None:
+        self.data["keep_on"] = on
+        self._save()
+        if on:
+            # an automatic off on its way stops (one already switching its devices
+            # off goes through; quiet still cuts the speakers)
+            quiet = {n.key for n in self.power.sound_nodes()} if self.quiet else set()
+            for node in self.power.nodes.values():
+                if node.key not in self._not_run_down and node.key not in quiet and node.devices_off_since is None:
+                    node.force_off = False
+                    node.stop_since = None
+        else:
+            # what was kept on runs down from now (not from its last need, maybe hours ago)
+            now = clock.now()
+            for node in self.power.nodes.values():
+                if node.last_demand is not None:
+                    node.last_demand = max(node.last_demand, now)
+            self.night.async_cut_disabled()  # devices off at night go now
+        await self.async_update("keep_on")
+
+    def node_name(self, key: str) -> str:
+        node = self.power.nodes[key]
+        if node.device is None:
+            return "Video player hardware" if node.sources[0] == SOURCE_VIDEO else "Music player hardware"
+        return node.device.get("name") or KIND_NAMES.get(node.device["kind"], key)
+
+    @callback
+    def _track_run_down(self, now: float) -> None:
+        """Which devices run down and when they go off; its triggers.
+
+        A device runs down while it is on, not needed and the room switches it off
+        automatically; its time is its last need plus its run-down. Waiting after
+        that (standby, an earlier device first) keeps the time until it is off.
+        One that is to go off at once (quiet, night) goes off "now"."""
+        devices = self.power.devices
+        nodes = self.power.nodes
+        cut = dict(self._not_run_down)
+        self._not_run_down = {
+            k: r for k, r in cut.items() if k in nodes and devices.node_on(nodes[k]) and not self.power.needed(nodes[k])
+        }
+        before = self.run_down_at
+        runs: dict[str, float] = {}
+        if self.auto_power and not self.manual and not self.keep_on:
+            for key, node in nodes.items():
+                if (
+                    key in self._not_run_down
+                    or node.last_demand is None
+                    or not devices.node_on(node)
+                    or self.power.needed(node)
+                    or not devices.switches_off(node)  # (never switched off by the room)
+                    # a start brings it up: not needed until its player is there
+                    or (self.sequence.running and key not in before)
+                ):
+                    continue
+                runs[key] = min(before.get(key, now), now) if node.force_off else node.last_demand + self.power.run_down(node)
+        self.run_down_at = runs
+        if not self._run_down_seen:
+            # the first look after the start (a restart: the run-down starts anew,
+            # what ran down before is no "start")
+            self._run_down_seen = self._started
+            return
+        # (to the second, as the sensors show it)
+        at = lambda t: dt_util.utc_from_timestamp(int(t)).isoformat()  # noqa: E731
+        started = {k: at(t) for k, t in runs.items() if k not in before}
+        if started:
+            self.async_fire(EVENT_RUN_DOWN, {"type": "started", "devices": started})
+        gone = [k for k in before if k not in runs]
+        is_off = lambda k: k not in nodes or not devices.node_on(nodes[k])  # noqa: E731
+        # went off after its run-down (not by hand before, nor by a room off)
+        ran_down = [k for k in gone if is_off(k) and k not in cut and now >= before[k] - 1]
+        for key in ran_down:
+            self.async_fire(EVENT_RUN_DOWN, {"type": "off", "device": key, "name": self.node_name(key) if key in nodes else key})
+        kept = [k for k in gone if k not in ran_down]
+        if kept:
+            if any(k in nodes and self.power.needed(nodes[k]) for k in kept):
+                reason = "needed"
+            elif self.keep_on:
+                reason = "kept_on"
+            elif reasons := [cut[k] for k in kept if k in cut]:
+                reason = "all_off" if "all_off" in reasons else reasons[0]
+            elif self.manual:
+                reason = "manual"
+            elif any(is_off(k) for k in kept):
+                reason = "switched_off"  # (by hand, before its time)
+            else:
+                reason = "automatic_off"
+            self.async_fire(EVENT_RUN_DOWN, {"type": "cancelled", "devices": kept, "reason": reason})
 
     async def async_set_auto_power(self, on: bool) -> None:
         self.data["auto_power"] = on

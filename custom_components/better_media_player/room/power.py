@@ -152,7 +152,8 @@ class RoomPower:
 
     @property
     def automatic(self) -> bool:
-        return self.ctrl.auto_power
+        """Devices run down (and go off): not while the room is kept on."""
+        return self.ctrl.auto_power and not self.ctrl.keep_on
 
     def demanded(self, node: Node) -> bool:
         return self.needed(self.nodes[node.key])

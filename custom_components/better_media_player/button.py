@@ -38,7 +38,7 @@ class AllOffButton(ControlEntity, ButtonEntity):
         return self.ctrl.room_active or self.ctrl.power.devices.has_power
 
     async def async_press(self) -> None:
-        await self.ctrl.async_turn_off()
+        await self.ctrl.async_turn_off(all_off=True)
 
 
 class SleepPlusButton(ControlEntity, ButtonEntity):
