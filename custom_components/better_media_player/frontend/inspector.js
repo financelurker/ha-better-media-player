@@ -23,6 +23,28 @@ export function renderInspector(p, d) {
   return dev ? device(p, d, dev) : nothing;
 }
 
+// nothing picked: the room at a glance; without cables, how it works now and taking that over
+export function renderOverview(p, d) {
+  const t = p._t;
+  const direct = !d.cables.length && d.devices.length && d.sources.some((s) => d.routes?.[s.id]?.direct?.length);
+  const moved = d.devices.find((x) => x.volume_migrated);
+  return html`
+    ${direct ? html`<div class="takeover">
+      <b>${t("over.title")}</b>
+      <p>${t("over.text")}</p>
+      <p>${t("over.passive")}</p>
+      ${moved ? html`<p>${t("over.volume", { entity: moved.volume, device: moved.name || t(`kind.${moved.kind}`) })}</p>` : nothing}
+      <button class="btn primary small" @click=${() => p._takeOver(d)}>${t("over.button")}</button>
+      <small class="muted">${t("over.after")}</small>
+    </div>` : nothing}
+    <h2>${d.name}</h2>
+    <div class="kind">${t("nav.room_sub", p._counts(d))}</div>
+    <p class="muted">${t("insp.click")}</p>
+    <p class="muted">${t("over.cable")}</p>
+    <p class="muted">${t("over.move")}</p>
+    <button class="btn small" @click=${() => { p._dialog = { type: "add" }; }}>+ ${t("add.button")}</button>`;
+}
+
 function problemsOf(p, d, id) {
   const own = (d.problems || []).filter((x) => x.device === id || x.source === id);
   return own.length ? html`<div class="problems">${own.map((x) => html`<div class=${x.error ? "err" : ""}>${p._problemText(x)}</div>`)}</div>` : nothing;

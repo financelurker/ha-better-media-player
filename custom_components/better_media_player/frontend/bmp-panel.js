@@ -6,8 +6,8 @@
 import { LitElement, html, svg, css, nothing } from "./vendor/lit.js";
 import { translator } from "./i18n.js";
 import { W, H, PASSIVE, SINKS, nodesOf, arrange, unstack, curve, labelSpot, bounds, iconPath } from "./diagram.js";
-import { DEVICE_KINDS, SOURCE_KINDS, addCable, addDevice, addSource, canConnect, draftOf, newRoom, payload, same } from "./editor.js";
-import { renderInspector } from "./inspector.js";
+import { DEVICE_KINDS, SOURCE_KINDS, addCable, addDevice, addSource, canConnect, directToCables, draftOf, newRoom, payload, same } from "./editor.js";
+import { renderInspector, renderOverview } from "./inspector.js";
 import { renderCentral, renderSettings } from "./settings.js";
 
 const PANEL_URL = "better-media-player";
@@ -273,7 +273,7 @@ class BmpPanel extends LitElement {
         </header>
         ${this._renderSaveBar()}
         ${this._notice ? html`<div class="notice" role="alert">${this._notice}<button class="chip" @click=${() => { this._notice = null; }}>${t("dismiss")}</button></div>` : html`<div></div>`}
-        <div class="main ${this._page === "room" && this._tab === "wiring" && this._selected ? "details" : ""}">
+        <div class="main ${this._page === "room" && this._tab === "wiring" ? "details" : ""}">
           ${this._renderNav()}
           ${this._page === "central"
             ? html`<section class="stage"><div class="page">${renderCentral(this)}</div></section>`
@@ -350,9 +350,9 @@ class BmpPanel extends LitElement {
           ? html`<div class="page">${renderSettings(this, room)}</div>`
           : html`${this._renderSources(room)}${this._renderProblems(room)}${this._renderDiagram(room)}${this._renderRoute(room)}`}
       </section>
-      ${this._tab === "wiring" && this._selected ? html`<section class="inspector">
-        <button class="close" title=${t("close")} aria-label=${t("close")} @click=${() => { this._selected = null; }}>×</button>
-        ${renderInspector(this, room)}</section>` : nothing}
+      ${this._tab === "wiring" ? html`<section class="inspector">
+        ${this._selected ? html`<button class="close" title=${t("close")} aria-label=${t("close")} @click=${() => { this._selected = null; }}>×</button>` : nothing}
+        ${this._selected ? renderInspector(this, room) : renderOverview(this, room)}</section>` : nothing}
     `;
   }
 
@@ -475,7 +475,7 @@ class BmpPanel extends LitElement {
     const src = room.sources.find((s) => s.id === this._source);
     if (this._armed) return html`<div class="route">${t("cable.armed")}</div>`;
     if (!src || !room.routes?.[src.id])
-      return html`<div class="route">${!room.cables.length && room.devices.length ? html`${t("insp.migrated")} ` : nothing}${t("route.pick")} ${t("insp.click")}</div>`;
+      return html`<div class="route">${t("route.pick")}</div>`;
     const r = room.routes[src.id];
     const devices = (r.order || []).map((id) => room.devices.find((d) => d.id === id)).filter(Boolean);
     const name = (d) => d.name || t(`kind.${d.kind}`);
@@ -807,6 +807,12 @@ class BmpPanel extends LitElement {
     }
   }
 
+  // the dotted lines as cables (an unsaved change), then everything placed anew
+  _takeOver(room) {
+    this._change(room, () => directToCables(room));
+    this._rearrange(room);
+  }
+
   async _rearrange(room) {
     for (const n of this._tiles(room)) n.placed = false;
     room.layout = {};
@@ -957,6 +963,9 @@ class BmpPanel extends LitElement {
     .clabel text { font-size: 11.5px; font-family: var(--code-font-family, ui-monospace, monospace); fill: var(--bmp-text); }
     .clabel.cec rect { stroke: var(--bmp-cec); }
     .clabel.dim { opacity: .2; }
+    .takeover { border: 1px solid color-mix(in srgb, var(--bmp-primary) 45%, var(--bmp-line)); background: color-mix(in srgb, var(--bmp-primary) 8%, var(--bmp-card)); border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; display: grid; gap: 8px; }
+    .takeover p { margin: 0; font-size: 13px; }
+    .takeover .btn { justify-self: start; }
     .inspector h2 { font-size: 18px; font-weight: 500; margin: 0 0 2px; padding-right: 32px; }
     .kind { color: var(--bmp-muted); margin-bottom: 16px; }
     .field { display: grid; gap: 6px; margin-bottom: 14px; }

@@ -232,6 +232,21 @@ export function addCable(d, from, to) {
   return d.cables.length - 1;
 }
 
+// the dotted lines (players feeding devices no cable reaches) as cables, so the room keeps
+// working as it does and the cabling can be changed from there; returns how many were added
+export function directToCables(d) {
+  let added = 0;
+  for (const s of d.sources) {
+    for (const to of d.routes?.[s.id]?.direct || []) {
+      const signals = defaultSignals(d, s.id, to);
+      const c = d.cables.find((x) => x.from === s.id && x.to === to);
+      if (c) c.signals = [...new Set([...c.signals, ...signals])].sort();
+      else { d.cables.push({ from: s.id, to, signals, input: null, mode: "bmp" }); added++; }
+    }
+  }
+  return added;
+}
+
 // a passive device put into a cable (the cable is split in two)
 export function insertInto(d, index, kind, defaults) {
   const c = d.cables[index];
