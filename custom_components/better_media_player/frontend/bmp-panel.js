@@ -228,6 +228,7 @@ class BmpPanel extends LitElement {
     }
     const taken = nodes.map((n) => [n.x - 8, n.y - 10, n.x + W + 8, n.y + H + 4]);
     const labels = [];
+    const feeding = new Set(room.cables.map((c) => c.from)); // tiles a cable leaves
     const cables = room.cables.map((c, i) => {
       const a = byId[c.from], b = byId[c.to];
       if (!a || !b) return nothing;
@@ -257,7 +258,7 @@ class BmpPanel extends LitElement {
             const a = byId[from], b = byId[to];
             return a && b ? svg`<path class="cable direct" d=${curve(a.x + W, a.y + H / 2, b.x, b.y + H / 2)}></path>` : nothing;
           })}${cables}</g>
-          <g>${nodes.map((n) => this._renderTile(n, onRoute && !onRoute.has(n.id)))}</g>
+          <g>${nodes.map((n) => this._renderTile(n, onRoute && !onRoute.has(n.id), feeding.has(n.id)))}</g>
           <g>${labels}</g>
         </g>
       </svg>
@@ -273,7 +274,7 @@ class BmpPanel extends LitElement {
     </div>`;
   }
 
-  _renderTile(n, dim) {
+  _renderTile(n, dim, feeds) {
     const sel = this._selected?.type === "node" && this._selected.id === n.id;
     const passive = PASSIVE.includes(n.kind);
     const name = n.name.length > 19 ? `${n.name.slice(0, 18)}…` : n.name;
@@ -290,7 +291,7 @@ class BmpPanel extends LitElement {
       <text x="46" y="46" class="sub">${sub}</text>
       ${cec ? svg`<g class="badge" transform="translate(${W - 44} -8)"><rect width="36" height="16" rx="7"></rect><text x="18" y="11.5" text-anchor="middle">CEC</text></g>` : nothing}
       ${n.kind !== "player" ? svg`<circle class="port" cx="0" cy=${H / 2} r="6"></circle>` : nothing}
-      ${!SINKS.includes(n.kind) ? svg`<circle class="port" cx=${W} cy=${H / 2} r="6"></circle>` : nothing}
+      ${feeds || !SINKS.includes(n.kind) ? svg`<circle class="port" cx=${W} cy=${H / 2} r="6"></circle>` : nothing}
     </g>`;
   }
 
