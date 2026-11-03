@@ -175,14 +175,14 @@ async function shotDialog(page, file) {
   }
 
   if (want('panel')) {
-    // the configuration panel: the Family Room as cabled by cable_demo.py, the film's route shown
+    // the configuration panel: the Family Room as cabled by cable_demo.py, the video's route shown
     await page.setViewportSize({ width: 1400, height: 760 });
     await page.goto(`${BASE}/better-media-player/${session.entry_id}`);
     await settle(page, 3000);
     const panel = page.locator('bmp-panel');
-    await panel.getByRole('button', { name: 'Arrange automatically' }).click();  // the places as the panel chooses them
+    await panel.getByRole('button', { name: 'Arrange automatically' }).click({ force: true });  // the places as the panel chooses them
     await page.waitForTimeout(800);
-    await panel.locator('.chip', { hasText: 'Film' }).click();
+    await panel.locator('.chip', { hasText: 'Video' }).click();
     await page.waitForTimeout(500);
     await panel.screenshot({ path: `${OUT}/panel.png` });
     // a device's details (editing), on its own page width

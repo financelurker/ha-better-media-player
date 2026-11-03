@@ -166,6 +166,7 @@ export function setHost(d, src, plug, defaults) {
 export function setRunsOn(d, src, id) {
   src.runs_on = id || null;
   if (src.runs_on) {
+    src.onoff = "auto"; // (what it runs on brings it up; its own on/off only if it has one)
     src.host = null;
     src.settings = null;
     d.cables = d.cables.filter((c) => c.from !== src.id);

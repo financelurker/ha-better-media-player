@@ -266,6 +266,13 @@ def test_what_it_runs_on_is_checked(hass, home):
     assert "guest_cable" in _codes(hass, _draft(_sources(), cables=cable))
 
 
+def test_no_on_off_hint_for_it(hass, home):
+    """It comes up with what it runs on: its own on/off is no matter."""
+    hass.states.async_set(SENDSPIN, "idle", {"supported_features": 0})
+    problems = check_room(hass, None, _draft(_sources(onoff="player")))
+    assert "player_no_onoff" not in {p["code"] for p in problems}
+
+
 def test_it_has_no_plug_of_its_own(hass):
     setup = clean_setup(_draft(_sources(host="switch.x")))
     assert setup["sources"][1]["host"] is None and setup["sources"][1]["runs_on"] == "video"

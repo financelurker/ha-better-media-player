@@ -21,7 +21,7 @@ A connection is what you have cabled: *from* a player or device, *to* the device
 
 - **The route of a source** follows its connections for each signal it needs (video: picture and sound; music: sound). Devices the connections do not reach are fed directly, as without cabling: a display for the picture, speakers, subwoofer, receiver and amplifier for the sound. Mixers and splitters pass on what reaches them, without being switched.
 - **What lies on a source's route is switched on for it.** Music routed through the TV (its app, or ARC) switches the TV on; music straight to the receiver leaves the TV off.
-- **One input per device and source:** a film cannot need BD and NET on the same receiver. The panel does not save that, nor connections that run in a circle for one signal.
+- **One input per device and source:** a video cannot need BD and NET on the same receiver. The panel does not save that, nor connections that run in a circle for one signal.
 - Removing a player or a device removes its connections.
 
 ## Inputs and switching of a device
@@ -38,7 +38,7 @@ In a device's details in the panel:
 
 ## What the room does
 
-- **The inputs follow the source in use:** the one starting, else the one playing. A film taking over from music puts the receiver on BD; when the film ends and the music still plays, back to NET.
+- **The inputs follow the source in use:** the one starting, else the one playing. A video taking over from music puts the receiver on BD; when the video ends and the music still plays, back to NET.
 - **An input is chosen once the device is on** (TVs ignore it while starting), checked after 5 s (with the device's `source`) and chosen once more if needed; then the room gives up (logged). A device that does not tell its input (IR) gets the command once.
 - **Changed by hand:** an input you change on the device afterwards is kept until the source changes.
 - **CEC:** HDMI-CEC lets devices control each other over the HDMI cable. Switching on is fairly uniform (a starting player wakes the TV and selects its input); switching off depends on the devices (a TV turned off often takes the others with it, a player going off often leaves the TV on). Hence the separate modes for on and off. A device switched on over CEC while the room needs it counts as switched by the room.
@@ -57,7 +57,7 @@ All setups are tested with simulated devices. **On real devices so far only scen
 
 - **Setup:** display (a TV or monitor without its own control) and speakers / subwoofer on switchable plugs; a video player (Kodi or Better Kodi) and a music player (Music Assistant).
 - **Configuration:** only the room's players and devices; no cabling.
-- **Behaviour:** a film switches the display, wakes Kodi, then speakers and subwoofer; music switches only speakers and subwoofer. Nothing plays for the idle timeout, or the player is turned off: everything goes off. No inputs to choose.
+- **Behaviour:** a video switches the display, wakes Kodi, then speakers and subwoofer; music switches only speakers and subwoofer. Nothing plays for the idle timeout, or the player is turned off: everything goes off. No inputs to choose.
 
 ### Scenario A: TV with CEC, AV receiver, Kodi
 
@@ -68,7 +68,15 @@ All setups are tested with simulated devices. **On real devices so far only scen
   - Display: the TV (switching itself), switched on by CEC (with fallback: the TV's `turn_on`, i.e. your Wake-on-LAN automation on its turn-on trigger), inputs via the TV.
   - AV receiver: on its plug and switching itself, inputs via the receiver.
   - Cables: video player → display, picture and sound, HDMI 2, chosen by CEC; display → receiver, sound, TV/ARC, chosen by CEC; music player → receiver, sound, NET, chosen by BMP.
-- **Behaviour:** starting a film, the room wakes Kodi and waits for the TV and its input over CEC (it does it itself after the timeout); music afterwards puts the receiver on NET.
+- **Behaviour:** starting a video, the room wakes Kodi and waits for the TV and its input over CEC (it does it itself after the timeout); music afterwards puts the receiver on NET.
+
+### Scenario B: a music player in Kodi
+
+*Tested: simulated only, not yet on real devices.*
+
+- **Setup:** Kodi on a box (with its plug) feeds the TV (picture) and the speakers (sound, e.g. through a passive mixer); a Sendspin player of Music Assistant runs as an add-on in Kodi; a second music player of its own (e.g. a Sendspin ESP) may feed the same speakers.
+- **Configuration:** Kodi as video player with its plug, cables to the display and the speakers; the Sendspin player in Kodi as music player, *Runs on*: Kodi ([details](players.md#a-player-that-runs-on-another-player-or-a-device)); *Main music player* under Room & behaviour if there are several.
+- **Behaviour:** music in Kodi wakes Kodi (plug first), waits for its Sendspin player and powers only the speakers – Kodi's own "playing" and its menu are no video, the TV stays off. A video chosen in Kodi turns the TV on after a moment. When the music is no longer used, the speakers go off, then Kodi, then its plug.
 
 ---
 
