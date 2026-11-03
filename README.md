@@ -63,7 +63,7 @@ A page of its own in Home Assistant's sidebar, where the rooms are set up: every
 Tested with simulated devices; **on real devices so far only scenario 0** (Kodi for video, a Sendspin device of Music Assistant for music). Feedback on the others is welcome.
 
 - **[Scenario 0 – simple devices on plugs](https://github.com/financelurker/ha-better-media-player/blob/main/docs/devices.md#scenario-0-simple-devices-on-plugs):** TV, speakers and subwoofer on plugs, a video and a music player; no cabling needed. *In real use.*
-- **[Scenario A – TV with CEC, AV receiver, Kodi](https://github.com/financelurker/ha-better-media-player/blob/main/docs/devices.md#scenario-a-tv-with-cec-av-receiver-kodi):** Kodi wakes the TV over CEC, the TV the receiver; music on the receiver's network input, chosen by the room. *Simulated only.*
+- **[Scenario A – TV with CEC, AV receiver](https://github.com/financelurker/ha-better-media-player/blob/main/docs/devices.md#scenario-a-tv-with-cec-av-receiver-kodi):** the video player wakes the TV over CEC, the TV the receiver; music on the receiver's network input, chosen by the room. *Simulated only.*
 - **[Scenario B – a music player in Kodi](https://github.com/financelurker/ha-better-media-player/blob/main/docs/devices.md#scenario-b-a-music-player-in-kodi):** Kodi for videos and a Sendspin player of Music Assistant in Kodi for music, through Kodi's sound; music in Kodi leaves the TV off. *Simulated only.*
 
 ## Installation
