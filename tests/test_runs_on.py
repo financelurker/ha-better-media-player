@@ -395,3 +395,25 @@ async def test_follow_me_prewarms_kodi_s_plug_for_the_music_in_kodi(hass, home, 
     entry = await _room(hass, freezer, music_source="kodi_music")
     power = entry.runtime_data.power
     assert power.prewarms(power.nodes["video_host"]) and power.prewarms(power.nodes["speakers"])
+
+
+async def test_kodi_echoing_the_music_s_volume_is_no_wish(hass, home, freezer):
+    """Sendspin in Kodi sets Kodi's volume: Kodi's reports during a preset's fade
+    are no change of the room's volume (the preset stays)."""
+    from .helpers import PRESET, select_preset, set_setting
+
+    _off(hass, home, plug="on")
+    entry = await _room(hass, freezer)
+    home.kodi("playing", volume_level=0.3)
+    home.kitchen("playing", volume_level=0.3)
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 3)
+    await set_setting(hass, "preset_fade", 20)
+    await select_preset(hass, "loud")
+    for _ in range(6):  # (Kodi follows each step of the Sendspin player's fade)
+        await tick(hass, freezer, 5, step=1)
+        home.kodi("playing", volume_level=hass.states.get(SENDSPIN).attributes["volume_level"])
+        await hass.async_block_till_done()
+    await tick(hass, freezer, 5)
+    assert hass.states.get(PRESET).state == "loud"
+    assert abs(hass.states.get(SENDSPIN).attributes["volume_level"] - entry.runtime_data.volume.presets["loud"]) < 0.01
