@@ -28,7 +28,7 @@ The device page and the settings of a room: [Setup](setup.md#the-rooms-device-an
 
 ## Dynamic controls
 
-A room's controls that make no sense right now are hidden (`hidden_by: integration`), so the automatic dashboards only show what can be used. A control is shown at once when it makes sense again and hidden only after the hide delay (default 3 s), so a short stop between two items changes nothing. The room player, the night mode and keep on are always shown; settings and diagnostic entities are left alone.
+A room's controls that make no sense right now are hidden (`hidden_by: integration`), so the automatic dashboards only show what can be used. A control is shown at once when it makes sense again and hidden only after the hide delay (default 3 s), so a short stop between two items changes nothing. The room player and the night mode are always shown; settings and diagnostic entities are left alone.
 
 | Control | Shown while |
 |---|---|
@@ -36,7 +36,8 @@ A room's controls that make no sense right now are hidden (`hidden_by: integrati
 | Sleep timer, Sleep timer +15 min | the room plays or is on, or a sleep timer runs |
 | Sleep timer end | a sleep timer runs |
 | Night mode | always (it is set ahead, also while nothing plays) |
-| Keep on | always (it is set ahead, also during playback) |
+| Keep on | the room plays or is on, or a device still has power, or it is on (it can be set ahead, during playback) |
+| *Device* off at | an off is planned (nothing plays and the idle timeout runs, or it waits to go off) |
 | Quiet | always in a room that takes part in follow me (occupancy sensors, a music player, a follow-me player in the central settings); elsewhere while it is on |
 | Wake, Snooze, Stop wake | a wake runs |
 | Follow me / Stop follow me | it can be started here / follow me runs |

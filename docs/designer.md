@@ -32,6 +32,20 @@ Tested on a local Home Assistant 2026.10 with the demo integration (simulated de
 - **Show route:** pick a player to highlight what it needs when it starts; below the drawing, the order in which the devices come on and the inputs they are switched to. *All* shows every cable.
 - **Problems** of the room are listed above the drawing; a tile with an error has a red frame.
 
+## Live
+
+With **Live** on (the switch above the drawing, on by default and remembered in the browser), the drawing shows what the room does right now:
+
+![Live: the music paused, the room goes off in 29:46; the speakers' details](images/panel-live.png)
+
+- **Under each tile** a line: a player *playing*, *paused · off in 7:42* (counting down; an hour or more: the time), *starting …*, *going off*; a device *on · HDMI 2* (its input), *on · → HDMI 2* (being chosen), *waiting for CEC · 8 s*, *off in 7:42*, *waiting for standby · 12 W*, *waits for the player*, *by hand · HDMI 1*, *night: off*, *kept on*, *off*.
+- **Cables:** the route in use is shown, the rest dimmed; while it plays, dots run along its cables (not with reduced motion).
+- **Below the drawing** a sentence on what the room does, with **Keep on** (or **Release**) and **All off** where they make sense.
+- **Details** of a tile you click: its state, why it is on (a player plays, its idle timeout, a wake, an announcement, follow me), its entities' states and its input.
+- **Rooms list:** a line per room (*plays film*, *film paused · off in 29 min*, *starting …*, *kept on*, *start failed*, *off*).
+
+Picking a route (*Show route*) turns Live off; switching it on again shows what runs. While a room's setup has unsaved changes, Live waits: the drawing then shows the changes, not what runs.
+
 ## Players, devices and cables
 
 - **+ Add** (above the drawing): a player (video or music; at most one each, a player of the room's area is proposed) or a device: display, AV receiver / soundbar, amplifier, speakers, subwoofer, HDMI switch, mixer, splitter, passive speakers.
@@ -44,7 +58,7 @@ Tested on a local Home Assistant 2026.10 with the demo integration (simulated de
 | **A device** | Name and ID (the ID can be changed until the device is saved, then it is fixed: automations use it, e.g. `set_setting` with `device:`). *Switched* or *Passive*; plugs, devices that switch themselves (a TV, an AV receiver, a remote), own on/off actions, power sensors (for [waiting for standby](room.md#wait-for-standby)); who switches it on and off (BMP, CEC, never). Inputs: via a media player's source list, or an action per input (IR). Its volume, and *Use as the room's volume*. Its settings: wait after on, standby, off at night. |
 | **A cable** | What it carries, the input on the device, who chooses it (BMP, CEC, never); *Insert in between* puts a mixer or a splitter into it. |
 
-Removing a player or a device removes its cables (and its settings).
+**Del** (or Backspace) removes the picked cable, device or player, like its *Remove* button in the details (not while typing in a field). Removing a player or a device removes its cables (and its settings). Like every change, it is undone with **Discard** until you save.
 
 ## Room & behaviour
 

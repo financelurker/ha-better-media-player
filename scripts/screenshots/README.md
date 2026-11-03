@@ -41,10 +41,11 @@ Home Assistant instance (2026.10.3, English, light theme) with the demo integrat
 
    ```bash
    python scene.py movie                                 # Kodi plays
-   node shoot.js ../../docs/images                       # all but dashboard-music
+   node shoot.js ../../docs/images                       # all but dashboard-music, panel-live
    node shoot.js ../../docs/images dashboard,more-info   # some
    python scene.py music                                 # music plays, Kodi and the TV off
    node shoot.js ../../docs/images dashboard-music
+   node shoot.js ../../docs/images panel-live            # the music paused: the panel's live state
    ```
 
    `announce.png` is the action in the developer tools (filled in YAML mode,
