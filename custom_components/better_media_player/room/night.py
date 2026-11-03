@@ -104,10 +104,6 @@ class NightMode:
         """A device set to be off at night is not switched on in night mode."""
         return not (self.active and node.device is not None and self.ctrl.power.device_setting(node, "night_off"))
 
-    def ramping(self, player: str) -> bool:
-        ramp = self._ramps.get(player)
-        return ramp is not None and ramp.running
-
     # ---------------------------------------------------------------- switch
 
     async def async_set(self, on: bool) -> None:

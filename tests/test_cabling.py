@@ -100,7 +100,8 @@ async def test_an_input_changed_by_hand_is_left_until_the_source_changes(hass, h
     await tick(hass, freezer, 30)
     assert hass.states.get(AVR).attributes["source"] == "TUNER"
     assert selects(home, AVR) == ["NET"]
-    assert entry_power(hass).devices.input_manual(entry_power(hass).nodes["speakers"])
+    devices = entry_power(hass).devices
+    assert devices.live(entry_power(hass).nodes["speakers"], 0)["input"]["state"] == "manual"
     home.kodi("playing")  # another source: its input again
     await hass.async_block_till_done()
     await tick(hass, freezer, 10)

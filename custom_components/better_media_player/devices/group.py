@@ -565,11 +565,6 @@ class DeviceGroup:
         state = self.hass.states.get(entity) if entity else None
         return state is not None and ("source_list" in state.attributes or "source" in state.attributes)
 
-    def input_manual(self, node: Node) -> bool:
-        """The node's input was changed by hand (left alone until the next wish)."""
-        wish = self._inputs.get(node.key)
-        return wish is not None and wish.manual
-
     def input_ready(self, node: Node) -> bool:
         """The node can take an input: its devices are really on (not only told to
         be, nor expected over CEC), and it is not being brought up (its wait after

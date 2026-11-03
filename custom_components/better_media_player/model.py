@@ -255,12 +255,6 @@ def host_key(source: str) -> str:
     return f"{source}_host"
 
 
-def taken_ids(options: dict) -> set[str]:
-    """Ids a device cannot have: the sources', their plugs' and the reserved ones."""
-    ids = {s["id"] for s in options.get(OPT_SOURCES) or []}
-    return ids | {host_key(i) for i in ids} | set(RESERVED_IDS)
-
-
 def devices_of(options: dict) -> list[dict]:
     return list(options.get(OPT_DEVICES) or [])
 

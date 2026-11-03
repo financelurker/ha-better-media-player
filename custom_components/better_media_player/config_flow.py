@@ -17,8 +17,6 @@ from homeassistant.helpers import selector as sel
 from .const import CONF_ENTRY_TYPE, CONF_FOLLOW_PLAYER, DOMAIN, ENTRY_TYPE_HUB, ENTRY_TYPE_ROOM, PANEL_URL
 from .players.music_assistant import MusicAssistant
 
-SOURCE_PANEL = "panel"
-
 
 class BetterMediaPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 4
