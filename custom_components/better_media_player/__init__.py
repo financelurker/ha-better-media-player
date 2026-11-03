@@ -34,6 +34,7 @@ from .room.announce import async_setup_services
 from .room.controller import RoomController
 from .follow.manager import FollowManager
 from .room import get_rooms
+from .hide import async_setup_hider, get_hider
 from .issues import REMOVED_KEY, async_setup_issues, get_checker
 from .model import REMOVED_CENTRAL_ENTITIES, REMOVED_ROOM_ENTITIES, migrate_store, migrate_store_4_2, options_v4
 from .panel import async_setup_panel
@@ -52,6 +53,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     async_setup_services(hass)
     async_setup_actions(hass)
     async_setup_issues(hass)
+    await async_setup_hider(hass)
     version = str((await async_get_integration(hass, DOMAIN)).version)
     hass.data[DOMAIN]["version"] = version
     await async_setup_panel(hass, version)
@@ -60,6 +62,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     def _entry_changed(change: ConfigEntryChange, entry: ConfigEntry) -> None:
         if entry.domain == DOMAIN and (checker := get_checker(hass)) is not None:
             checker.changed()  # added, removed, set up, unloaded, options changed
+        if entry.domain == DOMAIN and (hider := get_hider(hass)) is not None:
+            hider.changed()
 
     async_dispatcher_connect(hass, SIGNAL_CONFIG_ENTRY_CHANGED, _entry_changed)
     return True

@@ -36,7 +36,7 @@ It is a custom integration in the spirit of Better Thermostat: you tell it what 
 - **[Wake up with follow me](https://github.com/financelurker/ha-better-media-player/blob/main/docs/night-sleep-wake.md#with-follow-me):** the music follows you out of the bedroom.
 - **[Handover](https://github.com/financelurker/ha-better-media-player/blob/main/docs/handover.md):** continue the music or the video in another room, where it was; the select offers only the rooms that can take it over.
 - **[Announcements in several rooms](https://github.com/financelurker/ha-better-media-player/blob/main/docs/announcements.md):** rooms that play together as a group get it once, through the group, in step; quiet rooms are left out.
-- **[Central settings](https://github.com/financelurker/ha-better-media-player/blob/main/docs/setup.md):** the follow-me player and the dynamic controls for all rooms.
+- **[Central settings](https://github.com/financelurker/ha-better-media-player/blob/main/docs/setup.md):** the follow-me player, the dynamic controls for all rooms, and hiding the players and devices the rooms use.
 
 ## The panel
 

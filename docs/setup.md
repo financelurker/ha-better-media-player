@@ -40,7 +40,23 @@ Each room is a device (Settings → Devices & services → Better Media Player �
 
 How the room behaves – times, waits, standby, night mode, volume presets and follow me – are the room's settings, each device of the room has its own (wait after on, standby, off at night). The [panel](designer.md) shows them; the action `better_media_player.set_setting` changes one, at once and kept ([examples](automations.md#settings)). To start, you can leave them all at their defaults. All of them, with their defaults: [Reference](reference.md#settings).
 
-The **Central settings** (follow me's player and default volume, dynamic controls, hide delay) are on the panel's page *General*, or set with the action, without a room.
+The **Central settings** (follow me's player and default volume, dynamic controls, hide delay, hiding the used entities) are on the panel's page *General*, or set with the action, without a room.
+
+## Hide the used entities
+
+The room players stand in for the players and devices behind them. With the central setting **Hide used entities** (`hide_used`, default `none`), those entities are hidden in Home Assistant (as *hidden by the integration*); they still work in your own cards, automations and Music Assistant. Hidden entities are left out wherever Home Assistant leaves out hidden ones: the automatic dashboards, a HomeKit Bridge that does not include them by name, and voice assistants (Assist, Google Assistant, Alexa) unless they are exposed explicitly.
+
+| Value | Hidden |
+|---|---|
+| `none` | nothing |
+| `players` | the rooms' players (Kodi, music players) and the follow-me player |
+| `devices` | also the devices' media players (TV, AV receiver; as a device, the volume or the inputs) |
+| `all` | everything a room is set up with (plugs, remotes, actions, power sensors), not its presence sensors |
+
+- Only what Better Media Player hid is shown again: when the value goes down, when no enabled room uses an entity any more (removed from the room, the room deleted or disabled), and when the central settings are removed or disabled.
+- What you hid yourself stays hidden. One you show again yourself stays shown, until the setting is set to `none` once (or the entity is no longer used).
+- An entity without a unique id cannot be hidden.
+- While the central settings cannot be loaded (an error), nothing is hidden or shown again.
 
 ## Repairs
 

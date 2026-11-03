@@ -58,6 +58,7 @@ from .. import clock
 from ..const import (
     CENTRAL_SETTINGS,
     CONF_FOLLOW_PLAYER,
+    CONF_HIDE_USED,
     DOMAIN,
     FOLLOW_ACTIVE,
     FOLLOW_EXCLUDED_BUSY,
@@ -76,6 +77,7 @@ from ..const import (
 )
 from ..players.music_assistant import MusicAssistant
 from ..players.position import Position
+from ..hide import get_hider
 from ..room import get_rooms
 from . import EMPTY, PLAYING, PRESENT, START_GRACE_SECONDS, UNKNOWN
 from .volume import FollowVolume
@@ -157,6 +159,8 @@ class FollowManager:
         self._store.async_delay_save(lambda: self.data, 0)
         self._notify()
         self._notify_rooms()  # e.g. the dynamic controls of every room
+        if key == CONF_HIDE_USED and (hider := get_hider(self.hass)) is not None:
+            hider.changed()
 
     async def async_start(self) -> None:
         self.data = {"volumes": {}, **(await self._store.async_load() or {})}
