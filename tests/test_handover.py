@@ -337,3 +337,15 @@ async def test_better_kodis_own_error_reaches_the_user(hass, rooms, freezer):
     with pytest.raises(HomeAssistantError, match="not ready"):
         await _handover(hass, ROOM, BEDROOM)
     assert home.on(TV), "the living room stays on"
+
+
+async def test_paused_music_while_kodi_is_in_its_menu(hass, rooms, freezer):
+    """Nothing plays, Kodi stands in its menu: the paused music the room still holds goes."""
+    home = rooms
+    await _music(hass, home, freezer)
+    home.music("paused", media_content_id="t", media_position=10.0, media_position_updated_at=dt_util.utcnow())
+    home.kodi("idle")  # (Kodi on, in its menu)
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 3)
+    await _handover(hass, ROOM, KROOM)
+    assert home.transferred[-1] == (MUSIC, KITCHEN)
