@@ -76,7 +76,8 @@ export function arrange(nodes, cables, saved = {}) {
   }
   // above what they run on, side by side where several want the same spot
   const above = nodes.filter((n) => !n.placed && n.runsOn);
-  const spots = nodes.filter((n) => n.placed && n.runsOn).map((n) => n.x);
+  // (anything already on the top row: other players that run on something, tiles moved there)
+  const spots = nodes.filter((n) => n.placed && Math.abs(n.y - ROWY0) < H + 20).map((n) => n.x);
   for (const n of above) {
     const host = nodes.find((x) => x.id === n.runsOn);
     let x = host ? host.x : X0;

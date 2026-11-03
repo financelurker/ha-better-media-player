@@ -106,6 +106,7 @@ HOLD_SETTLE_SECONDS = 10
 # a player another one runs on (Kodi with Sendspin in it) that plays while none of
 # them does for this long plays something of its own
 ALONE_SECONDS = 1.0
+GONE_SECONDS = 60.0  # ... while one of them is not there (Music Assistant reconnecting)
 # after a restart, what is on stays on this long for a player that has not reported yet
 FIRST_LOOK_SECONDS = 300
 OWN_CONTEXTS = 50
@@ -186,6 +187,7 @@ class RoomController:
         self._started = False
         self._stopped = False
         self._side_tasks: set[asyncio.Task] = set()
+        self._alone_checks: dict[str, Callable[[], None]] = {}  # (a player others run on: _later)
         self._own_contexts: deque[str] = deque(maxlen=OWN_CONTEXTS)
 
         self.status = STATUS_OFF
@@ -290,6 +292,9 @@ class RoomController:
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()
+        for unsub in self._alone_checks.values():
+            unsub()
+        self._alone_checks.clear()
         self.sleep.async_stop()
         self.volume.async_stop()
         self.night.async_stop()
@@ -530,6 +535,8 @@ class RoomController:
         """No longer in use but still on, and the room turns it off: its plug waits."""
         if src.in_use or self.switched_by(src, False) is None or self.player_state(src) not in POWERED_STATES:
             return False
+        if self.serving(src) and any(self._used(g) for g in self.guests(src)):
+            return False  # (on for them)
         if src.off_sent_at is not None:
             return clock.now() - src.off_sent_at < PLAYER_OFF_SECONDS
         return src.going_off or not src.suppressed
@@ -807,48 +814,67 @@ class RoomController:
         moment (a film chosen in Kodi), when the room starts it, or when it comes
         on with none of them used."""
         state = self.player_state(src)
-        guests = self.guests(src)
+        guests = [g for g in self.guests(src) if not g.suppressed]  # (one the room stopped is no wish)
         playing = any(self.player_state(g) in PLAYING_STATES for g in guests)
-        held = any(self.player_state(g) in (*PLAYING_STATES, MediaPlayerState.PAUSED) for g in guests)
-        if playing or any(g.begun for g in guests) or (src.in_use is None and held):
-            src.own, src.alone_since = False, None  # (the first look: one of them holds)
+        first = src.in_use is None
+        # the first look (a restart, a reload): one of them holds, or was the room's last
+        held = first and any(
+            self.player_state(g) in (*PLAYING_STATES, MediaPlayerState.PAUSED)
+            or (self.player_state(g) in (None, *NOT_AVAILABLE, *POWERED_STATES) and self.data.get("last_source") == g.key)
+            for g in guests
+        )
+        if playing or any(g.begun for g in guests) or (held and state in POWERED_STATES):
+            src.own, src.alone_since = False, None
             guest = next((g for g in guests if self.player_state(g) in PLAYING_STATES), None)
             if guest is not None and self.data.get("last_source") == src.key:
                 self.data["last_source"] = guest.key  # (its playing was reported first)
                 self._save()
             return
-        if state in PLAYING_STATES and not src.own:
+        if state in PLAYING_STATES and not src.own and not src.begun:
+            # plays while none of them does: its own, after a moment (a while when one of
+            # them is not there: Music Assistant reconnecting, not loaded yet)
+            gone = any(self.player_state(g) in (None, *NOT_AVAILABLE) for g in guests)
+            wait = GONE_SECONDS if gone else ALONE_SECONDS
             if src.alone_since is None:
                 src.alone_since = now
-                self._later(ALONE_SECONDS + 0.1, "host_alone")
-            elif now - src.alone_since >= ALONE_SECONDS:
+                self._later(src, wait + 0.1)
+            elif now - src.alone_since >= wait:
                 _LOGGER.info("%s: %s plays something of its own", self.entry.title, src.player)
                 src.own, src.alone_since = True, None
                 self.begin_use(src)
+                if self.data.get("last_source") != src.key:
+                    self.data["last_source"] = src.key
+                    self._save()
+            else:
+                self._later(src, src.alone_since + wait - now + 0.1)
             return
         src.alone_since = None
         if state in (STATE_OFF, STATE_STANDBY, None) and not any(g.in_use for g in guests):
             src.own = True  # off: on by itself next time, it is for itself
 
     def _used(self, src: Source) -> bool:
-        """In use, or about to be (playing, started; the first look: paused)."""
+        """In use, or about to be (playing, started; the first look: paused). Not one
+        the room stopped."""
         state = self.player_state(src)
-        return bool(src.in_use) or src.begun or state in PLAYING_STATES or (
-            src.in_use is None and state == MediaPlayerState.PAUSED
+        return not src.suppressed and (
+            bool(src.in_use) or src.begun or state in PLAYING_STATES or (src.in_use is None and state == MediaPlayerState.PAUSED)
         )
 
     @callback
-    def _later(self, seconds: float, reason: str) -> None:
-        """Look again in a moment (e.g. whether a player plays on its own)."""
+    def _later(self, src: Source, seconds: float) -> None:
+        """Look again in a moment whether the player plays on its own (one look at a time)."""
         if self._stopped:
             return
+        if (old := self._alone_checks.pop(src.key, None)) is not None:
+            old()
 
         @callback
         def _again(_now: Any) -> None:
+            self._alone_checks.pop(src.key, None)
             if not self._stopped:
-                self._spawn(self.async_update(reason))
+                self._spawn(self.async_update("host_alone"))
 
-        self._unsubs.append(async_call_later(self.hass, seconds, _again))
+        self._alone_checks[src.key] = async_call_later(self.hass, seconds, _again)
 
     def _update_use(self, src: Source, now: float) -> None:
         """In use: it plays, or nothing plays (paused, stopped, its menu) for less
@@ -858,9 +884,9 @@ class RoomController:
         state = self.player_state(src)
         if self.serving(src):
             src.in_use, src.hold_since, src.begun = False, None, False
-            if any(self._used(g) for g in self.guests(src)):
-                src.expired, src.going_off = False, False
-            elif state in POWERED_STATES and not src.expired:
+            if any(self._used(g) for g in self.guests(src)) or state in PLAYING_STATES:
+                src.expired, src.going_off = False, False  # (playing: theirs, or its own in a moment)
+            elif state in POWERED_STATES and not src.expired and self.switched_by(src, False) is not None:
                 _LOGGER.info("%s: %s goes off with what runs on it", self.entry.title, src.player)
                 src.expired, src.expired_at = True, now
                 src.going_off = self.switched_by(src, False) is not None
@@ -907,6 +933,7 @@ class RoomController:
         then the player, then the picture (power.waits)."""
         if (
             not src.expired
+            or src.suppressed  # (sent already)
             or src.off_sent_at is not None
             or not self._started
             or not self.auto_power
@@ -1189,6 +1216,7 @@ class RoomController:
             if other.key == self.sources[source].runs_on:
                 # the player it runs on stays on (for it): only what it plays itself stops
                 own, other.own = other.own, False
+                self.begin_use(self.sources[source])
                 if own and self.player_state(other) in PLAYING_STATES and self.player_supports(other, MediaPlayerEntityFeature.STOP):
                     await self._player(other, "media_stop")
                 continue

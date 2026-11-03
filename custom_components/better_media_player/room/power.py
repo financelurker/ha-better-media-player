@@ -279,7 +279,10 @@ class RoomPower:
     def prewarms(self, node: RoomNode) -> bool:
         """Follow me prewarms the music's sound devices and the music player's plug."""
         music = self.ctrl.music
-        return music is not None and (node.key == host_key(music.key) or node in self.sound_nodes(music.key))
+        if music is None:
+            return False
+        plug = host_key(music.runs_on if music.runs_on in self.ctrl.sources else music.key)  # (one in Kodi: Kodi's)
+        return node.key == plug or node in self.sound_nodes(music.key)
 
     def demand(self, picture: bool) -> bool:
         """A device for the picture (else: for the sound) is demanded."""
