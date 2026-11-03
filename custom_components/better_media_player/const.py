@@ -35,8 +35,16 @@ CONF_DEFAULT_VOLUME = "default_volume"  # %
 # controls that make no sense right now are hidden (all rooms), after a delay (s)
 CONF_DYNAMIC_CONTROLS = "dynamic_controls"
 CONF_HIDE_DELAY = "hide_delay"
+# the entities the rooms use are hidden in Home Assistant (hide.py): none, the
+# players, also the devices' media players, everything a room is set up with
+CONF_HIDE_USED = "hide_used"
+HIDE_NONE = "none"
+HIDE_PLAYERS = "players"
+HIDE_DEVICES = "devices"
+HIDE_ALL = "all"
+HIDE_LEVELS = [HIDE_NONE, HIDE_PLAYERS, HIDE_DEVICES, HIDE_ALL]
 # the central settings and their first values (set_setting / get_settings; the options hold only the follow-me player)
-CENTRAL_SETTINGS: dict = {CONF_DEFAULT_VOLUME: 25, CONF_DYNAMIC_CONTROLS: True, CONF_HIDE_DELAY: 3}
+CENTRAL_SETTINGS: dict = {CONF_DEFAULT_VOLUME: 25, CONF_DYNAMIC_CONTROLS: True, CONF_HIDE_DELAY: 3, CONF_HIDE_USED: HIDE_NONE}
 
 SERVICE_FOLLOW_START = "start_follow"
 SERVICE_FOLLOW_STOP = "stop_follow"

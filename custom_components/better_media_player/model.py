@@ -45,6 +45,10 @@ from .const import (
     CONF_DISPLAY,
     CONF_DISPLAY_POWER,
     CONF_OCCUPANCY,
+    HIDE_DEVICES,
+    HIDE_LEVELS,
+    HIDE_NONE,
+    HIDE_PLAYERS,
     CONF_SPEAKERS,
     CONF_VOLUME_CONTROL,
     CONF_VOLUME_ENTITY,
@@ -163,6 +167,7 @@ SPECS: dict[str, tuple[float, float] | list[str] | type] = {
     "default_volume": (1, 100),
     "hide_delay": (0, 300),
     "dynamic_controls": bool,
+    "hide_used": list(HIDE_LEVELS),
 }
 
 
@@ -498,6 +503,21 @@ def entities_of(options: dict) -> list[str]:
             out.append(d["volume"])
     out += list(options.get(CONF_OCCUPANCY) or [])
     return list(dict.fromkeys(out))
+
+
+def used_by_level(options: dict, level: str) -> list[str]:
+    """What the central setting hide_used hides of a room (hide.py): its players;
+    also the devices' media players; everything it is set up with but its
+    presence sensors (they serve more than the room)."""
+    if level == HIDE_NONE:
+        return []
+    if level == HIDE_PLAYERS:
+        return players_of(options)
+    presence = set(options.get(CONF_OCCUPANCY) or [])
+    used = [e for e in entities_of(options) if e not in presence]
+    if level == HIDE_DEVICES:
+        return [e for e in used if e.split(".", 1)[0] == "media_player"]
+    return used  # HIDE_ALL
 
 
 def renamed(value: Any, old: str, new: str) -> Any:

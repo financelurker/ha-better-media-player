@@ -79,6 +79,7 @@ How a room behaves. They are not entities: the panel shows them, the action [`be
 | `default_volume` | 25 % | 1–100 | follow me: the volume when nothing is remembered yet |
 | `dynamic_controls` | `true` | `true` / `false` | [dynamic controls](dashboards.md#dynamic-controls): hide what makes no sense right now |
 | `hide_delay` | 3 s | 0–300 | dynamic controls: hide after |
+| `hide_used` | `none` | `none` / `players` / `devices` / `all` | [hide the entities the rooms use](setup.md#hide-the-used-entities) in Home Assistant |
 
 What they do: [How the room behaves](room.md), [Room volume](volume.md), [Night mode, sleep timer and wake up](night-sleep-wake.md), [Follow me](follow-me.md), [Announcements](announcements.md), [Dashboards](dashboards.md#dynamic-controls).
 
