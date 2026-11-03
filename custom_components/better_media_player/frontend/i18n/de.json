@@ -392,5 +392,7 @@
   "problem.runs_on_guest": "{source} läuft auf {device}, das selbst auf etwas läuft.",
   "problem.runs_on_passive": "{source} läuft auf {device}, das passiv ist (nicht geschaltet).",
   "problem.runs_on_missing": "{source} läuft auf „{device}“, das nicht mehr im Raum ist.",
-  "problem.guest_cable": "{source} läuft auf etwas: Ton und Bild gehen über dessen Kabel, nicht über eigene."
+  "problem.guest_cable": "{source} läuft auf etwas: Ton und Bild gehen über dessen Kabel, nicht über eigene.",
+  "details.show": "Details einblenden",
+  "details.hide": "Details ausblenden"
 }

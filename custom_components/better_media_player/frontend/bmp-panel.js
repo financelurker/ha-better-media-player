@@ -79,6 +79,8 @@ class BmpPanel extends LitElement {
     this._lines = {};
     this._liveOn = true;
     try { this._liveOn = localStorage.getItem("bmp-live") !== "0"; } catch { /* (no storage) */ }
+    this._detailsOpen = true; // the details on the right; folded away until unfolded again (remembered in this browser)
+    try { this._detailsOpen = localStorage.getItem("bmp-details") !== "0"; } catch { /* (no storage) */ }
     this._offset = 0; // Home Assistant's clock against the browser's (s)
     this._livePaused = false; // a route picked: Live waits for this view (not remembered)
     this._liveFails = 0; // subscriptions that failed in a row (then tried less often)
@@ -372,7 +374,7 @@ class BmpPanel extends LitElement {
         </header>
         ${this._renderSaveBar()}
         ${this._notice ? html`<div class="notice" role="alert">${this._notice}<button class="chip" @click=${() => { this._notice = null; }}>${t("dismiss")}</button></div>` : html`<div></div>`}
-        <div class="main ${this._page === "room" && this._tab === "wiring" ? "details" : ""}">
+        <div class="main ${this._page === "room" && this._tab === "wiring" ? `details${this._detailsOpen ? "" : " folded"}` : ""}">
           ${this._renderNav()}
           ${this._page === "central"
             ? html`<section class="stage"><div class="page">${renderCentral(this)}</div></section>`
@@ -450,11 +452,20 @@ class BmpPanel extends LitElement {
           ? html`<div class="page">${renderSettings(this, room)}</div>`
           : html`${this._renderSources(room)}${this._renderProblems(room)}${this._renderDiagram(room)}${this._renderRoute(room)}`}
       </section>
-      ${this._tab === "wiring" ? html`<section class="inspector">
+      ${this._tab === "wiring" && !this._detailsOpen ? html`<section class="inspector folded">
+        <button class="fold" title=${t("details.show")} aria-label=${t("details.show")} aria-expanded="false" @click=${() => this._foldDetails(true)}>‹</button></section>` : nothing}
+      ${this._tab === "wiring" && this._detailsOpen ? html`<section class="inspector">
+        <button class="fold ${this._selected ? "beside" : ""}" title=${t("details.hide")} aria-label=${t("details.hide")} aria-expanded="true" @click=${() => this._foldDetails(false)}>›</button>
         ${this._selected ? html`<button class="close" title=${t("close")} aria-label=${t("close")} @click=${() => { this._selected = null; }}>×</button>` : nothing}
         ${this._selected?.type === "node" && this._lv ? liveBox(this, room, this._lv, this._selected.id) : nothing}
         ${this._selected ? renderInspector(this, room) : renderOverview(this, room)}</section>` : nothing}
     `;
+  }
+
+  _foldDetails(open) {
+    this._detailsOpen = open;
+    try { localStorage.setItem("bmp-details", open ? "1" : "0"); } catch { /* (no storage) */ }
+    requestAnimationFrame(() => this._fit?.()); // (the drawing got more or less room)
   }
 
   _renderProblems(room) {
@@ -1033,6 +1044,11 @@ class BmpPanel extends LitElement {
     .err { color: var(--bmp-error); }
     .zoombar button:disabled { opacity: .4; cursor: default; }
     .main { display: grid; grid-template-columns: 220px 1fr; min-height: 0; }
+    .main.details.folded { grid-template-columns: 220px 1fr 44px; }
+    .inspector.folded { padding: 8px 4px; overflow: hidden; }
+    .fold { position: absolute; top: 10px; right: 12px; width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--bmp-line); background: var(--bmp-card); color: var(--bmp-text); font-size: 18px; line-height: 1; cursor: pointer; }
+    .fold.beside { right: 46px; }
+    .inspector.folded .fold { position: static; }
     .main.details { grid-template-columns: 220px 1fr 340px; }
     .inspector { position: relative; }
     .close { position: absolute; top: 8px; right: 8px; width: 32px; height: 32px; border: 0; border-radius: 50%; background: none; font-size: 20px; color: var(--bmp-muted); }
@@ -1088,7 +1104,7 @@ class BmpPanel extends LitElement {
     .zoombar button:hover { border-color: var(--bmp-primary); }
     .zoombar svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
     .zoombar .pct { font-size: 11px; color: var(--bmp-muted); text-align: center; }
-    .navhint { position: absolute; left: 12px; bottom: 12px; font-size: 12px; color: var(--bmp-muted); background: var(--bmp-card); border: 1px solid var(--bmp-line); border-radius: 8px; padding: 4px 8px; }
+    .navhint { position: absolute; left: 12px; bottom: 12px; max-width: calc(100% - 84px); font-size: 12px; color: var(--bmp-muted); background: var(--bmp-card); border: 1px solid var(--bmp-line); border-radius: 8px; padding: 4px 8px; }
     .route { padding: 10px 16px; border-top: 1px solid var(--bmp-line); background: var(--bmp-card); color: var(--bmp-muted); min-height: 44px; }
     .route b { color: var(--bmp-text); font-weight: 500; }
     .step { display: inline-flex; align-items: center; gap: 6px; }
@@ -1155,7 +1171,7 @@ class BmpPanel extends LitElement {
     .rl.wait i, .rl.manual i, .lv.wait i, .lv.manual i { background: var(--warning-color, #f9a825); }
     .rl.down i, .lv.down i { background: var(--bmp-primary); }
     .rl.err, .lv.err { color: var(--bmp-error); } .rl.err i, .lv.err i { background: var(--bmp-error); }
-    .livebox { border: 1px solid var(--bmp-line); border-radius: 10px; padding: 10px 12px; margin: 0 32px 16px 0; display: grid; gap: 3px; font-size: 13px; }
+    .livebox { border: 1px solid var(--bmp-line); border-radius: 10px; padding: 10px 12px; margin: 0 72px 16px 0; display: grid; gap: 3px; font-size: 13px; }
     .livebox .lv { display: inline-flex; align-items: center; gap: 6px; }
     .livebox b { font-weight: 500; }
     .livebox small { color: var(--bmp-muted); overflow-wrap: anywhere; }
@@ -1163,7 +1179,7 @@ class BmpPanel extends LitElement {
     .takeover { border: 1px solid color-mix(in srgb, var(--bmp-primary) 45%, var(--bmp-line)); background: color-mix(in srgb, var(--bmp-primary) 8%, var(--bmp-card)); border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; display: grid; gap: 8px; }
     .takeover p { margin: 0; font-size: 13px; }
     .takeover .btn { justify-self: start; }
-    .inspector h2 { font-size: 18px; font-weight: 500; margin: 0 0 2px; padding-right: 32px; }
+    .inspector h2 { font-size: 18px; font-weight: 500; margin: 0 0 2px; padding-right: 72px; }
     .kind { color: var(--bmp-muted); margin-bottom: 16px; }
     .field { display: grid; gap: 6px; margin-bottom: 14px; }
     .field > .lbl { font-size: 12px; }
@@ -1197,7 +1213,7 @@ class BmpPanel extends LitElement {
     .pick-list button { display: grid; text-align: left; border: 1px solid var(--bmp-line); background: none; border-radius: 8px; padding: 8px 12px; }
     .pick-list button:hover { border-color: var(--bmp-primary); }
     .pick-list small { color: var(--bmp-muted); }
-    @media (max-width: 1100px) { .main { grid-template-columns: 180px 1fr; } .main.details { grid-template-columns: 180px 1fr 300px; } }
+    @media (max-width: 1100px) { .main { grid-template-columns: 180px 1fr; } .main.details { grid-template-columns: 180px 1fr 300px; } .main.details.folded { grid-template-columns: 180px 1fr 44px; } }
     @media (max-width: 820px) {
       .main { display: block; overflow: auto; }
       aside { display: flex; gap: 8px; align-items: center; overflow-x: auto; padding: 8px 16px; border-right: 0; border-bottom: 1px solid var(--bmp-line); }
