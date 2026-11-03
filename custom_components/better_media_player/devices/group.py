@@ -20,6 +20,7 @@ from .api import NodeOwner
 from .const import (
     ACTION_ID,
     COMMAND_RETRY_SECONDS,
+    COMMAND_TRIES,
     DEVICE_DOMAINS,
     DEVICE_OFF_SECONDS,
     NOT_AVAILABLE,
@@ -73,6 +74,9 @@ class DeviceGroup:
         # or did not become available)
         self.held: set[str] = set()
         self._last_command: dict[str, tuple[bool, float]] = {}
+        # commands sent without effect per entity (direction, count); above
+        # COMMAND_TRIES: given up until the next start or the other direction
+        self._tries: dict[str, tuple[bool, int]] = {}
         # recent commands per entity, to recognise late device reports as our own
         self._recent_commands: dict[str, deque[tuple[bool, float]]] = {}
         # CEC: power states expected from someone else, since when
@@ -220,6 +224,32 @@ class DeviceGroup:
             for on, ts in self._recent_commands.get(entity_id, ())
         )
 
+    def release(self) -> None:
+        """The next start: devices left as they were are switched again."""
+        self.held.clear()
+        self._tries.clear()
+
+    def reached(self, entity_id: str, on: bool) -> None:
+        """The device reports a state: commands that way had their effect (counted anew)."""
+        tries = self._tries.get(entity_id)
+        if tries is not None and tries[0] == on:
+            del self._tries[entity_id]
+
+    def given_up(self, entity_id: str, on: bool) -> bool:
+        """Switching it this way was given up (until the next start)."""
+        tries = self._tries.get(entity_id)
+        return tries is not None and tries[0] == on and tries[1] > COMMAND_TRIES
+
+    def _give_up(self, entity_id: str, on: bool, how: str) -> None:
+        if self.given_up(entity_id, on):
+            return
+        self._tries[entity_id] = (on, COMMAND_TRIES + 1)
+        if on:
+            _LOGGER.warning("%s: %s was not switched on %s, left off until the next start", self.owner.name, entity_id, how)
+            self.held.add(entity_id)
+        else:
+            _LOGGER.warning("%s: %s was not switched off %s, left on until the next start", self.owner.name, entity_id, how)
+
     def forget_command(self, entity_id: str) -> None:
         """Our turn-on is no longer on its way (the device was turned off from outside)."""
         self._last_command.pop(entity_id, None)
@@ -310,6 +340,9 @@ class DeviceGroup:
             return
         if self.is_on(entity_id) == on and not (not on and self._pending_on(entity_id)):
             self._expected.pop(entity_id, None)
+            self._tries.pop(entity_id, None)
+            return
+        if self.given_up(entity_id, on):
             return
         now = _now()
         control = self.control_of(entity_id)
@@ -325,17 +358,19 @@ class DeviceGroup:
                 return
             del self._expected[entity_id]
             if not control.fallback:
-                if on:
-                    _LOGGER.warning(
-                        "%s: %s was not switched on over CEC, left off until the next start", self.owner.name, entity_id
-                    )
-                    self.held.add(entity_id)
+                self._give_up(entity_id, on, "over CEC")
                 return
             _LOGGER.info("%s: %s not switched over CEC, switching it %s", self.owner.name, entity_id, "on" if on else "off")
             force = True
         last = self._last_command.get(entity_id)
         if not force and last is not None and last[0] == on and now - last[1] < COMMAND_RETRY_SECONDS:
             return
+        tries = self._tries.get(entity_id)
+        count = tries[1] + 1 if tries is not None and tries[0] == on else 1
+        if count > COMMAND_TRIES:
+            self._give_up(entity_id, on, f"after {COMMAND_TRIES} commands")
+            return
+        self._tries[entity_id] = (on, count)
         self._last_command[entity_id] = (on, now)
         self._recent_commands.setdefault(entity_id, deque(maxlen=4)).append((on, now))
         service = SERVICE_TURN_ON if on else SERVICE_TURN_OFF
@@ -462,6 +497,7 @@ class DeviceGroup:
             "standby": standby,
             "devices_off": node.devices_off_since is not None and self.node_on(node),
             "held": sorted(e for e in node.entities if e in self.held),
+            "stuck": sorted(e for e in node.entities if self.given_up(e, False)),
             "input": None if wish is None else {
                 "wanted": wish.target,
                 "current": self.input_of(node),

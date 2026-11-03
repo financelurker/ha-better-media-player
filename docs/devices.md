@@ -34,7 +34,7 @@ In a device's details in the panel:
 | **Inputs by action** | For devices without a source list (IR): one action per input, e.g. `HDMI 1` → `script.tv_hdmi1`. |
 | **Pause after choosing an input** | Before the next command (IR devices may need a moment). |
 | **Switched on by** / **Switched off by** | **BMP** (default): the room switches the device. **CEC**: a player switches it over HDMI-CEC, the room waits for it. **Never**: left alone. Separately for on and off. Plugs and own on/off actions are always switched by the room. |
-| **Fall back to BMP**, **Wait for CEC at most** | If what is expected from CEC does not happen within the wait (default 15 s), the room does it itself – or, without the fallback, gives up: a device not switched on is left off until the next start, an input not chosen is left as it is. |
+| **Fall back to BMP**, **Wait for CEC at most** | If what is expected from CEC does not happen within the wait (default 15 s), the room does it itself (at most 3 commands, see [devices instead of plugs](room.md#devices-instead-of-plugs)) – or, without the fallback, gives up with a warning in the log: a device not switched on is left off until the next start, one not switched off is left on, an input not chosen is left as it is. |
 
 ## What the room does
 

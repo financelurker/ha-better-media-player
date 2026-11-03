@@ -409,6 +409,8 @@ class RoomController:
                 if self.error:
                     self.error = None
 
+        if entity_id in self.power.devices.entities and new is not None and new.state not in NOT_AVAILABLE:
+            self.power.devices.reached(entity_id, self.power.devices.state_on(entity_id, new))
         if self._started and entity_id in self.power.devices.entities and new is not None and old is not None:
             was_on, is_on = self.power.devices.state_on(entity_id, old), self.power.devices.state_on(entity_id, new)
             if (
@@ -763,7 +765,7 @@ class RoomController:
                 self._was_on = True
             elif self.power.fully_off():
                 self._was_on = False
-                self.power.held.clear()  # the next start switches them again
+                self.power.release()  # the next start switches them again
             await self.sleep.async_apply_restores()
             self.source_watch.async_check()
             self.night.async_check()
@@ -1108,7 +1110,7 @@ class RoomController:
     def _reset_overrides(self) -> None:
         self.manual = False
         self.error = None
-        self.power.held.clear()
+        self.power.release()
 
     async def async_turn_on(self, source: str | None = None) -> None:
         """Explicit wish: power the room up with source (default: the one it starts with)."""

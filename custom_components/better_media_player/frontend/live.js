@@ -102,6 +102,7 @@ export function tileStatus(p, room, live, id) {
   const cec = cecOn(n);
   if (n.night_off && !n.on) return { cls: "off", text: t("live.night_off") };
   if (n.held.length && !cec) return { cls: "manual", text: t("live.held") };
+  if (n.stuck?.length && n.on) return { cls: "manual", text: t("live.stuck") };
   if (cec) return cec.left > 0 ? { cls: "wait", text: t("live.cec", { left: Math.ceil(cec.left) }) } : { cls: "wait", text: t("live.switching_on") };
   if (n.starting) return { cls: "wait", text: t("live.switching_on") };
   if (!n.on) return { cls: "off", text: t("live.off") };
