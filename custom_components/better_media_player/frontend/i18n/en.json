@@ -392,5 +392,7 @@
   "problem.runs_on_guest": "{source} runs on {device}, which runs on something itself.",
   "problem.runs_on_passive": "{source} runs on {device}, which is passive (not switched).",
   "problem.runs_on_missing": "{source} runs on “{device}”, which is no longer in the room.",
-  "problem.guest_cable": "{source} runs on something: its sound and picture go out through that one's cables, not its own."
+  "problem.guest_cable": "{source} runs on something: its sound and picture go out through that one's cables, not its own.",
+  "details.show": "Show the details",
+  "details.hide": "Hide the details"
 }

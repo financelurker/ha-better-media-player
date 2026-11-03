@@ -50,7 +50,7 @@ Picking a route (*Show route*) turns Live off; switching it on again shows what 
 
 - **+ Add** (above the drawing): a player – a video player (needs picture and sound) or a music player (needs the sound); as many as the room has, a player of the room's area is proposed for the first of each; offered are only players that are free – not already a player or device of a room, not a room player of Better Media Player, a group or the follow-me player – and of the room's area or of none – or a device: display, AV receiver / soundbar, amplifier, speakers, subwoofer, HDMI switch, mixer, splitter, passive speakers.
 - **A cable:** click the right dot of a tile, then the tile it plugs into (Esc cancels). What it carries is proposed from the two ends.
-- **Details:** click a tile or a cable, and they open on the right (× goes back to the room's overview there). Entities and the area are picked with Home Assistant's own selector (search by name, area or ID; only entities that fit the field are offered).
+- **Details:** click a tile or a cable, and they open on the right (× goes back to the room's overview there). **›** folds the details away for more room for the drawing, **‹** brings them back; folded stays folded (also when you pick a tile, remembered in this browser) until you unfold them. Entities and the area are picked with Home Assistant's own selector (search by name, area or ID; only entities that fit the field are offered).
 
 | Details of | What you set |
 |---|---|
