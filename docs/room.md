@@ -33,8 +33,8 @@ One rule for every player:
 | is turned off (by you, in its app, with its remote) | everything it needed goes off at once, in the same order |
 
 - Playing again before the idle timeout ends keeps everything on; the next pause starts it anew.
-- A device another player still uses stays on (e.g. the speakers for a film while the music is paused).
-- Choosing another source switches off at once what the new one does not need (the display after a film, when music starts).
+- A device another player still uses stays on (e.g. the speakers for a video while the music is paused).
+- Choosing another source switches off at once what the new one does not need (the display after a video, when music starts).
 - Follow me leaving the room (nobody there for its presence time): its speakers go off at once.
 - A player the room does not switch off (*Switched on and off by: None*, or music without on/off) stays as it is; only its devices go off.
 - The picture waits for the player to go off (at most a minute): a TV that the player turns off over HDMI-CEC goes with it.
@@ -50,7 +50,7 @@ One rule for every player:
 `switch.<room>_keep_on` keeps what is on on: nothing is switched off automatically – the idle timeout does not end, no device off at night, no device that nothing needs, no player's hardware plug, nothing an announcement brought up. Starting still switches on what a player needs (unlike *Automatic power* off, which switches nothing at all).
 
 - It stays on until it is turned off or *All off* is pressed (also the room player's off); also over a restart. Turned off, what nothing needs goes off at once; a player that does not play holds again for its idle timeout, from then on.
-- Set it ahead too, e.g. during a film, so nothing goes off afterwards.
+- Set it ahead too, e.g. during a video, so nothing goes off afterwards.
 - A room off that you did not press yourself (sleep timer, the end of a wake, a handover to another room) stops the players; kept on, the devices stay on. Quiet mode still switches the speakers off: you asked for it.
 - The room's status is `kept_on` while devices are on and nothing plays.
 - Turned on while something is going off: what was not yet switched off stays on (a device already switched off, waiting for its plug, goes on off).

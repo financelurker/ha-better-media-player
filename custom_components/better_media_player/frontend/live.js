@@ -37,7 +37,7 @@ function when(p, at, coarse = false) {
 
 const playerWord = (p, s) => (s.state === "paused" ? p._t("live.paused") : p._t("live.stopped"));
 
-// the source's name ("Film", "Music"); in an English line it reads as a word ("plays film")
+// the source's name ("Video", "Music"); in an English line it reads as a word ("plays video")
 const kindOf = (room, key) => room.sources.find((s) => s.id === key)?.kind ?? (key === "video" ? "video" : "audio");
 const srcName = (p, room, key) => p._t(`source.${kindOf(room, key)}`);
 const srcWord = (p, room, key) => (String(p._lang || "en").startsWith("en") ? srcName(p, room, key).toLowerCase() : srcName(p, room, key));

@@ -189,7 +189,7 @@ When the room's source changes, the event `better_media_player_source_changed` i
 | `entity_id`, `entry_id`, `room` | the room player and the room |
 | `source`, `previous` | the player's ID (`video`, `audio`, …) or `null` |
 | `player` | the player of the new source |
-| `reason` | `selected` (through the room player: source, on, play, wake), `player` (a player took over by itself, e.g. a film cast to Kodi), `off` |
+| `reason` | `selected` (through the room player: source, on, play, wake), `player` (a player took over by itself, e.g. a video cast to Kodi), `off` |
 
 - Fired once the room is ready for it: after the power-on sequence, so the TV already has power (plus its wait after switching on).
 - Only for a stable change: two players at the same time for a moment fire nothing. A pause, new media on the same player, a dropout of the current source's player or a restart of Home Assistant fire nothing either. Another player that is unavailable (e.g. behind its host plug) counts as off.

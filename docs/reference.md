@@ -46,8 +46,8 @@ How a room behaves. They are not entities: the panel shows them, the action [`be
 | `preset_quiet`, `preset_normal`, `preset_loud`, `preset_party` | 15 / 30 / 50 / 70 % | 0–100, 0 = not offered | [volume presets](volume.md#presets) |
 | `preset_fade` | 0 s | 0–30, 0 = at once | fade to a preset |
 | `power_on_preset` | `none` | `none`, `quiet`, `normal`, `loud`, `party` | the room volume whenever the room comes on |
-| `announce_video` | `pause` | `pause`, `overlay`, `lower` | [an announcement](announcements.md) during a film |
-| `announce_video_lower` | 50 % | 0–100 | `lower`: the film turned down by |
+| `announce_video` | `pause` | `pause`, `overlay`, `lower` | [an announcement](announcements.md) during a video |
+| `announce_video_lower` | 50 % | 0–100 | `lower`: the video turned down by |
 | `sleep_fade` | 5 min | 0–60 | [sleep timer](night-sleep-wake.md#sleep-timer): fade-out at the end |
 | `snooze_minutes` | 9 min | 1–120 | wake: snooze time |
 | `presence_run_down` | 2 min | 0–60 | [follow me](follow-me.md): the room leaves after no presence this long |

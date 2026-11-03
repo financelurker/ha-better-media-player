@@ -26,10 +26,10 @@ Some players only exist while something else runs: a Sendspin player of Music As
 
 - **Starting it:** the player it runs on comes up first – its plug, Kodi woken, or the receiver switched on – then the room waits (start timeout) until this player is there, then it plays.
 - **Its route:** its sound (and picture) goes out through the cables of what it runs on; it has no cables and no plug of its own (the tile sits above, with a dotted line).
-- **Its playing is its own:** while it plays, Kodi's own *playing* (Kodi plays its stream) is its, not a film; if Kodi reports first, the room waits a moment (1 s) for it. Kodi on in its menu while the music is in use is no film either, so the TV stays off.
-- **A film after all:** Kodi playing something of its own (a film chosen in Kodi) for a moment is the film again; so is choosing Kodi through the room player. Kodi turned on by itself, with the music not in use, is a film as ever.
+- **Its playing is its own:** while it plays, Kodi's own *playing* (Kodi plays its stream) is its, not a video; if Kodi reports first, the room waits a moment (1 s) for it. Kodi on in its menu while the music is in use is no video either, so the TV stays off.
+- **A video after all:** Kodi playing something of its own (a video chosen in Kodi) for a moment is the video again; so is choosing Kodi through the room player. Kodi turned on by itself, with the music not in use, is a video as ever.
 - **Off:** once it is no longer used (its idle timeout, turned off), Kodi goes off with it – after the sound – and then its plug; a receiver it runs on goes off unless something else needs it.
-- **Choosing it while a film plays:** the film stops, Kodi stays on for it.
+- **Choosing it while a video plays:** the video stops, Kodi stays on for it.
 - Its volume is its own player's (Kodi's Sendspin add-on sets Kodi's volume, as set in Music Assistant).
 
 *Tested: simulated only, not yet on real devices.* Jellyfin in Kodi is no player of its own: the Jellyfin add-on plays through Kodi's player (Home Assistant's Jellyfin player exists only per session), so it is Kodi.

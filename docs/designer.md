@@ -6,7 +6,7 @@ Better Media Player has a page of its own in Home Assistant's sidebar: **Better 
 
 Tested on a local Home Assistant 2026.10 with the demo integration (simulated devices).
 
-![The panel: the Family Room's devices and cables, the film's route highlighted](images/panel.png)
+![The panel: the Family Room's devices and cables, the video's route highlighted](images/panel.png)
 
 ## Opening the panel
 
@@ -42,7 +42,7 @@ With **Live** on (the switch above the drawing, on by default and remembered in 
 - **Cables:** the route in use is shown, the rest dimmed; while it plays, dots run along its cables (not with reduced motion).
 - **Below the drawing** a sentence on what the room does, with **Keep on** (or **Release**) and **All off** where they make sense.
 - **Details** of a tile you click: its state, why it is on (a player plays, its idle timeout, a wake, an announcement, follow me), its entities' states and its input.
-- **Rooms list:** a line per room (*plays film*, *film paused · off in 29 min*, *starting …*, *kept on*, *start failed*, *off*).
+- **Rooms list:** a line per room (*plays video*, *video paused · off in 29 min*, *starting …*, *kept on*, *start failed*, *off*).
 
 Picking a route (*Show route*) turns Live off; switching it on again shows what runs. While a room's setup has unsaved changes, Live waits: the drawing then shows the changes, not what runs.
 

@@ -242,7 +242,7 @@ def check_room(hass: HomeAssistant, entry_id: str | None, setup: dict, settings:
                 err("room_player", entity=e)
         if s["onoff"] == "actions" and not s["on_action"] and not s["off_action"]:
             err("needs_actions", source=s["id"])
-        if s["onoff"] == "player" and _supports(hass, s["player"], MediaPlayerEntityFeature.TURN_ON) is False:
+        if s["onoff"] == "player" and not s.get("runs_on") and _supports(hass, s["player"], MediaPlayerEntityFeature.TURN_ON) is False:
             hint("player_no_onoff", entity=s["player"])
 
     # devices
