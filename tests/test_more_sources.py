@@ -172,13 +172,24 @@ def test_the_handover_target():
         backend.handover_to = lambda other: other.ok
         return SimpleNamespace(key=key, kind=kind, backend=backend)
 
+    def room(*sources, music=None, video=None):
+        by_key = {s.key: s for s in sources}
+        return SimpleNamespace(sources=by_key, music=by_key.get(music), video=by_key.get(video))
+
     music = src("audio", "audio")
-    dest = SimpleNamespace(sources={s.key: s for s in (src("video", "video"), src("audio", "audio", ok=False), src("kitchen", "audio"))})
-    assert target_of(dest, music).key == "kitchen", "the same id cannot take it: one of the kind that can"
+    dest = room(src("video", "video"), src("audio", "audio"), src("kitchen", "audio"), music="kitchen", video="video")
+    assert target_of(dest, music).key == "kitchen", "dest's own music player (main, or the one that plays)"
     dest.sources["kitchen"].backend.ok = False
+    assert target_of(dest, music).key == "audio", "it cannot take it: the same id"
+    dest.sources["audio"].backend.ok = False
+    dest.sources["radio"] = src("radio", "audio")
+    assert target_of(dest, music).key == "radio", "neither can: any of the kind that can"
+    dest.sources["radio"].backend.ok = False
     assert target_of(dest, music).key == "audio", "none can: the same id (for the message)"
-    dest = SimpleNamespace(sources={"film": src("film", "video")})
-    assert target_of(dest, music) is None
+    film = src("film", "video")
+    dest = room(src("video", "video"), src("film2", "video"), video="film2")
+    assert target_of(dest, film).key == "film2", "video: the one that is on"
+    assert target_of(room(src("film", "video"), video="film"), music) is None
 
 
 # ------------------------------------------------------------------ the panel's checks

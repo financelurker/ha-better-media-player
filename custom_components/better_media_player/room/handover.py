@@ -106,10 +106,15 @@ class RoomHandover:
 
 
 def target_of(dest: RoomController, src: Source) -> Source | None:
-    """Dest's player for src's playback: the source with the same id, else one of
-    the same kind that can take it over, else one of the same kind (that cannot)."""
+    """Dest's player for src's playback, the first that can take it over: dest's
+    own player of the kind (music: the one that plays, else the main music player;
+    video: the one that is on, else the first), the one with the same id, any of
+    the kind. None can: the same id, else dest's own (for the message)."""
     same = [s for s in dest.sources.values() if s.kind == src.kind]
-    first = dest.sources.get(src.key)
-    if first is not None and first.kind == src.kind and src.backend.handover_to(first.backend):
-        return first
-    return next((s for s in same if src.backend.handover_to(s.backend)), first if first in same else next(iter(same), None))
+    own = dest.music if src.kind == SOURCE_AUDIO else dest.video
+    by_id = dest.sources.get(src.key)
+    by_id = by_id if by_id in same else None
+    for candidate in (own, by_id, *same):
+        if candidate is not None and src.backend.handover_to(candidate.backend):
+            return candidate
+    return by_id or own or next(iter(same), None)
