@@ -264,10 +264,6 @@ class BmpPanel extends LitElement {
     if (location.pathname !== path) history.replaceState(history.state, "", path);
   }
 
-  _moreInfo(entityId) {
-    this.dispatchEvent(new CustomEvent("hass-more-info", { detail: { entityId }, bubbles: true, composed: true }));
-  }
-
   _count(what, n) {
     return this._t(n === 1 ? `count.${what}_one` : `count.${what}`, { n });
   }

@@ -36,7 +36,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.util import dt as dt_util
 
-from ..const import CONF_SLEEP_FADE, DOMAIN, EVENT_SLEEP_TIMER_FINISHED
+from ..const import CONF_SLEEP_FADE, DOMAIN, EVENT_SLEEP_TIMER_FINISHED, WAKE_END_SLEEP_TIMER
 from .. import clock
 
 if TYPE_CHECKING:
@@ -143,7 +143,7 @@ class SleepTimer:
         if minutes <= 0:
             await self.async_cancel(REASON_CANCELLED)
             return
-        await self.ctrl.wake.async_finish("sleep_timer")  # playback goes on, the timer ends it
+        await self.ctrl.wake.async_finish(WAKE_END_SLEEP_TIMER)  # playback goes on, the timer ends it
         minutes = min(float(minutes), MAX_MINUTES)
         fade = self.default_fade_minutes if fade_minutes is None else float(fade_minutes)
         fade = max(0.0, min(fade, minutes))
@@ -166,7 +166,7 @@ class SleepTimer:
         if s is None:
             await self.async_set(minutes)
             return
-        await self.ctrl.wake.async_finish("sleep_timer")
+        await self.ctrl.wake.async_finish(WAKE_END_SLEEP_TIMER)
         async with self._lock:
             await self._end_fade(restore=True)
             s = self._s

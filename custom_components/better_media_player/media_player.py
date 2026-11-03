@@ -54,6 +54,7 @@ from .const import (
     SERVICE_SET_SLEEP_TIMER,
     SOURCE_AUDIO,
     SOURCE_VIDEO,
+    WAKE_END_STOPPED,
 )
 from .entity import BetterMediaPlayerEntity
 from .follow import async_start_follow, async_stop_follow
@@ -541,7 +542,7 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
         await self.ctrl.wake.async_snooze(minutes)
 
     async def async_stop_wake(self) -> None:
-        await self.ctrl.wake.async_finish("stopped")
+        await self.ctrl.wake.async_finish(WAKE_END_STOPPED)
 
     async def async_browse_media(
         self, media_content_type: MediaType | str | None = None, media_content_id: str | None = None

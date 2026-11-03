@@ -76,6 +76,7 @@ from ..const import (
     STATUS_STOPPING,
     STORAGE_VERSION,
     TICK_SECONDS,
+    WAKE_END_ROOM_OFF,
 )
 from ..model import OPT_MUSIC_SOURCE, OPT_START_SOURCE, ROOM_SETTINGS, source_kind, sources_of, volume_entity
 from ..follow import get_hub
@@ -88,7 +89,7 @@ from .night import NightMode
 from .source_event import SourceWatch
 from .output import DeviceOutput, PlayerOutput
 from .volume import RoomVolume
-from .wake import PHASE_STARTING, REASON_ROOM_OFF as WAKE_ROOM_OFF, WakeAlarm
+from .wake import PHASE_STARTING, WakeAlarm
 from .follow import RoomFollow
 from .handover import RoomHandover
 from ..devices.const import NOT_AVAILABLE, POWERED_STATES
@@ -778,7 +779,7 @@ class RoomController:
                 and self._started
                 and self.power.fully_off()
             ):
-                self._spawn(self.wake.async_finish(WAKE_ROOM_OFF))
+                self._spawn(self.wake.async_finish(WAKE_END_ROOM_OFF))
         self._notify()
 
     @callback
@@ -1268,7 +1269,7 @@ class RoomController:
             self._not_run_down[node.key] = reason
 
     async def _turn_off(self, reason: str) -> None:
-        await self.wake.async_finish(WAKE_ROOM_OFF)
+        await self.wake.async_finish(WAKE_END_ROOM_OFF)
         self.sequence.cancel()
         self._reset_overrides()
         self.volume.async_off()

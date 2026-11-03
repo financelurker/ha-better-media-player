@@ -7,6 +7,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import BetterMediaPlayerConfigEntry
+from .const import WAKE_END_STOPPED
 from .entity import ControlEntity
 from .follow import async_start_follow, async_stop_follow, get_hub
 
@@ -70,7 +71,7 @@ class WakeStopButton(ControlEntity, ButtonEntity):
         return self.ctrl.wake.active
 
     async def async_press(self) -> None:
-        await self.ctrl.wake.async_finish("stopped")
+        await self.ctrl.wake.async_finish(WAKE_END_STOPPED)
 
 
 class FollowStartButton(ControlEntity, ButtonEntity):

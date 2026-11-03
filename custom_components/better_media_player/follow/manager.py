@@ -74,6 +74,7 @@ from ..const import (
     FOLLOW_WAKING,
     STORAGE_VERSION,
     TICK_SECONDS,
+    WAKE_END_STOPPED,
 )
 from ..players.music_assistant import MusicAssistant
 from ..players.position import Position
@@ -393,7 +394,7 @@ class FollowManager:
                 target = room if room is not None and room.audio_player in members else self.origin
             for wake_room in get_rooms(self.hass).values():
                 if wake_room.wake.follows and wake_room.wake.active:
-                    await wake_room.wake.async_finish("stopped")
+                    await wake_room.wake.async_finish(WAKE_END_STOPPED)
             position = self.ma.position(group)  # (the group stops with its last member)
             for member in members:
                 await self._unjoin(member, "follow me stopped")

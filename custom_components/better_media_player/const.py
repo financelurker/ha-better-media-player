@@ -93,6 +93,13 @@ FOLLOW_EXCLUDED_VIDEO = "excluded_video"
 FOLLOW_EXCLUDED_OFF = "excluded_off"  # room was turned off during this session
 FOLLOW_EXCLUDED_BUSY = "excluded_busy"  # plays directly or in another group
 FOLLOW_UNKNOWN = "presence_unknown"
+# why a wake ended (event better_media_player_wake_finished, "reason")
+WAKE_END_STOPPED = "stopped"
+WAKE_END_MAX_DURATION = "max_duration"
+WAKE_END_ROOM_OFF = "room_off"
+WAKE_END_SLEEP_TIMER = "sleep_timer"
+WAKE_END_REPLACED = "replaced"
+WAKE_END_LEFT = "left"  # follow wake: the wake room was left
 FOLLOW_WAKING = "waking"  # wake room of a follow wake (held until it is left)
 FOLLOW_SNOOZED = "snoozed"  # wake room, snoozed: out of the group meanwhile
 FOLLOW_HELD_OUT = "held_out"  # occupied when a follow wake started: joins after its presence went and came

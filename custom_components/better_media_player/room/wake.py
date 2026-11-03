@@ -40,6 +40,9 @@ from ..const import (
     EVENT_WAKE_FAILED,
     EVENT_WAKE_FINISHED,
     EVENT_WAKE_STARTED,
+    WAKE_END_MAX_DURATION,
+    WAKE_END_REPLACED,
+    WAKE_END_STOPPED,
 )
 from .ramp import VolumeRamp
 from .. import clock
@@ -62,12 +65,6 @@ PHASE_PLAYING = "playing"
 PHASE_SNOOZED = "snoozed"
 PHASES = [PHASE_IDLE, PHASE_STARTING, PHASE_FADING, PHASE_PLAYING, PHASE_SNOOZED]
 
-REASON_STOPPED = "stopped"
-REASON_MAX_DURATION = "max_duration"
-REASON_ROOM_OFF = "room_off"
-REASON_SLEEP_TIMER = "sleep_timer"
-REASON_REPLACED = "replaced"
-REASON_LEFT = "left"  # follow wake: the wake room was left
 FAILED_START = "start_failed"
 FAILED_NOT_PLAYING = "not_playing"
 
@@ -215,7 +212,7 @@ class WakeAlarm:
                     translation_placeholders={"room": ctrl.entry.title},
                 )
         if self.active:
-            await self.async_finish(REASON_REPLACED)
+            await self.async_finish(WAKE_END_REPLACED)
         if ctrl.sleep.active:
             await ctrl.sleep.async_cancel()  # a sleep timer would end the wake
         player = ctrl.sources[key].player
@@ -515,7 +512,7 @@ class WakeAlarm:
                     return  # dropped from its group: follow me takes it back in
                 if hub.ma.state(hub.follow_player) in _PLAYING:
                     return
-            self.ctrl._spawn(self.async_finish(REASON_STOPPED))
+            self.ctrl._spawn(self.async_finish(WAKE_END_STOPPED))
 
         self._stop_check = async_track_point_in_utc_time(
             self.hass, _due, dt_util.utc_from_timestamp(clock.now() + STOP_SETTLE)
@@ -565,7 +562,7 @@ class WakeAlarm:
     async def async_finish(self, reason: str) -> None:
         """End the wake; the playback is left as it is."""
         if not self.active:
-            if reason == REASON_STOPPED:
+            if reason == WAKE_END_STOPPED:
                 _LOGGER.debug("%s: stop without a running wake: nothing to do", self.ctrl.entry.title)
             return
         self._clear()
@@ -634,7 +631,7 @@ class WakeAlarm:
     async def _max_duration(self) -> None:
         """Played long enough: the sleep timer fades out and turns the room off."""
         ctrl = self.ctrl
-        await self.async_finish(REASON_MAX_DURATION)
+        await self.async_finish(WAKE_END_MAX_DURATION)
         fade = float(ctrl.setting(CONF_SLEEP_FADE))
         if fade > 0 and ctrl.room_on:
             await ctrl.sleep.async_set(fade, fade)

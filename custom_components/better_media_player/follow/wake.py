@@ -14,7 +14,7 @@ from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
 from .. import clock
-from ..const import CONF_WAKE_DETECT_LEFT, DOMAIN, FOLLOW_WAITING, FOLLOW_WAKING, WAKE_ARRIVAL_WINDOW
+from ..const import CONF_WAKE_DETECT_LEFT, DOMAIN, FOLLOW_WAITING, FOLLOW_WAKING, WAKE_ARRIVAL_WINDOW, WAKE_END_LEFT
 from . import EMPTY, PLAYING, PRESENT, START_GRACE_SECONDS, UNKNOWN
 
 if TYPE_CHECKING:
@@ -61,7 +61,7 @@ class FollowWake:
             since = max(s.empty_since.setdefault(rid, now), s.member_since[rid])
             if now - since >= room.follow.presence_run_down and self._arrived_elsewhere(room):
                 _LOGGER.info("Follow wake: %s was left, the wake is done", room.entry.title)
-                await room.wake.async_finish("left")
+                await room.wake.async_finish(WAKE_END_LEFT)
                 await self.manager._leave(room, "left after waking up")
                 room.follow.set_state(FOLLOW_WAITING)
                 return
