@@ -11,10 +11,10 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from homeassistant.components.media_player import MediaPlayerEntityFeature as F
 from homeassistant.helpers import area_registry as ar
-from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.setup import async_setup_component
 
+from custom_components.better_media_player.room import room_device
 from custom_components.better_media_player.const import CONF_ENTRY_TYPE, DOMAIN, ENTRY_TYPE_ROOM
 from custom_components.better_media_player.model import options_v4
 from custom_components.better_media_player.panel.edit import SETUP_SCHEMA, check_room, clean_setup
@@ -173,7 +173,7 @@ def test_what_a_kind_cannot_have_is_left_out():
     }]))
     mixer = setup["devices"][0]
     assert (mixer["power"], mixer["control"], mixer["inputs"], mixer["volume"]) == (None, None, None, None)
-    assert setup["sources"][0] == {"id": "video", "player": KODI, "host": None, "onoff": "auto", "on_action": None, "off_action": None}
+    assert setup["sources"][0] == {"id": "video", "kind": "video", "player": KODI, "host": None, "onoff": "auto", "on_action": None, "off_action": None}
     SETUP_SCHEMA(setup)  # (stored as it is checked)
 
 
@@ -234,14 +234,14 @@ async def test_the_area_alone_does_not_set_the_room_up_again(hass, home, hass_ws
     assert res["result"]["saved"], res
     await hass.async_block_till_done()
     assert entry.runtime_data is controller, "no reload"
-    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, entry.entry_id)})
+    device = room_device(hass, entry.entry_id)
     assert device.area_id == den.id
     # saved again without an area: the device keeps it
     room = await _room(hass, hass_ws_client)
     res = await _ws(hass_ws_client, type="better_media_player/room/save", entry_id=entry.entry_id, version=room["version"],
                     name="Living Room", setup=_setup_of(room), settings={"room": {"prewarm": False}})
     assert res["result"]["saved"]
-    assert dr.async_get(hass).async_get_device(identifiers={(DOMAIN, entry.entry_id)}).area_id == den.id
+    assert room_device(hass, entry.entry_id).area_id == den.id
 
 
 async def test_a_room_not_loaded_is_set_up_with_the_saved_setup(hass, home, hass_ws_client):
@@ -327,7 +327,7 @@ async def test_the_area_is_the_room_device_s(hass, home, hass_ws_client):
                     name="Living Room", area_id=den.id, setup=_setup_of(room))
     assert res["result"]["saved"]
     await hass.async_block_till_done()
-    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, entry.entry_id)})
+    device = room_device(hass, entry.entry_id)
     assert device.area_id == den.id
     assert er.async_get(hass).async_get(ROOM) is not None, "the room player keeps its id"
 

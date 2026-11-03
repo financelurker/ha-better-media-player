@@ -6,7 +6,7 @@
 import { LitElement, html, svg, css, nothing } from "./vendor/lit.js";
 import { translator } from "./i18n.js";
 import { W, H, PASSIVE, SINKS, nodesOf, arrange, unstack, curve, labelSpot, bounds, iconPath } from "./diagram.js";
-import { DEVICE_KINDS, SOURCE_KINDS, addCable, addDevice, addSource, canConnect, directToCables, draftOf, newRoom, payload, removeDevice, removeSource, same } from "./editor.js";
+import { DEVICE_KINDS, SOURCE_KINDS, addCable, addDevice, addSource, canConnect, directToCables, draftOf, needsOf, newRoom, payload, removeDevice, removeSource, same } from "./editor.js";
 import { renderInspector, renderOverview } from "./inspector.js";
 import { renderCentral, renderSettings } from "./settings.js";
 import { liveBox, liveRoute, roomLine, roomSentence, tileStatus } from "./live.js";
@@ -204,8 +204,11 @@ class BmpPanel extends LitElement {
       const body = payload(d);
       const local = d.sources.filter((s) => !s.player).map((s) => ({ error: true, code: "player_missing", source: s.id }));
       body.setup.sources = body.setup.sources.filter((s) => s.player);
+      for (const k of ["start_source", "music_source"]) { // (one without its entity yet: told above)
+        if (!body.setup.sources.some((s) => s.id === body.setup[k])) body.setup[k] = null;
+      }
       try {
-        const sources = body.setup.sources.map((s) => ({ ...s, needs: s.id === "video" ? ["picture", "sound"] : ["sound"] }));
+        const sources = body.setup.sources.map((s) => ({ ...s, needs: needsOf(s.kind) }));
         const [routes, checked] = await Promise.all([
           this.hass.callWS({ type: "better_media_player/route", sources, devices: body.setup.devices, cables: body.setup.cables }),
           this.hass.callWS({ type: "better_media_player/validate", ...(d.isNew ? {} : { entry_id: d.entry_id }), setup: body.setup, settings: body.settings }),
@@ -272,11 +275,11 @@ class BmpPanel extends LitElement {
   }
 
   _sourceName(s) {
-    return s.name || (s.player ? this.hass.states[s.player]?.attributes.friendly_name || s.player : this._t(`source.${s.id}`));
+    return s.name || (s.player ? this.hass.states[s.player]?.attributes.friendly_name || s.player : this._t(`source.${s.kind}`));
   }
 
   _sourceLabel(s) {
-    return `${this._t(`source.${s.id}`)} · ${this._sourceName(s)}`;
+    return `${this._t(`source.${s.kind}`)} · ${this._sourceName(s)}`;
   }
 
   // ------------------------------------------------------------ live state
@@ -621,14 +624,18 @@ class BmpPanel extends LitElement {
           <button class="btn danger" @click=${() => this._delete(dlg.room)}>${t("delete.confirm")}</button></div></div></div>`;
     }
     const d = this._room;
-    const missing = SOURCE_KINDS.filter((k) => !d.sources.some((s) => s.id === k));
     const pick = (fn) => { this._change(d, fn); close(); };
     return html`<div class="dlg-back" @click=${(e) => e.target === e.currentTarget && close()}><div class="dlg" role="dialog" aria-modal="true" aria-labelledby="dlg-t">
       <h3 id="dlg-t">${t("add.title")}</h3>
       <div class="pick-list">
-        ${missing.length ? html`<div class="side-title">${t("add.players")}</div>
-          ${missing.map((k) => html`<button @click=${() => pick(() => { const s = addSource(d, k, this._config.suggested?.[d.area_id]?.[k] || null); s.offers_onoff = s.player ? this._offersOnoff(s.player) : null; this._selected = { type: "node", id: k }; })}>
-            <b>${t(`source.${k}`)}</b><small>${t(`add.player_${k}`)}</small></button>`)}` : nothing}
+        <div class="side-title">${t("add.players")}</div>
+        ${SOURCE_KINDS.map((k) => html`<button @click=${() => pick(() => {
+            const first = !d.sources.some((s) => s.kind === k); // (a known player of the area is proposed for the first of a kind)
+            const s = addSource(d, k, (first && this._config.suggested?.[d.area_id]?.[k]) || null);
+            s.offers_onoff = s.player ? this._offersOnoff(s.player) : null;
+            this._selected = { type: "node", id: s.id };
+          })}>
+          <b>${t(`source.${k}`)}</b><small>${t(`add.player_${k}`)}</small></button>`)}
         <div class="side-title">${t("add.devices")}</div>
         ${DEVICE_KINDS.map((k) => html`<button @click=${() => pick(() => { const dev = addDevice(d, k, this._config.defaults); this._selected = { type: "node", id: dev.id }; })}>
           <b>${t(`kind.${k}`)}</b><small>${t(`add.kind_${k}`)}</small></button>`)}

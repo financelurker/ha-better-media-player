@@ -301,7 +301,7 @@ class RoomVolume:
             self._schedule_learn(src, vol_new)
 
         started = new.state in _PLAYING and old.state not in _PLAYING
-        if src.key == "video":
+        if src.kind == "video":
             # the video player gets the volume as soon as it is up, before it plays
             started = started or (new.state in _POWERED and old.state not in _POWERED)
         if started:

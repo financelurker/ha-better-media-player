@@ -1,7 +1,7 @@
 """The room's devices as power nodes: what it has, and when each is needed.
 
 node     A device of the room (model.py: display, receiver, speakers, …) or the
-         hardware plug of one of its players (video_host / audio_host).
+         hardware plug of one of its players (<source>_host: video_host, audio_host, …).
 demand   A node is demanded while a source whose route it is on is in use: it
          plays, or nothing plays for less than the idle timeout (paused,
          stopped, a menu; the controller's hold). Then it goes off at once; a
@@ -26,15 +26,15 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.components.media_player import MediaPlayerState
 from homeassistant.core import State, callback
 
-from ..const import CONF_START_TIMEOUT, ROLE_AUDIO_HOST, ROLE_VIDEO_HOST, SOURCE_AUDIO
+from ..const import CONF_START_TIMEOUT, SOURCE_AUDIO
 from ..devices import DeviceGroup, Node, Standby, get_control
 from ..devices.const import ACTION_ID
 from ..devices.graph import Route, route
 from ..devices.model import Edge, Mode, Signal
 from ..model import (
-    HOST_OF,
     KIND_GIVES,
     NEEDS,
+    host_key,
     OPT_CABLES,
     control_of,
     device_setting,
@@ -51,7 +51,6 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
-HOSTS = (ROLE_VIDEO_HOST, ROLE_AUDIO_HOST)
 PLAYS, HOLD = "plays:", "hold:"  # why a node is needed (RoomPower.reasons)
 
 
@@ -111,27 +110,29 @@ class RoomPower:
                 picture=shows_picture(d, options.get(OPT_CABLES) or []),
             )
         # what each source needs: its route through the cables
-        self.routes: dict[str, Route] = {key: route(key, NEEDS[key], every, edges) for key in ctrl.sources}
+        self.routes: dict[str, Route] = {key: route(key, NEEDS[src.kind], every, edges) for key, src in ctrl.sources.items()}
         for node in every.values():
             node.sources = tuple(s for s, r in self.routes.items() if node.key in r.nodes)
         # what is switched: devices with power (plugs, devices, own actions) and the players' plugs
         self.nodes: dict[str, RoomNode] = {k: n for k, n in every.items() if n.entities}
         for key, src in sources_of(options).items():
             if src.get("host") and key in ctrl.sources:
-                self.nodes[HOST_OF[key]] = RoomNode(key=HOST_OF[key], entities=[src["host"]], sources=(key,))
+                self.nodes[host_key(key)] = RoomNode(key=host_key(key), entities=[src["host"]], sources=(key,))
         # the order to switch on: plugs, picture, sound; each from the source on
         cables = list(options.get(OPT_CABLES) or [])
         devs = switch_order([n.device for n in self.nodes.values() if n.device is not None], cables, list(ctrl.sources))
-        self.on_order: list[str] = [h for h in HOSTS if h in self.nodes] + devs
-        self.off_order: list[str] = list(reversed(devs)) + [h for h in HOSTS if h in self.nodes]
+        hosts = [host_key(k) for k in ctrl.sources if host_key(k) in self.nodes]
+        self.on_order: list[str] = hosts + devs
+        self.off_order: list[str] = list(reversed(devs)) + hosts
         self.devices: DeviceGroup = get_control(ctrl.hass).register(ctrl.entry.entry_id, self, list(self.nodes.values()))
 
     # ------------------------------------------------- the room's kinds of nodes
 
-    def sound_nodes(self, source: str = SOURCE_AUDIO) -> list[RoomNode]:
-        """The devices on a source's route that do not carry the picture (speakers,
-        receiver, subwoofer, …), without the player's plug."""
-        return [n for n in self.nodes.values() if n.device is not None and not n.picture and source in n.sources]
+    def sound_nodes(self, source: str | None = None) -> list[RoomNode]:
+        """The devices on a source's route (None: any music player's) that do not
+        carry the picture (speakers, receiver, subwoofer, …), without the player's plug."""
+        keys = {source} if source is not None else {s.key for s in self.ctrl.of_kind(SOURCE_AUDIO)}
+        return [n for n in self.nodes.values() if n.device is not None and not n.picture and keys & set(n.sources)]
 
     def device_setting(self, node: RoomNode, key: str) -> Any:
         return device_setting(self.ctrl.data, node.device, key)
@@ -269,7 +270,8 @@ class RoomPower:
 
     def prewarms(self, node: RoomNode) -> bool:
         """Follow me prewarms the music's sound devices and the music player's plug."""
-        return node.key == ROLE_AUDIO_HOST or node in self.sound_nodes()
+        music = self.ctrl.music
+        return music is not None and (node.key == host_key(music.key) or node in self.sound_nodes(music.key))
 
     def demand(self, picture: bool) -> bool:
         """A device for the picture (else: for the sound) is demanded."""

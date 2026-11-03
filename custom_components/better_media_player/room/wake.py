@@ -31,6 +31,7 @@ from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.util import dt as dt_util
 
 from ..const import (
+    SOURCE_AUDIO,
     CONF_NIGHT_FADE_IN,
     CONF_SLEEP_FADE,
     CONF_START_TIMEOUT,
@@ -207,7 +208,7 @@ class WakeAlarm:
             raise HomeAssistantError(f"Unknown source: {key}")
         if follow:
             hub = ctrl.hub
-            if hub is None or key != "audio" or not ctrl.follow.capable:
+            if hub is None or ctrl.sources[key].kind != SOURCE_AUDIO or not ctrl.follow.capable:
                 raise ServiceValidationError(
                     translation_domain=DOMAIN,
                     translation_key="follow_wake",
@@ -336,7 +337,7 @@ class WakeAlarm:
             media = {k: data[k] for k in ("media_content_id", "media_content_type") if data.get(k)}
             w["follow"] = await hub.wake.async_start(self.ctrl, media, join_volume)
             w["started_once"] = True
-        self.ctrl.data.setdefault("last_source", "audio")
+        self.ctrl.data.setdefault("last_source", w["source"])
 
     async def _set_volume(self, src: Source, volume: float) -> None:
         out = self.ctrl.vol(src)

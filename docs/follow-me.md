@@ -32,6 +32,7 @@ While it plays:
 - **Leave:** a room without presence leaves after its presence run-down (2 min); its speakers go off at once. When the last room leaves, Music Assistant pauses the group and follow me ends.
 - **Never steals:** a room that plays something else (directly or in another group) is left alone.
 - **Left out:** rooms with video playing (Kodi; when the video ends the room comes back, and if it was the last room the group resumes, within 3 h), rooms in **quiet** mode (switch per room; leaves at once and cuts the speakers) and rooms turned **off** during the session (until follow me ends).
+- **Several music players in a room:** a room joins with the one that plays or holds (paused), else with its *Main music player* ([Room & behaviour](designer.md#room--behaviour)).
 - **Unknown presence** (all sensors unavailable) changes nothing, so music does not stop because a sensor integration is down.
 - **Nobody detected** at the start: the start room stays as long as nobody is detected in any follow room; then the normal rules apply, including the idle timeout. The same goes for a room you add to the group by hand.
 - **Paused by you:** follow me goes on, rooms stay as they are (their speakers for the idle timeout), the prewarmed speakers go off. On resume the rules apply again.

@@ -24,6 +24,7 @@ export function renderSettings(p, d) {
       ${areaField(p, { label: t("settings.area"), value: d.area_id, onChange: (v) => ch(() => { d.area_id = v; }) })}
       <hr><button class="btn danger" @click=${() => p._askDelete(d)}>${t("settings.delete")}</button>
     </div>
+    ${sourcesCard(p, d)}
     <div class="card"><h3>${t("settings.volume")}</h3>
       <p class="muted">${t("settings.volume_hint")}</p>
       ${segField(t("settings.volume_where"), d.volume.where, [["players", t("settings.volume_players")], ["device", t("settings.volume_on_device")]], (v) => ch(() => {
@@ -46,6 +47,28 @@ export function renderSettings(p, d) {
           ${keys.map((k) => settingRow(p, k, d.settings[k], (v) => ch(() => { d.settings[k] = v; }), { units: p._units }))}</div>`)}`
         : html`<p class="muted">${t("settings.not_loaded")}</p>`}
     </div>`;
+}
+
+// which player the room starts with; with several music players, follow me's one
+function sourcesCard(p, d) {
+  const t = p._t;
+  const ch = (fn) => p._change(d, fn);
+  const usable = d.sources.filter((s) => s.player);
+  const music = usable.filter((s) => s.kind === "audio");
+  if (!usable.length) return nothing;
+  const label = (s) => p._sourceLabel(s);
+  return html`<div class="card"><h3>${t("settings.sources")}</h3>
+    <p class="muted">${t("settings.sources_hint")}</p>
+    <div class="field"><label class="lbl" for="r-start">${t("settings.start_source")}</label>
+      <select id="r-start" @change=${(e) => ch(() => { d.start_source = e.target.value || null; })}>
+        <option value="" ?selected=${!d.start_source}>${t("settings.start_last")}</option>
+        ${usable.map((s) => html`<option value=${s.id} ?selected=${s.id === d.start_source}>${label(s)}</option>`)}
+      </select><small class="muted">${t("settings.start_hint")}</small></div>
+    ${music.length > 1 ? html`<div class="field"><label class="lbl" for="r-music">${t("settings.music_source")}</label>
+      <select id="r-music" @change=${(e) => ch(() => { d.music_source = e.target.value === music[0].id ? null : e.target.value; })}>
+        ${music.map((s) => html`<option value=${s.id} ?selected=${s.id === (d.music_source || music[0].id)}>${label(s)}</option>`)}
+      </select><small class="muted">${t("settings.music_hint")}</small></div>` : nothing}
+  </div>`;
 }
 
 export function renderCentral(p) {

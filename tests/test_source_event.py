@@ -6,9 +6,9 @@ from pytest_homeassistant_custom_component.common import async_capture_events
 
 from homeassistant.components import automation
 from homeassistant.components.device_automation import DeviceAutomationType, async_get_device_automations
-from homeassistant.helpers import device_registry as dr
 from homeassistant.setup import async_setup_component
 
+from custom_components.better_media_player.room import room_device
 from custom_components.better_media_player.const import DOMAIN, EVENT_SOURCE_CHANGED
 
 from .conftest import FOLLOW, GROUP, KITCHEN_OCC, KODI, MUSIC, SPEAKERS, TV, setup_room
@@ -142,7 +142,7 @@ async def test_device_triggers(hass, home, freezer):
     from homeassistant.components.device_automation import async_get_device_automations
 
     entry = await _room(hass, home, freezer)
-    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, entry.entry_id)})
+    device = room_device(hass, entry.entry_id)
     triggers = await async_get_device_automations(hass, DeviceAutomationType.TRIGGER, [device.id])
     types = sorted(t["type"] for t in triggers[device.id] if t["domain"] == DOMAIN)
     assert types == [
@@ -181,7 +181,7 @@ async def test_music_only_room_offers_no_video_trigger(hass, home, freezer):
     from homeassistant.components.device_automation import async_get_device_automations
 
     entry = await _room(hass, home, freezer, video_player=None, display=None)
-    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, entry.entry_id)})
+    device = room_device(hass, entry.entry_id)
     triggers = await async_get_device_automations(hass, DeviceAutomationType.TRIGGER, [device.id])
     assert "source_video" not in {t["type"] for t in triggers[device.id]}
     assert home.on(SPEAKERS) is False
@@ -255,7 +255,7 @@ async def test_turning_on_with_music_from_off(hass, home, freezer):
 
 async def test_device_triggers_of_a_room_that_is_not_loaded(hass, home, freezer):
     entry = await _room(hass, home, freezer)
-    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, entry.entry_id)})
+    device = room_device(hass, entry.entry_id)
     assert await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
     triggers = await async_get_device_automations(hass, DeviceAutomationType.TRIGGER, [device.id])

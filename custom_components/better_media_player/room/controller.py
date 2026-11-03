@@ -5,8 +5,9 @@ power devices, evaluates what the room needs (its power devices: power.py, the
 power-on sequence: sequence.py), runs the room's actions (handing over:
 handover.py) and keeps a room-level status.
 
-source   A media player of the room. "video" (e.g. Kodi) needs display + audio,
-         "audio" (e.g. a Music Assistant / sendspin player) needs audio only.
+source   A media player of the room; any number, one plays at a time. Its kind:
+         "video" (e.g. Kodi) needs picture and sound, "audio" (e.g. a Music
+         Assistant / sendspin player) the sound only.
 """
 
 from __future__ import annotations
@@ -62,7 +63,6 @@ from ..const import (
     PRESETS,
     SOURCE_AUDIO,
     SOURCE_VIDEO,
-    SOURCES,
     STATUS_DISABLED,
     STATUS_ERROR,
     STATUS_MANUAL,
@@ -76,7 +76,7 @@ from ..const import (
     STORAGE_VERSION,
     TICK_SECONDS,
 )
-from ..model import ROOM_SETTINGS, sources_of, volume_entity
+from ..model import OPT_MUSIC_SOURCE, OPT_START_SOURCE, ROOM_SETTINGS, source_kind, sources_of, volume_entity
 from ..follow import get_hub
 from . import get_rooms
 from .sleep import REASON_ROOM_OFF, SleepTimer
@@ -113,11 +113,15 @@ VIDEO_STOPPED = {STATE_OFF, STATE_STANDBY}
 AUDIO_STOPPED = {STATE_OFF, STATE_STANDBY, MediaPlayerState.IDLE, MediaPlayerState.ON, MediaPlayerState.PAUSED}
 
 
+DEFAULT_SOURCE_NAMES = {SOURCE_VIDEO: "Video", SOURCE_AUDIO: "Music"}
+
+
 @dataclass
 class Source:
     """A media player of the room."""
 
     key: str
+    kind: str  # SOURCE_VIDEO / SOURCE_AUDIO: what it needs, when it is active
     player: str
     on_action: str | None
     off_action: str | None
@@ -146,18 +150,18 @@ class RoomController:
         self.opts: dict[str, Any] = dict(entry.options)  # the setup (model.py)
 
         self.sources: dict[str, Source] = {}
-        found = sources_of(self.opts)
-        for key in SOURCES:
-            if (s := found.get(key)) is not None:
-                self.sources[key] = Source(
-                    key=key,
-                    player=s["player"],
-                    on_action=s.get("on_action"),
-                    off_action=s.get("off_action"),
-                    host=s.get("host"),
-                    onoff=s.get("onoff") or "auto",
-                    backend=backend_for(hass, s["player"], key),
-                )
+        for key, s in sources_of(self.opts).items():
+            kind = source_kind(s)
+            self.sources[key] = Source(
+                key=key,
+                kind=kind,
+                player=s["player"],
+                on_action=s.get("on_action"),
+                off_action=s.get("off_action"),
+                host=s.get("host"),
+                onoff=s.get("onoff") or "auto",
+                backend=backend_for(hass, s["player"], kind),
+            )
 
         self.power = RoomPower(self)
         self.sequence = PowerSequence(self)
@@ -207,7 +211,7 @@ class RoomController:
 
     async def async_start(self) -> None:
         stored = await self._store.async_load() or {}
-        default_source = SOURCE_VIDEO if SOURCE_VIDEO in self.sources else SOURCE_AUDIO
+        default_source = next((k for k, s in self.sources.items() if s.kind == SOURCE_VIDEO), next(iter(self.sources), SOURCE_AUDIO))
         self.data = {
             "auto_power": True,
             "last_source": default_source,
@@ -469,7 +473,7 @@ class RoomController:
         """A music player with an on/off of its own (e.g. Music Assistant's
         power control, also its fake one) that the room switches."""
         return (
-            src.key == SOURCE_AUDIO
+            src.kind == SOURCE_AUDIO
             and src.onoff in ("auto", "player")
             and self.player_supports(src, MediaPlayerEntityFeature.TURN_ON)
             and self.player_supports(src, MediaPlayerEntityFeature.TURN_OFF)
@@ -545,7 +549,7 @@ class RoomController:
     def source_active(self, src: Source) -> bool:
         if not self.source_active_raw(src) or src.suppressed:
             return False
-        if src.key == SOURCE_AUDIO:
+        if src.kind == SOURCE_AUDIO:
             return self.follow.group_counts(src)
         return True
 
@@ -556,15 +560,49 @@ class RoomController:
             return False
         if self.switched_by(src, True) is None:
             return True  # the room does not switch it on: it is woken by playing
-        if src.key == SOURCE_VIDEO or self.player_supports(src, MediaPlayerEntityFeature.TURN_ON):
+        if src.kind == SOURCE_VIDEO or self.player_supports(src, MediaPlayerEntityFeature.TURN_ON):
             return state in POWERED_STATES
         return True
 
     # ------------------------------------------------------------- what plays
 
+    def of_kind(self, kind: str) -> list[Source]:
+        return [s for s in self.sources.values() if s.kind == kind]
+
+    @property
+    def music(self) -> Source | None:
+        """The room's music player for follow me, announcements and a wake: the
+        one that plays (on its own before one in a group), else one in a group, else
+        a wake's, else one in use, else the one chosen in the setup, else the first."""
+        music = self.of_kind(SOURCE_AUDIO)
+        if len(music) < 2:
+            return next(iter(music), None)
+        wake = (self.data.get("wake") or {}).get("source")
+        for test in (
+            lambda s: self.source_playing(s) and not s.backend.groups_of(s.player),
+            self.source_playing,
+            lambda s: bool(s.backend.groups_of(s.player, idle=True)),
+            lambda s: s.key == wake,
+            lambda s: bool(s.in_use),
+        ):
+            if (src := next((s for s in music if test(s)), None)) is not None:
+                return src
+        chosen = self.sources.get(self.opts.get(OPT_MUSIC_SOURCE) or "")
+        return chosen if chosen is not None and chosen.kind == SOURCE_AUDIO else next(iter(music), None)
+
+    @property
+    def video(self) -> Source | None:
+        """The room's video player for announcements: the one that is active, else
+        the one in use, else the first."""
+        video = self.of_kind(SOURCE_VIDEO)
+        for test in (self.source_active, lambda s: bool(s.in_use)):
+            if (src := next((s for s in video if test(s)), None)) is not None:
+                return src
+        return next(iter(video), None)
+
     @property
     def audio_player(self) -> str | None:
-        src = self.sources.get(SOURCE_AUDIO)
+        src = self.music
         return src.player if src else None
 
     @property
@@ -573,18 +611,12 @@ class RoomController:
 
     @property
     def video_active(self) -> bool:
-        src = self.sources.get(SOURCE_VIDEO)
         # suppressed (turned off, still suspending) or idle-timed-out video does not count
-        return src is not None and self.source_active(src)
+        return any(self.source_active(src) for src in self.of_kind(SOURCE_VIDEO))
 
     @property
     def audio_playing_directly(self) -> bool:
-        src = self.sources.get(SOURCE_AUDIO)
-        return (
-            src is not None
-            and self.source_playing(src)
-            and not src.backend.groups_of(src.player)
-        )
+        return any(self.source_playing(src) and not src.backend.groups_of(src.player) for src in self.of_kind(SOURCE_AUDIO))
 
     # ------------------------------------------------------------- properties
 
@@ -595,6 +627,28 @@ class RoomController:
     @property
     def last_source(self) -> str:
         return self.data.get("last_source", SOURCE_VIDEO)
+
+    def source_name(self, src: Source) -> str:
+        """Its player's name (as the room's source list shows it)."""
+        state = self.hass.states.get(src.player)
+        if state is not None and state.attributes.get("friendly_name"):
+            return str(state.attributes["friendly_name"])
+        return DEFAULT_SOURCE_NAMES.get(src.key) or src.key
+
+    @property
+    def wake_source(self) -> str | None:
+        """A wake without a source: the one the room starts with if it is set up,
+        else the music player, else the video player."""
+        if self.opts.get(OPT_START_SOURCE) in self.sources:
+            return self.opts[OPT_START_SOURCE]
+        src = self.music or self.video
+        return src.key if src else None
+
+    @property
+    def start_source(self) -> str:
+        """The source the room starts with: the one set up, else the one used last."""
+        chosen = self.opts.get(OPT_START_SOURCE)
+        return chosen if chosen in self.sources else self.last_source
 
     @property
     def hub(self):
@@ -710,12 +764,12 @@ class RoomController:
 
     def _update_sources(self, now: float) -> None:
         for src in self.sources.values():
-            stopped = VIDEO_STOPPED if src.key == SOURCE_VIDEO else AUDIO_STOPPED
+            stopped = VIDEO_STOPPED if src.kind == SOURCE_VIDEO else AUDIO_STOPPED
             if src.suppressed and self.player_state(src) in stopped:
                 src.suppressed = False
             if not self.announce.protects(src.player):  # (an announcement is no use)
                 self._update_use(src, now)
-            if src.key == SOURCE_VIDEO:
+            if src.kind == SOURCE_VIDEO:
                 self._video_follows(src)
             if self.power_controlled(src):
                 self._power_follows(src)
@@ -730,7 +784,7 @@ class RoomController:
             return
         if first and state in (None, *NOT_AVAILABLE):
             return  # (not reported yet, e.g. after a restart: the first look is its first state)
-        if src.suppressed or (src.key == SOURCE_AUDIO and not self.follow.group_counts(src)):
+        if src.suppressed or (src.kind == SOURCE_AUDIO and not self.follow.group_counts(src)):
             self.end_use(src)
             return
         if state in (STATE_OFF, STATE_STANDBY, None) and not src.begun:
@@ -738,12 +792,12 @@ class RoomController:
             return
         if state in POWERED_STATES:
             src.begun = False
-        if src.key == SOURCE_VIDEO:
+        if src.kind == SOURCE_VIDEO:
             # on (its menu, paused) is in use; unavailable for a moment goes on
             candidate = self.source_active(src) or src.begun or (bool(src.in_use) and state in NOT_AVAILABLE)
         elif first:
             # the first look (a restart): paused or stopped with its speakers on (or none)
-            sound = self.power.sound_nodes()
+            sound = self.power.sound_nodes(src.key)
             candidate = state in POWERED_STATES and (not sound or any(self.power.devices.node_on(n) for n in sound))
         else:
             candidate = bool(src.in_use) or src.expired or src.begun  # it played (or was turned on)
@@ -757,7 +811,7 @@ class RoomController:
             _LOGGER.info("%s: nothing played on %s for %d min, going off", self.entry.title, src.player, timeout // 60)
             src.expired = True
             src.expired_at = now
-            if src.key == SOURCE_VIDEO and self.switched_by(src, False) is not None:
+            if src.kind == SOURCE_VIDEO and self.switched_by(src, False) is not None:
                 src.going_off = True  # (off after its sound devices: _video_follows)
         src.in_use = not src.expired
 
@@ -778,7 +832,7 @@ class RoomController:
         # (only what the room switches off itself; at most a minute: then it goes anyway)
         sound = [
             n for n in self.power.nodes.values()
-            if n.device is not None and not n.picture and SOURCE_VIDEO in n.sources and self.power.devices.off_by_owner(n)
+            if n.device is not None and not n.picture and src.key in n.sources and self.power.devices.off_by_owner(n)
         ]
         waiting = clock.now() - (src.expired_at or 0) < PLAYER_OFF_SECONDS
         if waiting and any(self.power.devices.node_on(n) and not self.power.needed(n) for n in sound):
@@ -794,7 +848,7 @@ class RoomController:
         group decides), nor while its speakers are on or needed (manual mode, a
         wake's snooze)."""
         automatic = self.auto_power and not self.manual and not self.sequence.running and not self.keep_on
-        audio_nodes = [n for n in self.power.nodes.values() if SOURCE_AUDIO in n.sources and n.device is not None]
+        audio_nodes = [n for n in self.power.nodes.values() if src.key in n.sources and n.device is not None]
         if (
             src.off_sent_at is not None
             or not self._started
@@ -892,7 +946,7 @@ class RoomController:
     async def _source_off(self, src: Source) -> None:
         """Stop a source: leave groups, stop playback, power it down if possible."""
         self.end_use(src)
-        if src.key == SOURCE_AUDIO:
+        if src.kind == SOURCE_AUDIO:
             groups = src.backend.groups_of(src.player)
             if (
                 groups
@@ -915,7 +969,7 @@ class RoomController:
             await self._player(src, SERVICE_TURN_OFF)
         elif how == "action":
             await self._run_action(src.off_action, False)
-        elif src.key == SOURCE_VIDEO and self.source_playing(src):
+        elif src.kind == SOURCE_VIDEO and self.source_playing(src):
             if self.player_supports(src, MediaPlayerEntityFeature.STOP):
                 await self._player(src, "media_stop")
 
@@ -943,9 +997,9 @@ class RoomController:
         self.power.held.clear()
 
     async def async_turn_on(self, source: str | None = None) -> None:
-        """Explicit wish: power the room up with source (default: last used)."""
+        """Explicit wish: power the room up with source (default: the one it starts with)."""
         self._reset_overrides()
-        key = source or self.last_source
+        key = source or (self.start_source if not self.room_on else self.last_source)
         if key not in self.sources:
             key = next(iter(self.sources))
         self.source_watch.note_request(key)
@@ -1026,7 +1080,7 @@ class RoomController:
             self.data["last_source"] = key
             self._save()
         if (
-            key == SOURCE_AUDIO
+            src.kind == SOURCE_AUDIO
             and src.backend.groups_of(src.player)
             and self.player_supports(src, MediaPlayerEntityFeature.GROUPING)
         ):
@@ -1048,7 +1102,7 @@ class RoomController:
             if not self.source_active_raw(other):
                 continue
             other.suppressed = True
-            if other.key == SOURCE_VIDEO:
+            if other.kind == SOURCE_VIDEO:
                 await self._source_off(other)
             else:
                 # music: leave a group, otherwise just pause
@@ -1162,7 +1216,9 @@ class RoomController:
     def node_name(self, key: str) -> str:
         node = self.power.nodes[key]
         if node.device is None:
-            return "Video player hardware" if node.sources[0] == SOURCE_VIDEO else "Music player hardware"
+            src = self.sources[node.sources[0]]
+            kind = "Video player hardware" if src.kind == SOURCE_VIDEO else "Music player hardware"
+            return kind if src.key in (SOURCE_VIDEO, SOURCE_AUDIO) else f"{kind} ({self.source_name(src)})"
         return node.device.get("name") or KIND_NAMES.get(node.device["kind"], key)
 
     @callback

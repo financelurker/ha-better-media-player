@@ -22,7 +22,6 @@ from homeassistant.components.media_player import (
 )
 from homeassistant.const import (
     ATTR_ENTITY_PICTURE,
-    ATTR_FRIENDLY_NAME,
     ATTR_SUPPORTED_FEATURES,
 )
 from homeassistant.core import HomeAssistant, State
@@ -98,7 +97,6 @@ STATE_MAP = {
     MediaPlayerState.IDLE: MediaPlayerState.IDLE,
 }
 
-DEFAULT_SOURCE_NAMES = {SOURCE_VIDEO: "Video", SOURCE_AUDIO: "Music"}
 SOURCE_ICONS = {SOURCE_VIDEO: "mdi:television-play", SOURCE_AUDIO: "mdi:music"}
 ICON_ON = "mdi:television-speaker"
 ICON_OFF = "mdi:television-speaker-off"
@@ -134,7 +132,7 @@ async def async_setup_entry(
             vol.Optional("fade_minutes"): vol.All(vol.Coerce(float), vol.Range(min=0, max=120)),
             vol.Optional("max_duration_minutes"): vol.All(vol.Coerce(float), vol.Range(min=1, max=720)),
             vol.Optional(ATTR_NIGHT_MODE): cv.boolean,
-            vol.Optional("source"): vol.In([SOURCE_AUDIO, SOURCE_VIDEO]),
+            vol.Optional("source"): cv.string,  # a source's id (checked by the room)
             vol.Optional("follow"): cv.boolean,
         },
         "async_wake",
@@ -157,7 +155,7 @@ async def async_setup_entry(
         SERVICE_HANDOVER,
         {
             vol.Required("destination"): cv.entity_id,
-            vol.Optional("source"): vol.In([SOURCE_AUDIO, SOURCE_VIDEO]),
+            vol.Optional("source"): cv.string,  # a source's id (checked by the room)
             vol.Optional("keep_source_playing", default=False): cv.boolean,
         },
         "async_handover",
@@ -194,11 +192,7 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
         return child.attributes.get(name) if child is not None else None
 
     def _source_name(self, key: str) -> str:
-        src = self.ctrl.sources[key]
-        state = self.hass.states.get(src.player)
-        if state is not None and state.attributes.get(ATTR_FRIENDLY_NAME):
-            return str(state.attributes[ATTR_FRIENDLY_NAME])
-        return DEFAULT_SOURCE_NAMES[key]
+        return self.ctrl.source_name(self.ctrl.sources[key])
 
     # ------------------------------------------------------------------- state
 
@@ -220,7 +214,7 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
             return ICON_OFF
         src = self.ctrl.active_source
         if src is not None and not src.suppressed:
-            return SOURCE_ICONS[src.key]
+            return SOURCE_ICONS[src.kind]
         return ICON_ON
 
     @property
@@ -507,7 +501,8 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
             data = {"media_content_type": inner_type or media_content_type, "media_content_id": inner_id}
             room_mode = self._browser.player_mode(key, inner_id)
         else:
-            key = source or (SOURCE_AUDIO if SOURCE_AUDIO in self.ctrl.sources else SOURCE_VIDEO)
+            music = self.ctrl.music
+            key = source or (music.key if follow and music is not None else self.ctrl.wake_source)
             data = {"media_content_type": media_content_type, "media_content_id": media_content_id}
         if key not in self.ctrl.sources:
             raise ServiceValidationError(

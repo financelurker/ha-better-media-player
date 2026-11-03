@@ -38,8 +38,9 @@ function when(p, at, coarse = false) {
 const playerWord = (p, s) => (s.state === "paused" ? p._t("live.paused") : p._t("live.stopped"));
 
 // the source's name ("Film", "Music"); in an English line it reads as a word ("plays film")
-const srcName = (p, key) => p._t(`source.${key}`);
-const srcWord = (p, key) => (String(p._lang || "en").startsWith("en") ? srcName(p, key).toLowerCase() : srcName(p, key));
+const kindOf = (room, key) => room.sources.find((s) => s.id === key)?.kind ?? (key === "video" ? "video" : "audio");
+const srcName = (p, room, key) => p._t(`source.${kindOf(room, key)}`);
+const srcWord = (p, room, key) => (String(p._lang || "en").startsWith("en") ? srcName(p, room, key).toLowerCase() : srcName(p, room, key));
 
 const devName = (p, room, id) => {
   const d = room.devices.find((x) => x.id === id);
@@ -134,9 +135,9 @@ export function roomSentence(p, room, live, coarse = false) {
     const waiting = Object.entries(live.nodes).find(([, n]) => cecOn(n)?.left > 0);
     if (waiting) {
       const c = cecOn(waiting[1]);
-      return { cls: "note", text: t(c.fallback ? "live.s_starting_cec" : "live.s_starting_cec_only", { source: srcName(p, key ?? "video"), device: devName(p, room, waiting[0]), left: Math.ceil(c.left) }) };
+      return { cls: "note", text: t(c.fallback ? "live.s_starting_cec" : "live.s_starting_cec_only", { source: srcName(p, room, key ?? "video"), device: devName(p, room, waiting[0]), left: Math.ceil(c.left) }) };
     }
-    return { cls: "note", text: key ? t("live.s_starting", { source: srcName(p, key) }) : t("live.s_starting_auto") };
+    return { cls: "note", text: key ? t("live.s_starting", { source: srcName(p, room, key) }) : t("live.s_starting_auto") };
   }
   if (live.error) return { cls: "bad", text: t("live.s_failed", { error: failure(p, live.error) }) };
   if (live.manual) return { cls: "note", text: t("live.s_manual") };
@@ -146,17 +147,17 @@ export function roomSentence(p, room, live, coarse = false) {
     const byHand = Object.entries(live.nodes).find(([, n]) => n.input?.state === "manual");
     if (byHand) return { cls: "note", text: t("live.s_by_hand", { device: devName(p, room, byHand[0]), input: byHand[1].input.current ?? "?" }) };
     const acts = live.keep_on ? ["release", "all_off"] : ["keep_on", "all_off"];
-    return { cls: "", text: t(allThere(room, live, playing[0]) ? "live.s_playing_all" : "live.s_playing", { source: srcName(p, playing[0]), player: name(playing[0]) }), acts };
+    return { cls: "", text: t(allThere(room, live, playing[0]) ? "live.s_playing_all" : "live.s_playing", { source: srcName(p, room, playing[0]), player: name(playing[0]) }), acts };
   }
   const goingOff = src.find(([, s]) => s.going_off);
-  if (goingOff) return { cls: "", text: t("live.s_going_off", { source: srcName(p, goingOff[0]), player: name(goingOff[0]), min: Math.round(live.idle_timeout / 60) }) };
+  if (goingOff) return { cls: "", text: t("live.s_going_off", { source: srcName(p, room, goingOff[0]), player: name(goingOff[0]), min: Math.round(live.idle_timeout / 60) }) };
   const nodes = Object.values(live.nodes);
   const anyOn = nodes.some((n) => n.on) || src.some(([, s]) => s.on);
   if (live.keep_on && anyOn) return { cls: "", text: t("live.s_kept_on"), acts: ["release", "all_off"] };
   const holding = src.find(([, s]) => s.in_use && s.since != null);
   if (holding) {
     const [key, s] = holding;
-    const vars = { source: srcName(p, key), word: playerWord(p, s), since: clockTime(p, s.since), player: name(key) };
+    const vars = { source: srcName(p, room, key), word: playerWord(p, s), since: clockTime(p, s.since), player: name(key) };
     const picture = (room.routes?.[key]?.picture || []).length > 0;
     return {
       cls: "",
@@ -184,11 +185,11 @@ export function roomLine(p, room, line) {
   const t = p._t;
   if (!line) return null;
   if (line.error) return { cls: "err", text: t("live.l_failed") };
-  if (line.starting) return { cls: "wait", text: t("live.l_starting", { source: srcWord(p, line.starting) }) };
-  if (line.playing) return { cls: "play", text: t("live.l_playing", { source: srcWord(p, line.playing) }) };
+  if (line.starting) return { cls: "wait", text: t("live.l_starting", { source: srcWord(p, room, line.starting) }) };
+  if (line.playing) return { cls: "play", text: t("live.l_playing", { source: srcWord(p, room, line.playing) }) };
   if (line.status === "kept_on") return { cls: "on", text: t("live.kept_on") };
   if (line.holding) {
-    const text = t("live.l_paused", { source: srcName(p, line.holding) });
+    const text = t("live.l_paused", { source: srcName(p, room, line.holding) });
     return { cls: "down", text: line.off_at ? `${text} · ${offText(p, line.off_at, true)}` : text };
   }
   if (line.status === "manual") return { cls: "manual", text: t("live.l_manual") };
@@ -203,7 +204,7 @@ export function roomLine(p, room, line) {
 function reason(p, room, why) {
   const t = p._t;
   const [what, key] = why.split(":");
-  const vars = key ? { source: srcName(p, key), player: p._sourceName(room.sources.find((s) => s.id === key) || { id: key }) } : {};
+  const vars = key ? { source: srcName(p, room, key), player: p._sourceName(room.sources.find((s) => s.id === key) || { id: key }) } : {};
   return {
     plays: t("live.why_plays", vars), hold: t("live.why_hold", vars), wake: t("live.why_wake"), announce: t("live.why_announce"),
     prewarm: t("live.why_prewarm"), shutdown: t("live.why_shutdown", vars), restart: t("live.why_restart", vars),

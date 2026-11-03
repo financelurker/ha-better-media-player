@@ -107,8 +107,9 @@ FOLLOW_STATES = [
 CONF_AREA = "area"
 
 # --- Sources -----------------------------------------------------------------
-SOURCE_VIDEO = "video"  # needs display + audio (e.g. Kodi)
-SOURCE_AUDIO = "audio"  # needs audio only (e.g. Music Assistant / sendspin)
+# the kinds of players (and the ids of a room's first ones)
+SOURCE_VIDEO = "video"  # needs picture + sound (e.g. Kodi)
+SOURCE_AUDIO = "audio"  # needs sound only (e.g. Music Assistant / sendspin)
 SOURCES = (SOURCE_VIDEO, SOURCE_AUDIO)
 
 CONF_VIDEO_PLAYER = "video_player"

@@ -62,6 +62,12 @@
       "audio_host_off_at": {
         "default": "mdi:timer-sand"
       },
+      "video_host_named_off_at": {
+        "default": "mdi:timer-sand"
+      },
+      "audio_host_named_off_at": {
+        "default": "mdi:timer-sand"
+      },
       "display_off_at": {
         "default": "mdi:timer-sand"
       },

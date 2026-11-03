@@ -35,6 +35,7 @@ Good to know:
 - At night (with the limit given as the announcement's volume), Music Assistant leaves the ESPHome route for a player that announces through ESPHome: the player is taken out of its group for the announcement and the music pauses instead of ducking, then it rejoins.
 - Music Assistant's own minimum and maximum announcement volume (per player) still apply and may override the night mode's limit.
 - Only announcements through the room player (or the action) are handled by the room: one sent to the Music Assistant player directly bypasses it, as for all of the room's features.
+- With several music players in a room, *the music player* is the one that plays, else the room's *Main music player* ([Room & behaviour](designer.md#room--behaviour)); with several video players, the one that is on.
 - An AV receiver on another input (e.g. the TV's) does not play an announcement of the music player; switching its input for announcements is not part of this (yet).
 
 ---

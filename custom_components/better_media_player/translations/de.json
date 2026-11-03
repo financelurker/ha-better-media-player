@@ -83,6 +83,12 @@
       "audio_host_off_at": {
         "name": "Musik-Player-Hardware aus um"
       },
+      "video_host_named_off_at": {
+        "name": "Video-Player-Hardware ({player}) aus um"
+      },
+      "audio_host_named_off_at": {
+        "name": "Musik-Player-Hardware ({player}) aus um"
+      },
       "display_off_at": {
         "name": "Display aus um"
       },
@@ -227,7 +233,7 @@
         },
         "source": {
           "name": "Player",
-          "description": "Für Medien, die nicht über den Raum-Player ausgewählt wurden; Vorgabe: der Musik-Player."
+          "description": "Für Medien, die nicht über den Raum-Player ausgewählt wurden: audio, video oder die ID einer anderen Quelle; Vorgabe: die Quelle, mit der der Raum startet (falls gewählt), sonst der Musik-Player."
         },
         "follow": {
           "name": "Follow-Me",
@@ -281,7 +287,7 @@
         },
         "source": {
           "name": "Quelle",
-          "description": "Musik oder Video (Standard: was läuft)."
+          "description": "audio, video oder die ID einer anderen Quelle (Standard: was läuft)."
         },
         "keep_source_playing": {
           "name": "Hier weiterspielen",
@@ -493,6 +499,7 @@
       "source_changed": "Quelle gewechselt",
       "source_video": "Auf Video gewechselt",
       "source_audio": "Auf Musik gewechselt",
+      "source_started": "Gewechselt zu {subtype}",
       "source_off": "Quelle aus (kein Player aktiv)",
       "night_mode_on": "Nachtmodus an (Geräte bereit)",
       "night_mode_off": "Nachtmodus aus (Geräte bereit)",
