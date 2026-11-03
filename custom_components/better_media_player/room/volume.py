@@ -280,6 +280,8 @@ class RoomVolume:
         """State change of one of the room's players."""
         if new is None or old is None or self.ctrl._stopped:
             return
+        if self.ctrl.serving(src):
+            return  # (on for a player that runs on it, e.g. Sendspin in Kodi: its volume is that one's)
         self._check_cut(src.player, *([self.ctrl.volume_device.id] if self.ctrl.volume_device else []))
         vol_new, vol_old = _volume(new), _volume(old)
         if self.ctrl.volume_device is not None:
