@@ -8,7 +8,7 @@ const ONLY = process.argv[3] ? process.argv[3].split(',') : null;  // default: a
 const session = JSON.parse(fs.readFileSync('session.json', 'utf8'));
 fs.mkdirSync(OUT, { recursive: true });
 
-const want = (name) => (ONLY ? ONLY.includes(name) : name !== 'dashboard-music');
+const want = (name) => (ONLY ? ONLY.includes(name) : !['dashboard-music', 'panel-live'].includes(name));
 
 async function login(page) {
   await page.goto(BASE + '/');
@@ -198,6 +198,21 @@ async function shotDialog(page, file) {
     await panel.screenshot({ path: `${OUT}/panel-settings.png` });
     await page.setViewportSize({ width: 1400, height: 640 });
     console.log('panel');
+  }
+
+  if (want('panel-live')) {  // after: python scene.py music (the music is paused here)
+    // the live state: the music paused, its idle timeout counting down; a tile's details
+    await page.setViewportSize({ width: 1400, height: 760 });
+    await page.goto(`${BASE}/better-media-player/${session.entry_id}`);
+    await settle(page, 2000);
+    const panel = page.locator('bmp-panel');
+    if (!(await panel.locator('.livesw input').isChecked())) await panel.locator('.livesw input').check();
+    await page.evaluate(() => document.querySelector('home-assistant').hass.callService('media_player', 'media_pause', { entity_id: 'media_player.walkman' }));
+    await page.waitForTimeout(14000);  // (a hold is shown once it lasted 10 s)
+    await panel.locator('g.node', { hasText: 'Speakers' }).click();
+    await page.waitForTimeout(800);
+    await panel.screenshot({ path: `${OUT}/panel-live.png` });
+    console.log('panel-live');
   }
 
   await browser.close();

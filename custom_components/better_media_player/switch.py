@@ -48,11 +48,12 @@ class KeepOnSwitch(ControlEntity, SwitchEntity):
     what is on stays on. Starting still switches on. Stays on until turned off
     or All off (also over a restart).
 
-    Always shown: it is set ahead too (before the room stops)."""
+    Shown while something of the room is on (it is set ahead too, during a film)
+    or it is on."""
 
     @property
     def usable(self) -> bool:
-        return True
+        return self.ctrl.keep_on or self.ctrl.room_active or self.ctrl.power.devices.has_power
 
     @property
     def is_on(self) -> bool:

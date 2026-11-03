@@ -6,9 +6,10 @@
 import { LitElement, html, svg, css, nothing } from "./vendor/lit.js";
 import { translator } from "./i18n.js";
 import { W, H, PASSIVE, SINKS, nodesOf, arrange, unstack, curve, labelSpot, bounds, iconPath } from "./diagram.js";
-import { DEVICE_KINDS, SOURCE_KINDS, addCable, addDevice, addSource, canConnect, directToCables, draftOf, newRoom, payload, same } from "./editor.js";
+import { DEVICE_KINDS, SOURCE_KINDS, addCable, addDevice, addSource, canConnect, directToCables, draftOf, newRoom, payload, removeDevice, removeSource, same } from "./editor.js";
 import { renderInspector, renderOverview } from "./inspector.js";
 import { renderCentral, renderSettings } from "./settings.js";
+import { liveBox, liveRoute, roomLine, roomSentence, tileStatus } from "./live.js";
 
 const PANEL_URL = "better-media-player";
 
@@ -40,6 +41,9 @@ class BmpPanel extends LitElement {
     _armed: { state: true },
     _dialog: { state: true },
     _saving: { state: true },
+    _live: { state: true },
+    _lines: { state: true },
+    _liveOn: { state: true },
   };
 
   constructor() {
@@ -70,6 +74,17 @@ class BmpPanel extends LitElement {
     this._pan = null;
     this._onMove = this._onMove.bind(this);
     this._onUp = this._onUp.bind(this);
+    // the live state: the open room's (room/live), every room's line (rooms/live)
+    this._live = null;
+    this._lines = {};
+    this._liveOn = true;
+    try { this._liveOn = localStorage.getItem("bmp-live") !== "0"; } catch { /* (no storage) */ }
+    this._offset = 0; // Home Assistant's clock against the browser's (s)
+    this._livePaused = false; // a route picked: Live waits for this view (not remembered)
+    this._liveFails = 0; // subscriptions that failed in a row (then tried less often)
+    this._liveSub = null; // {entry_id, unsub: Promise}
+    this._linesSub = null;
+    this._onDeleteKey = this._onDeleteKey.bind(this);
     this._onBeforeUnload = (e) => { if (this._dirtyRooms().length || this._centralDirty()) e.preventDefault(); };
   }
 
@@ -78,9 +93,16 @@ class BmpPanel extends LitElement {
     window.addEventListener("pointermove", this._onMove);
     window.addEventListener("pointerup", this._onUp);
     window.addEventListener("beforeunload", this._onBeforeUnload);
+    this.addEventListener("keydown", this._onDeleteKey);
+    // counting down (only while something counts)
+    this._ticker = setInterval(() => { if (this._counting()) this.requestUpdate(); }, 1000);
   }
 
   disconnectedCallback() {
+    clearInterval(this._ticker);
+    this.removeEventListener("keydown", this._onDeleteKey);
+    this._unsubscribe("_liveSub");
+    this._unsubscribe("_linesSub");
     window.removeEventListener("pointermove", this._onMove);
     window.removeEventListener("pointerup", this._onUp);
     window.removeEventListener("beforeunload", this._onBeforeUnload);
@@ -227,6 +249,7 @@ class BmpPanel extends LitElement {
   }
 
   _go(page, roomId = this._roomId) {
+    this._livePaused = false;
     this._page = page;
     this._roomId = roomId;
     this._selected = null;
@@ -256,6 +279,78 @@ class BmpPanel extends LitElement {
     return `${this._t(`source.${s.id}`)} · ${this._sourceName(s)}`;
   }
 
+  // ------------------------------------------------------------ live state
+
+  _serverNow() {
+    return Date.now() / 1000 + this._offset;
+  }
+
+  _counting() {
+    const live = this._live;
+    // (a CEC wait comes from Home Assistant every 2 s: no need to count it here)
+    return (live?.loaded && (Object.values(live.nodes).some((n) => n.off_at) || Object.values(live.sources).some((s) => s.hold_end)))
+      || Object.values(this._lines).some((l) => l.off_at);
+  }
+
+  _unsubscribe(key) {
+    const sub = this[key];
+    this[key] = null;
+    sub?.unsub.then((unsub) => unsub()).catch(() => {});
+  }
+
+  _subscribe(key, msg, onMessage) {
+    const unsub = this.hass.connection.subscribeMessage((m) => {
+      if (this[key]?.unsub !== unsub) return; // (a late message of one given up)
+      this._liveFails = 0;
+      if (m.now != null) this._offset = m.now - Date.now() / 1000;
+      onMessage(m);
+    }, msg);
+    // failed (e.g. an older integration): tried again later, less often each time
+    unsub.catch(() => {
+      if (this[key]?.unsub !== unsub) return;
+      this._liveFails++;
+      setTimeout(() => { if (this[key]?.unsub === unsub) { this[key] = null; this.requestUpdate(); } }, Math.min(60000, 2000 * 2 ** this._liveFails));
+    });
+    this[key] = { entry_id: msg.entry_id ?? null, unsub };
+  }
+
+  // the subscriptions follow what is shown: the open room's while its drawing is
+  // shown with "Live" on, every room's line while the panel is open
+  _syncLive() {
+    if (!this.hass?.connection || !this._config) return;
+    if (!this._linesSub) this._subscribe("_linesSub", { type: "better_media_player/rooms/live" }, (m) => { this._lines = m.rooms || {}; });
+    const room = this._room;
+    const want = this._liveOn && !this._livePaused && this._page === "room" && this._tab === "wiring" && room && !room.isNew ? room.entry_id : null;
+    if ((this._liveSub?.entry_id ?? null) === want) return;
+    this._unsubscribe("_liveSub");
+    this._live = null;
+    if (want) this._subscribe("_liveSub", { type: "better_media_player/room/live", entry_id: want }, (m) => { this._live = { ...m, entry_id: want }; });
+  }
+
+  // the live state for this room's drawing (none: Live off, a route picked, a
+  // cable being drawn, its setup changed and not saved)
+  _liveFor(room) {
+    if (!this._liveOn || this._livePaused || this._source || this._armed || !room || room.isNew || this._live?.entry_id !== room.entry_id) return null;
+    if (this._setupChanged(room)) return null;
+    return this._live;
+  }
+
+  // the switch: remembered in the browser
+  _setLive(on) {
+    this._liveOn = on;
+    this._livePaused = false;
+    if (on) this._source = null;
+    try { localStorage.setItem("bmp-live", on ? "1" : "0"); } catch { /* (no storage) */ }
+  }
+
+  async _act(room, action) {
+    try {
+      await this.hass.callWS({ type: "better_media_player/room/act", entry_id: room.entry_id, action });
+    } catch (err) {
+      this._notice = err?.message || String(err);
+    }
+  }
+
   // ------------------------------------------------------------ render
 
   render() {
@@ -265,6 +360,7 @@ class BmpPanel extends LitElement {
         <button class="chip" @click=${() => { this._error = null; this._load(); }}>${t("retry")}</button></div>`;
     if (!this._config) return html`<div class="message">${t("loading")}</div>`;
     const room = this._room;
+    this._lv = room ? this._liveFor(room) : null; // (once per drawing)
     return html`
       <div class="app">
         <header class="toolbar">
@@ -330,6 +426,7 @@ class BmpPanel extends LitElement {
         const dirty = r.isNew || !same(r, this._base[r.entry_id]);
         return html`<button class="nav ${this._page === "room" && r.entry_id === this._roomId ? "active" : ""}" @click=${() => this._go("room", r.entry_id)}>
           <b>${r.name}${dirty ? html` <span class="dot" title=${t("save.unsaved")}>•</span>` : nothing}</b>
+          ${(() => { const l = this._liveOn && !r.isNew ? roomLine(this, r, this._lines[r.entry_id]) : null; return l ? html`<span class="rl ${l.cls}"><i></i>${l.text}</span>` : nothing; })()}
           <small>${t("nav.room_sub", this._counts(r))}${r.loaded ? "" : html` · <span class="warn">${t("nav.not_loaded")}</span>`}${errors ? html` · <span class="err">${this._count("errors", errors)}</span>` : nothing}</small>
         </button>`;
       })}
@@ -352,6 +449,7 @@ class BmpPanel extends LitElement {
       </section>
       ${this._tab === "wiring" ? html`<section class="inspector">
         ${this._selected ? html`<button class="close" title=${t("close")} aria-label=${t("close")} @click=${() => { this._selected = null; }}>×</button>` : nothing}
+        ${this._selected?.type === "node" && this._lv ? liveBox(this, room, this._lv, this._selected.id) : nothing}
         ${this._selected ? renderInspector(this, room) : renderOverview(this, room)}</section>` : nothing}
     `;
   }
@@ -364,12 +462,17 @@ class BmpPanel extends LitElement {
 
   _renderSources(room) {
     const t = this._t;
+    const live = !room.isNew;
+    const pick = (id) => { this._source = id; if (live) this._livePaused = true; };
     return html`<div class="sources">
+      ${live ? html`<label class="livesw" title=${t("live.switch_hint")}>
+        <input type="checkbox" role="switch" .checked=${this._liveOn && !this._livePaused} @change=${(e) => this._setLive(e.target.checked)}>
+        ${this._lv ? html`<span class="livedot"></span>` : nothing}<span>${t("live.switch")}</span></label>` : nothing}
       <span class="lbl">${t("routes.label")}</span>
       ${room.sources.filter((s) => s.player).map(
-        (s) => html`<button class="chip" aria-pressed=${String(this._source === s.id)} @click=${() => { this._source = s.id; }}>${this._sourceLabel(s)}</button>`
+        (s) => html`<button class="chip" aria-pressed=${String(!this._lv && this._source === s.id)} @click=${() => pick(s.id)}>${this._sourceLabel(s)}</button>`
       )}
-      <button class="chip" aria-pressed=${String(!this._source)} @click=${() => { this._source = null; }}>${t("routes.all")}</button>
+      <button class="chip" aria-pressed=${String(!this._lv && !this._source)} @click=${() => pick(null)}>${t("routes.all")}</button>
       <button class="btn small add" @click=${() => { this._dialog = { type: "add" }; }}>+ ${t("add.button")}</button>
       <span class="legend">
         <span><i class="picture"></i>${t("legend.picture")}</span>
@@ -383,16 +486,18 @@ class BmpPanel extends LitElement {
     const t = this._t;
     const nodes = this._tiles(room);
     const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
-    const route = this._source ? room.routes?.[this._source] : null;
-    const onRoute = route ? new Set([this._source, ...route.devices]) : null;
+    const live = this._lv;
+    const inUse = live ? liveRoute(room, live) : null;
+    const route = this._source ? room.routes?.[this._source] : inUse ? room.routes?.[inUse.key] : null;
+    const onRoute = this._source ? (route ? new Set([this._source, ...route.devices]) : null) : inUse ? inUse.tiles : null;
     const v = this._view();
     // direct feeds: a source to a device no cable reaches
     const directs = new Map();
     for (const s of room.sources) {
-      if (this._source && s.id !== this._source) continue;
+      if ((this._source && s.id !== this._source) || (!this._source && inUse && s.id !== inUse.key)) continue;
       for (const d of room.routes?.[s.id]?.direct || []) directs.set(`${s.id}>${d}`, [s.id, d]);
     }
-    const taken = nodes.map((n) => [n.x - 8, n.y - 10, n.x + W + 8, n.y + H + 4]);
+    const taken = nodes.map((n) => [n.x - 8, n.y - 10, n.x + W + 8, n.y + H + (live ? 26 : 4)]);
     const labels = [];
     const feeding = new Set(room.cables.map((c) => c.from)); // tiles a cable leaves
     const cables = room.cables.map((c, i) => {
@@ -413,6 +518,7 @@ class BmpPanel extends LitElement {
       }
       return svg`<path d=${d} class=${cls}></path>
         ${both ? svg`<path d=${d} class="cable sound${dim ? " dim" : ""}" transform="translate(0 4)"></path>` : nothing}
+        ${inUse?.flowing && inUse.cables.has(i) ? svg`<path d=${d} class="flow"></path>` : nothing}
         <path d=${d} class="cable-hit" tabindex="0" role="button" aria-label=${`${t("insp.cable")} ${a.name} → ${b.name}`}
           @click=${(e) => this._select(e, { type: "cable", index: i })}
           @keydown=${(e) => e.key === "Enter" && this._select(e, { type: "cable", index: i })}></path>`;
@@ -422,9 +528,10 @@ class BmpPanel extends LitElement {
         <g id="world" transform="translate(${v.tx} ${v.ty}) scale(${v.k})">
           <g>${[...directs.values()].map(([from, to]) => {
             const a = byId[from], b = byId[to];
-            return a && b ? svg`<path class="cable direct" d=${curve(a.x + W, a.y + H / 2, b.x, b.y + H / 2)}></path>` : nothing;
+            const d = a && b ? curve(a.x + W, a.y + H / 2, b.x, b.y + H / 2) : null;
+            return d ? svg`<path class="cable direct" d=${d}></path>${inUse?.flowing ? svg`<path d=${d} class="flow"></path>` : nothing}` : nothing;
           })}${cables}</g>
-          <g>${nodes.map((n) => this._renderTile(room, n, onRoute && !onRoute.has(n.id), feeding.has(n.id)))}</g>
+          <g>${nodes.map((n) => this._renderTile(room, n, onRoute && !onRoute.has(n.id), feeding.has(n.id), live ? tileStatus(this, room, live, n.id) : null))}</g>
           <g>${labels}</g>
         </g>
       </svg>
@@ -440,7 +547,7 @@ class BmpPanel extends LitElement {
     </div>`;
   }
 
-  _renderTile(room, n, dim, feeds) {
+  _renderTile(room, n, dim, feeds, status = null) {
     const sel = this._selected?.type === "node" && this._selected.id === n.id;
     const passive = PASSIVE.includes(n.kind) || (n.device && !n.device.power);
     const name = n.name.length > 19 ? `${n.name.slice(0, 18)}…` : n.name;
@@ -451,7 +558,7 @@ class BmpPanel extends LitElement {
     const target = this._armed && canConnect(room, this._armed, n.id);
     const errors = (room.problems || []).some((x) => x.error && (x.device === n.id || x.source === n.id));
     return svg`<g class="node${sel ? " sel" : ""}${dim ? " dim" : ""}${passive ? " passive" : ""}${target ? " target" : ""}${errors ? " bad" : ""}" transform="translate(${n.x} ${n.y})"
-        tabindex="0" role="button" aria-label=${n.name}
+        tabindex="0" role="button" aria-label=${status ? `${n.name}: ${status.text}` : n.name}
         @pointerdown=${(e) => this._onDragStart(e, n)}
         @click=${(e) => this._tileClick(e, room, n)}
         @keydown=${(e) => e.key === "Enter" && this._tileClick(e, room, n)}>
@@ -461,6 +568,7 @@ class BmpPanel extends LitElement {
       <text x="46" y="46" class="sub">${sub}</text>
       ${cec ? svg`<g class="badge" transform="translate(${W - 44} -8)"><rect width="36" height="16" rx="7"></rect><text x="18" y="11.5" text-anchor="middle">CEC</text></g>` : nothing}
       ${roomVolume ? svg`<g class="badge vol" transform="translate(8 -8)"><rect width="84" height="16" rx="7"></rect><text x="42" y="11.5" text-anchor="middle">${this._t("insp.room_volume")}</text></g>` : nothing}
+      ${status ? (() => { const max = Math.floor((W + 36 - 28) / 6.1), text = status.text.length > max ? `${status.text.slice(0, max - 1)}…` : status.text; const w = Math.max(48, text.length * 6.1 + 28); return svg`<g class="pill ${status.cls}" transform="translate(${(W - w) / 2} ${H + 6})"><rect width=${w} height="18" rx="9"></rect><circle cx="11" cy="9" r="3.5"></circle><text x="20" y="12.8">${text}</text><title>${status.text}</title></g>`; })() : nothing}
       ${n.kind !== "player" ? svg`<circle class="port" cx="0" cy=${H / 2} r="6"></circle>` : nothing}
       ${feeds || !SINKS.includes(n.kind) || armed
         ? svg`<circle class="port out${armed ? " armed" : ""}" cx=${W} cy=${H / 2} r="7" tabindex="0" role="button" aria-label=${this._t("cable.from", { device: n.name })}
@@ -474,6 +582,15 @@ class BmpPanel extends LitElement {
     const t = this._t;
     const src = room.sources.find((s) => s.id === this._source);
     if (this._armed) return html`<div class="route">${t("cable.armed")}</div>`;
+    const live = this._lv;
+    if (live) {
+      const st = roomSentence(this, room, live);
+      const said = roomSentence(this, room, live, true).text; // (a screen reader: whole minutes, not every second)
+      return html`<div class="route live ${st.cls}"><span class="sr" aria-live="polite">${said}</span><span class="livedot"></span><span aria-hidden="true">${st.text}</span>
+        ${(st.acts || []).length ? html`<span class="acts">${st.acts.map((a) => html`<button class="btn small" @click=${() => this._act(room, a)}>${{ keep_on: t("live.act_keep_on"), release: t("live.act_release"), all_off: t("live.act_all_off") }[a]}</button>`)}</span>` : nothing}</div>`;
+    }
+    if (this._liveOn && !this._source && !room.isNew && this._setupChanged(room))
+      return html`<div class="route live note">${t("live.paused_unsaved")}</div>`;
     if (!src || !room.routes?.[src.id])
       return html`<div class="route">${t("route.pick")}</div>`;
     const r = room.routes[src.id];
@@ -739,6 +856,33 @@ class BmpPanel extends LitElement {
   }
 
   // keys while the drawing has the focus (not across Home Assistant: it has shortcuts of its own)
+  // Del / Backspace: the picked cable, device or player goes (an unsaved change, like
+  // its "Remove" button); not while typing in a field
+  _onDeleteKey(e) {
+    if ((e.key !== "Delete" && e.key !== "Backspace") || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    const room = this._room;
+    const sel = this._selected;
+    if (!room || !sel || this._page !== "room" || this._tab !== "wiring" || this._dialog) return;
+    const typing = e.composedPath().some((el) => el instanceof HTMLElement
+      && (["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName) || el.isContentEditable || el.tagName === "HA-SELECTOR" || el.tagName?.startsWith?.("HA-TEXTFIELD")));
+    if (typing) return;
+    e.preventDefault();
+    this._removeSelected(room, sel);
+  }
+
+  _removeSelected(room, sel) {
+    if (sel.type === "cable") {
+      if (!room.cables[sel.index]) return;
+      this._change(room, () => { room.cables.splice(sel.index, 1); });
+    } else if (room.sources.some((x) => x.id === sel.id)) {
+      this._change(room, () => removeSource(room, sel.id));
+    } else if (room.devices.some((x) => x.id === sel.id)) {
+      this._change(room, () => removeDevice(room, sel.id));
+    } else return;
+    this._selected = null;
+    this.renderRoot.querySelector(".canvas-wrap")?.focus({ preventScroll: true });
+  }
+
   _onKey(e) {
     if (e.target !== e.currentTarget) return;
     const keys = { "+": () => this._zoomBy(1.2), "=": () => this._zoomBy(1.2), "-": () => this._zoomBy(1 / 1.2), 0: () => this._fit(), 1: () => this._zoomBy(1 / this._view().k) };
@@ -779,7 +923,7 @@ class BmpPanel extends LitElement {
     if (!b.width || !b.height) return;
     const box = bounds(this._tiles(room));
     if (!box) return this._setView(40, 40, 1);
-    const w = b.width - 64, h = b.height - 44; // clear of the zoom buttons and the hint
+    const w = b.width - 64, h = b.height - 68; // clear of the zoom buttons, the hint and the tiles' live lines
     const k = Math.max(b.width < 600 ? 0.5 : 0, Math.min(1.2, w / (box.x1 - box.x0), h / (box.y1 - box.y0)));
     // wider than the screen (narrow, not smaller than readable): from the left, the rest by dragging
     const tx = (box.x1 - box.x0) * k > w ? -box.x0 * k : (w - (box.x1 - box.x0) * k) / 2 - box.x0 * k;
@@ -787,6 +931,7 @@ class BmpPanel extends LitElement {
   }
 
   updated() {
+    this._syncLive();
     if (this._page === "room" && this._tab === "wiring" && this._room && !this._view().fitted && this.renderRoot.querySelector(".canvas-wrap")) {
       this._view().fitted = true;
       requestAnimationFrame(() => this._fit());
@@ -963,6 +1108,39 @@ class BmpPanel extends LitElement {
     .clabel text { font-size: 11.5px; font-family: var(--code-font-family, ui-monospace, monospace); fill: var(--bmp-text); }
     .clabel.cec rect { stroke: var(--bmp-cec); }
     .clabel.dim { opacity: .2; }
+    .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    .livesw { display: inline-flex; align-items: center; gap: 6px; padding-right: 12px; margin-right: 4px; border-right: 1px solid var(--bmp-line); color: var(--bmp-muted); cursor: pointer; }
+    .livesw input { width: 16px; height: 16px; margin: 0; accent-color: var(--bmp-primary); }
+    .livedot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--bmp-error); margin-right: 6px; vertical-align: middle; animation: blink 1.6s ease-in-out infinite; }
+    @keyframes blink { 50% { opacity: .25; } }
+    .route.live { color: var(--bmp-text); background: color-mix(in srgb, var(--bmp-primary) 7%, var(--bmp-card)); }
+    .route.live.note { background: color-mix(in srgb, var(--warning-color, #f9a825) 12%, var(--bmp-card)); }
+    .route.live.bad { background: color-mix(in srgb, var(--bmp-error) 9%, var(--bmp-card)); }
+    .route .acts { display: inline-flex; gap: 6px; margin-left: 10px; vertical-align: middle; }
+    .pill rect { fill: var(--bmp-card); stroke: var(--bmp-line); }
+    .pill text { font-size: 11px; fill: var(--bmp-text); font-weight: 500; }
+    .pill circle { fill: var(--bmp-muted); }
+    .pill.off text { fill: var(--bmp-muted); font-weight: 400; }
+    .pill.on circle, .pill.play circle { fill: var(--success-color, #43a047); }
+    .pill.play rect { stroke: var(--success-color, #43a047); }
+    .pill.wait circle { fill: var(--warning-color, #f9a825); animation: blink 1s ease-in-out infinite; }
+    .pill.wait rect { stroke: var(--warning-color, #f9a825); }
+    .pill.down circle { fill: var(--bmp-primary); }
+    .pill.err rect { stroke: var(--bmp-error); } .pill.err circle { fill: var(--bmp-error); } .pill.err text { fill: var(--bmp-error); }
+    .pill.manual rect { stroke: var(--warning-color, #f9a825); } .pill.manual circle { fill: var(--warning-color, #f9a825); }
+    .flow { fill: none; stroke: #fff; stroke-width: 2; stroke-dasharray: 2 14; stroke-linecap: round; opacity: .85; pointer-events: none; animation: flow .9s linear infinite; }
+    @keyframes flow { to { stroke-dashoffset: -16; } }
+    .rl { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; }
+    .rl i, .lv i { width: 7px; height: 7px; border-radius: 50%; background: var(--bmp-muted); display: inline-block; flex: none; }
+    .rl.play i, .rl.on i, .lv.play i, .lv.on i { background: var(--success-color, #43a047); }
+    .rl.wait i, .rl.manual i, .lv.wait i, .lv.manual i { background: var(--warning-color, #f9a825); }
+    .rl.down i, .lv.down i { background: var(--bmp-primary); }
+    .rl.err, .lv.err { color: var(--bmp-error); } .rl.err i, .lv.err i { background: var(--bmp-error); }
+    .livebox { border: 1px solid var(--bmp-line); border-radius: 10px; padding: 10px 12px; margin: 0 32px 16px 0; display: grid; gap: 3px; font-size: 13px; }
+    .livebox .lv { display: inline-flex; align-items: center; gap: 6px; }
+    .livebox b { font-weight: 500; }
+    .livebox small { color: var(--bmp-muted); overflow-wrap: anywhere; }
+    @media (prefers-reduced-motion: reduce) { .flow { display: none; } .livedot, .pill.wait circle { animation: none; } }
     .takeover { border: 1px solid color-mix(in srgb, var(--bmp-primary) 45%, var(--bmp-line)); background: color-mix(in srgb, var(--bmp-primary) 8%, var(--bmp-card)); border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; display: grid; gap: 8px; }
     .takeover p { margin: 0; font-size: 13px; }
     .takeover .btn { justify-self: start; }
@@ -1006,7 +1184,7 @@ class BmpPanel extends LitElement {
       aside { display: flex; gap: 8px; align-items: center; overflow-x: auto; padding: 8px 16px; border-right: 0; border-bottom: 1px solid var(--bmp-line); }
       .side-title { display: none; }
       .nav { flex: 0 0 auto; width: auto; flex-direction: row; padding: 6px 14px; border: 1px solid var(--bmp-line); border-radius: 16px; background: var(--bmp-chip); white-space: nowrap; }
-      .nav small { display: none; }
+      .nav small, .nav .rl { display: none; }
       .nav.active { background: var(--bmp-primary); border-color: var(--bmp-primary); color: #fff; }
       .stage, .stage.settings { display: block; }
       .canvas-wrap { height: 60vh; min-height: 360px; }

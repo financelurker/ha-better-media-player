@@ -47,9 +47,14 @@ async def async_setup_entry(
 OFF_AT = "_off_at"
 
 
-class OffAtSensor(BetterMediaPlayerEntity, SensorEntity):
+class OffAtSensor(ControlEntity, SensorEntity):
     """When a device (or a player's hardware plug) goes off after its run-down;
-    unknown while none is planned (needed, off, kept on, automatic off)."""
+    unknown while none is planned (needed, off, kept on, automatic off). Shown
+    only while one is planned."""
+
+    @property
+    def usable(self) -> bool:
+        return self._key in self.ctrl.run_down_at
 
     _attr_device_class = SensorDeviceClass.TIMESTAMP
 

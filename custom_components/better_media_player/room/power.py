@@ -52,6 +52,7 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 HOSTS = (ROLE_VIDEO_HOST, ROLE_AUDIO_HOST)
+PLAYS, HOLD = "plays:", "hold:"  # why a node is needed (RoomPower.reasons)
 
 
 def edges_of(options: dict) -> list[Edge]:
@@ -219,11 +220,11 @@ class RoomPower:
 
     def needed(self, node: RoomNode) -> bool:
         """Demanded right now."""
-        return self._needed(node, False)
+        return bool(self.reasons(node))
 
     def needed_playing(self, node: RoomNode) -> bool:
         """Needed by more than a player that does not play (one that plays, a wake, …)."""
-        return self._needed(node, True)
+        return any(not r.startswith(HOLD) for r in self.reasons(node))
 
     def hold_end(self, node: RoomNode) -> float | None:
         """When a needed node goes off: only players that do not play need it (the
@@ -231,7 +232,7 @@ class RoomPower:
         if not self.needed(node):
             return None
         ctrl = self.ctrl
-        if self._needed(node, True):
+        if self.needed_playing(node):
             return None  # needed by more than a hold
         # (no end: no idle timeout, kept on, automatic power off – for every player alike)
         ends = [e for s in node.sources if (src := ctrl.sources.get(s)) is not None and src.in_use and (e := ctrl.hold_end(src)) is not None]
@@ -240,27 +241,31 @@ class RoomPower:
         end = max(ends)
         return end + self.run_down(node) if node.device is None else end
 
-    def _needed(self, node: RoomNode, playing: bool) -> bool:
-        """playing: needed without the holds (a player that does not play)."""
+    def reasons(self, node: RoomNode) -> list[str]:
+        """Why the node is needed right now (none: it is not): "plays:<source>",
+        "hold:<source>" (it does not play, its idle timeout runs), "wake",
+        "announce", "prewarm", "shutdown:<source>" (a player's plug while the
+        player shuts down), "restart:<source>" (its player has not reported yet)."""
         ctrl = self.ctrl
         if not ctrl.night.enabled(node):
-            return False  # night mode: e.g. no subwoofer
+            return []  # night mode: e.g. no subwoofer
+        out: list[str] = []
         if ctrl.wake.holds(node):
-            return True  # snoozed: the room stays ready
+            out.append("wake")  # snoozed: the room stays ready
         if ctrl.announce.holds(node):
-            return True  # an announcement plays
+            out.append("announce")
         if ctrl.follow.prewarm and not ctrl.quiet and self.prewarms(node):
-            return True
+            out.append("prewarm")
         for s in node.sources:
             if (src := ctrl.sources.get(s)) is None:
                 continue
-            if src.in_use and (not playing or src.hold_since is None):  # (playing: it plays)
-                return True
+            if src.in_use:
+                out.append(f"{PLAYS if src.hold_since is None else HOLD}{s}")
             if node.device is None and self.devices.node_on(node) and ctrl.player_shutting_down(src):
-                return True  # a player's plug: not while the player is still on
+                out.append(f"shutdown:{s}")  # a player's plug: not while the player is still on
             if self.devices.node_on(node) and ctrl.not_reported(src):
-                return True  # (after a restart: kept until its player reported)
-        return False
+                out.append(f"restart:{s}")  # (after a restart: kept until its player reported)
+        return out
 
     def prewarms(self, node: RoomNode) -> bool:
         """Follow me prewarms the music's sound devices and the music player's plug."""

@@ -437,6 +437,50 @@ class DeviceGroup:
             if self.kind(entity_id) == "plug" and entity_id not in needed:
                 await self._switch(entity_id, False, force)
 
+    # ------------------------------------------------------------------- live
+
+    def live(self, node: Node, now: float) -> dict:
+        """What the node is doing, for a view (the panel's live state): on, being
+        brought up, waiting (for HDMI-CEC, for its standby, for its devices to
+        go off), held off, its input, its entities' states."""
+        cec = [
+            {"entity": e, "on": on, "left": max(0.0, round(self.control_of(e).timeout - (now - since), 1)),
+             "fallback": self.control_of(e).fallback}
+            for e, (on, since) in self._expected.items()
+            if e in node.entities
+        ]
+        standby = None
+        if node.stop_since is not None and self.node_on(node):
+            values = [_float(self.hass.states.get(e)) for e in node.power or []]
+            standby = {"since": node.stop_since, "watts": max((v for v in values if v is not None), default=None)}
+        wish = self._inputs.get(node.key)
+        entity = node.inputs.entity if node.inputs else None
+        return {
+            "on": self.node_on(node),
+            "starting": node.key in self._starting,
+            "cec": cec,
+            "standby": standby,
+            "devices_off": node.devices_off_since is not None and self.node_on(node),
+            "held": sorted(e for e in node.entities if e in self.held),
+            "input": None if wish is None else {
+                "wanted": wish.target,
+                "current": self.input_of(node),
+                "mode": wish.mode.value,
+                "state": "manual" if wish.manual else "failed" if wish.failed else "done" if wish.done
+                else "choosing" if wish.sent_at is not None else "waiting",
+                "entity": entity,
+            },
+            "entities": {
+                e: {
+                    "kind": self.kind(e),
+                    "state": (st.state if (st := self.hass.states.get(e)) is not None else None) if self.kind(e) != "action" else ("on" if self.is_on(e) else "off"),
+                    "on": self.is_on(e),
+                }
+                for e in node.entities
+            },
+            "power": {e: _float(self.hass.states.get(e)) for e in node.power or []},
+        }
+
     # ----------------------------------------------------------------- inputs
 
     def want_inputs(self, key: str | None, wanted: Mapping[str, tuple[str, Mode]]) -> None:

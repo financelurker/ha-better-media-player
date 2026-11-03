@@ -459,3 +459,22 @@ async def test_failed_central_settings_use_the_defaults(hass, home, freezer):
     await _music(hass, home, freezer)
     await tick(hass, freezer, 2)
     assert PRESET in _shown(hass)
+
+
+async def test_keep_on_and_the_off_times_only_when_they_matter(hass, home, freezer):
+    keep_on, speakers_off_at = "switch.living_room_keep_on", "sensor.living_room_speakers_off_at"
+    await setup_room(hass)
+    await tick(hass, freezer, 5)
+    assert _hidden(hass, keep_on) and _hidden(hass, speakers_off_at), "nothing on"
+    await _music(hass, home, freezer)
+    assert not _hidden(hass, keep_on), "set ahead during playback"
+    assert _hidden(hass, speakers_off_at), "it plays: no off planned"
+    await _music(hass, home, freezer, "paused")
+    await tick(hass, freezer, 15)
+    assert not _hidden(hass, speakers_off_at), "paused: its off time"
+    await hass.services.async_call("button", "press", {"entity_id": ALL_OFF}, blocking=True)
+    await tick(hass, freezer, 10)
+    assert _hidden(hass, keep_on) and _hidden(hass, speakers_off_at)
+    await hass.services.async_call("switch", "turn_on", {"entity_id": keep_on}, blocking=True)
+    await tick(hass, freezer, 10)
+    assert not _hidden(hass, keep_on), "on: shown (to turn it off)"

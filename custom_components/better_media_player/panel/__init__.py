@@ -2,7 +2,7 @@
 
 The panel is a web component (frontend/, Lit shipped with the integration: it
 works without internet). It reads and writes through the websocket commands in
-ws.py, where rooms are also set up and changed. It is registered only where Home Assistant's frontend runs; without it
+ws.py, where rooms are also set up and changed; live.py sends what the rooms do. It is registered only where Home Assistant's frontend runs; without it
 (tests) there is nothing to show, and the integration works the same.
 """
 
@@ -13,6 +13,7 @@ from pathlib import Path
 from homeassistant.core import HomeAssistant
 
 from ..const import DOMAIN, PANEL_URL
+from .live import async_setup_live
 from .ws import async_setup_ws
 
 PANEL_TITLE = "Better Media Player"
@@ -24,6 +25,7 @@ FRONTEND = Path(__file__).parent.parent / "frontend"
 
 async def async_setup_panel(hass: HomeAssistant, version: str) -> None:
     async_setup_ws(hass)
+    async_setup_live(hass)
     if "frontend" not in hass.config.components or hass.http is None:
         return
     from homeassistant.components import panel_custom  # noqa: PLC0415 (needs the frontend)
