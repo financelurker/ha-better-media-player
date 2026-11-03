@@ -1,7 +1,7 @@
 """What the room needs to know about the system behind one of its players.
 
-The room itself only knows its two roles: a video player (needs the display)
-and a music player (may play in groups). What a particular system can do on
+The room itself only knows two kinds of players (any number of each): video
+players (need the picture) and music players (may play in groups). What a particular system can do on
 top, or does differently – when it counts as active, browsing while it is off,
 its own queue or its own play next / add entries, its group players, moving a
 queue – is answered by a backend:
@@ -13,8 +13,8 @@ queue – is answered by a backend:
     └── MusicBackend              the room's music player (groups)
         └── MusicAssistant        music_assistant.py
 
-A player of an unknown system gets the plain VideoBackend / MusicBackend: what
-Home Assistant offers for every media player. Another system is one more
+A player of an unknown system (or a known one used as the other kind) gets the
+plain VideoBackend / MusicBackend: what Home Assistant offers for every media player. Another system is one more
 module with its subclass, listed in _backends() below; the interface is in base.py.
 """
 
@@ -34,7 +34,7 @@ def _backends() -> list[type[PlayerBackend]]:
 
 
 def backend_for(hass: HomeAssistant, entity_id: str | None, role: str) -> PlayerBackend:
-    """The backend of a player in this role (the plain one of the role if its system is unknown)."""
+    """The backend of a player of this kind (the plain one of the kind if its system is unknown)."""
     for cls in _backends():
         if cls.role == role and cls.handles(hass, entity_id):
             return cls(hass)

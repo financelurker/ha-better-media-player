@@ -4,7 +4,7 @@
 
 Which media players a room can use, and what a particular system adds.
 
-Any media player can be the room's video or music player. The room then uses what Home Assistant offers for every media player: on, off, play, volume and browsing; a video player counts as active while it is on (also in its menu) and is browsed only while it is on (Home Assistant's media sources stand in while it is off); a music player counts as active while it plays (and holds its devices for the idle timeout after) and can be browsed while it is off (one with an on/off of its own, e.g. Music Assistant's power control: see below); a player in a group is noticed by the group's members, and turning the room off takes it out with `media_player.unjoin`.
+Any media player can be one of the room's video or music players (a room can have several of each). The room then uses what Home Assistant offers for every media player: on, off, play, volume and browsing; a video player counts as active while it is on (also in its menu) and is browsed only while it is on (Home Assistant's media sources stand in while it is off); a music player counts as active while it plays (and holds its devices for the idle timeout after) and can be browsed while it is off (one with an on/off of its own, e.g. Music Assistant's power control: see below); a player in a group is noticed by the group's members, and turning the room off takes it out with `media_player.unjoin`.
 
 What a particular system does on top, or differently, lives in a backend of its own (in `players/`):
 

@@ -6,8 +6,8 @@ What the room does by itself: the power button and sources, the order of the dev
 
 ## Power button and sources
 
-- **On** starts the last used source; the first time after setup that is the video player. The last source survives restarts.
-- **Source** selects video or music explicitly. The other source is stopped (Kodi off, music leaves its group or is paused).
+- **On** starts the player set as *Starts with* ([Room & behaviour](designer.md#room--behaviour)), else the last used one; the first time after setup that is the (first) video player. The last source survives restarts.
+- **Source** selects one of the room's players explicitly (each is a source; a room can have several video and music players). The one before is stopped (a video player off, music leaves its group or is paused).
 - **Off** (or **All off**): leave a Music Assistant group with `media_player.unjoin` (if it was the last member, Music Assistant pauses the group), otherwise stop direct playback; turn the video player off; switch all plugs and devices off in order (a player's hardware plug once the player is off – at most a minute – and its `off_wait`). A player that takes a while to stop does not switch the room back on; only new playback does.
 - **Volume and transport** go to the player that is currently active.
 

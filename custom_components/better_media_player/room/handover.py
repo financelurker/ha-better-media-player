@@ -30,7 +30,7 @@ class RoomHandover:
         if src is None:
             return None
         state = ctrl.player_state(src)
-        if src.key == SOURCE_VIDEO:
+        if src.kind == SOURCE_VIDEO:
             return src if state in GROUP_ACTIVE_STATES else None
         if state in GROUP_ACTIVE_STATES or any(
             ctrl.player_state_of(g) in GROUP_ACTIVE_STATES for g in src.backend.groups_of(src.player)
@@ -52,7 +52,7 @@ class RoomHandover:
         if src is None:
             return "handover_nothing_playing", names
         player = self._name(src.player)
-        target = dest.sources.get(src.key)
+        target = target_of(dest, src)
         if target is None:
             return "handover_no_player", {**names, "player": player}
         if not src.backend.handover_to(target.backend):
@@ -62,7 +62,7 @@ class RoomHandover:
         hub = ctrl.hub
         groups = [
             g for g in src.backend.groups_of(src.player) if hub is None or not hub.follows(g)
-        ] if src.key == SOURCE_AUDIO else []
+        ] if src.kind == SOURCE_AUDIO else []
         if groups:
             # the group plays it, not the player (follow me: it ends, see below)
             return "handover_in_group", {**names, "player": player, "group": ", ".join(self._name(g) for g in groups)}
@@ -86,15 +86,16 @@ class RoomHandover:
         assert dest is not None
         src = self.source(source)
         assert src is not None
-        target = dest.sources[src.key]
+        target = target_of(dest, src)
+        assert target is not None
         _LOGGER.info("%s: handing %s over to %s", ctrl.entry.title, src.key, dest.entry.title)
         hub = ctrl.hub
-        if src.key == SOURCE_AUDIO and hub is not None and any(hub.follows(g) for g in src.backend.groups_of(src.player)):
+        if src.kind == SOURCE_AUDIO and hub is not None and any(hub.follows(g) for g in src.backend.groups_of(src.player)):
             # follow me plays it: it ends, the music goes to dest (the others stop)
-            await dest.async_prepare(src.key)
+            await dest.async_prepare(target.key)
             await hub.async_follow_stop(ctrl, to=dest)
         else:
-            await dest.async_prepare(src.key)
+            await dest.async_prepare(target.key)
             if not await src.backend.handover(src.player, target.player, keep):
                 raise HomeAssistantError(f"{ctrl.entry.title}: could not hand over to {dest.entry.title}")
         # the destination plays at its room volume (night mode, presets)
@@ -102,3 +103,13 @@ class RoomHandover:
         others_in_use = any(ctrl.source_active(s) for s in ctrl.sources.values() if s is not src)
         if not keep and not others_in_use:
             await ctrl.async_turn_off()
+
+
+def target_of(dest: RoomController, src: Source) -> Source | None:
+    """Dest's player for src's playback: the source with the same id, else one of
+    the same kind that can take it over, else one of the same kind (that cannot)."""
+    same = [s for s in dest.sources.values() if s.kind == src.kind]
+    first = dest.sources.get(src.key)
+    if first is not None and first.kind == src.kind and src.backend.handover_to(first.backend):
+        return first
+    return next((s for s in same if src.backend.handover_to(s.backend)), first if first in same else next(iter(same), None))

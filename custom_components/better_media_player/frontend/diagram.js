@@ -16,7 +16,7 @@ export function nodesOf(room, t) {
   const sources = room.sources.map((s) => ({
     id: s.id,
     kind: "player",
-    name: s.name || s.player || t(`source.${s.id}`),
+    name: s.name || s.player || t(`source.${s.kind}`),
     sub: s.player || "",
     source: s,
   }));

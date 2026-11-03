@@ -35,9 +35,9 @@ def integration_version(hass) -> str | None:
 
 def _model(ctrl: RoomController) -> str:
     parts = []
-    if SOURCE_VIDEO in ctrl.sources:
+    if ctrl.of_kind(SOURCE_VIDEO):
         parts.append("Video")
-    if SOURCE_AUDIO in ctrl.sources:
+    if ctrl.of_kind(SOURCE_AUDIO):
         parts.append("Audio")
     return "Room player (" + " + ".join(parts) + ")"
 

@@ -2,8 +2,15 @@
 
 Setup (options, a change reloads the room):
 
-    sources   the players: {"id": "video" | "audio", "player", "host", "onoff", "on_action",
-              "off_action"}; onoff: how the room switches the player itself (SOURCE_ONOFF)
+    sources   the players: {"id", "kind": "video" | "audio", "player", "host", "onoff",
+              "on_action", "off_action"}; any number, one plays at a time. kind: what it
+              needs (video: picture and sound, active while on; audio: sound, active while
+              it plays); without one the id is the kind (rooms up to 4.2: ids video / audio).
+              onoff: how the room switches the player itself (SOURCE_ONOFF)
+    start_source  the source the room starts with (turned on, a wake without one); None:
+              the one used last
+    music_source  follow me's and the announcements' music player while none plays (with
+              several music players); None: the first
     devices   what is switched or passed through: {"id", "kind", "name", "power": {"plugs",
               "devices", "actions": [on, off] | None, "sensors"}, "control": {"on", "off",
               "fallback", "timeout"}, "inputs": {"entity", "actions", "pause"} | None,
@@ -77,10 +84,11 @@ KIND_GIVES: dict[str, frozenset[Signal]] = {
     "speakers": frozenset({Signal.SOUND}),
     "subwoofer": frozenset({Signal.SOUND}),
 }
+OPT_START_SOURCE = "start_source"
+OPT_MUSIC_SOURCE = "music_source"
 NEEDS = {SOURCE_VIDEO: (Signal.PICTURE, Signal.SOUND), SOURCE_AUDIO: (Signal.SOUND,)}
-# ids that are not a device's: the sources and the nodes of their hardware plugs
+# ids no device may have (besides the sources' own and their plugs', host_key)
 RESERVED_IDS = (SOURCE_VIDEO, SOURCE_AUDIO, ROLE_VIDEO_HOST, ROLE_AUDIO_HOST)
-HOST_OF = {SOURCE_VIDEO: ROLE_VIDEO_HOST, SOURCE_AUDIO: ROLE_AUDIO_HOST}
 # how the room switches a player itself (its hardware plug comes before): auto = its
 # own on/off if it offers one, else its own actions; player; actions; none (never)
 SOURCE_ONOFF = ("auto", "player", "actions", "none")
@@ -232,6 +240,23 @@ def inputs_of(device: dict) -> Inputs | None:
 
 def sources_of(options: dict) -> dict[str, dict]:
     return {s["id"]: s for s in options.get(OPT_SOURCES) or [] if s.get("player")}
+
+
+def source_kind(source: dict) -> str:
+    """video or audio (a room up to 4.2: its id)."""
+    kind = source.get("kind") or source["id"]
+    return kind if kind in SOURCES else SOURCE_AUDIO
+
+
+def host_key(source: str) -> str:
+    """The node of a player's hardware plug (video_host, audio_host, <id>_host)."""
+    return f"{source}_host"
+
+
+def taken_ids(options: dict) -> set[str]:
+    """Ids a device cannot have: the sources', their plugs' and the reserved ones."""
+    ids = {s["id"] for s in options.get(OPT_SOURCES) or []}
+    return ids | {host_key(i) for i in ids} | set(RESERVED_IDS)
 
 
 def devices_of(options: dict) -> list[dict]:

@@ -93,6 +93,7 @@ wake:
       selector:
         select:
           translation_key: source
+          custom_value: true
           options:
             - audio
             - video
@@ -160,6 +161,7 @@ handover:
       selector:
         select:
           translation_key: source
+          custom_value: true
           options:
             - audio
             - video

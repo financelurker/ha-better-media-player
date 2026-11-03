@@ -227,7 +227,7 @@
         },
         "source": {
           "name": "Player",
-          "description": "For media not picked through the room player; default: the music player."
+          "description": "For media not picked through the room player: audio, video or another source's id; default: the source the room starts with if one is set, else the music player."
         },
         "follow": {
           "name": "Follow me",
@@ -281,7 +281,7 @@
         },
         "source": {
           "name": "Source",
-          "description": "Music or video (default: what plays)."
+          "description": "audio, video or another source's id (default: what plays)."
         },
         "keep_source_playing": {
           "name": "Keep playing here",
@@ -493,6 +493,7 @@
       "source_changed": "Source changed",
       "source_video": "Switched to video",
       "source_audio": "Switched to music",
+      "source_started": "Switched to {subtype}",
       "source_off": "Source off (no player active)",
       "night_mode_on": "Night mode on (devices up)",
       "night_mode_off": "Night mode off (devices up)",

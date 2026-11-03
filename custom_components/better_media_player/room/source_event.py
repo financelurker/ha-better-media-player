@@ -1,8 +1,8 @@
 """Source changes of a room as an event (and device triggers).
 
 The room's source is the source the room plays or is turned on with:
-- video while the video player is on,
-- music while the music player plays (on its own or in a group that counts
+- a video player while it is on,
+- a music player while it plays (on its own or in a group that counts
   for the room), while it is paused and the room still has power for it, or
   after the room was turned on with music,
 - a source chosen through the room player (or a wake) stays the room's source
@@ -18,7 +18,7 @@ current source's player is unavailable (a dropout is no change); another
 unavailable player (e.g. behind its host plug) counts as off.
 
     better_media_player_source_changed:
-        entity_id, entry_id, room, source (video / audio / None),
+        entity_id, entry_id, room, source (the source's id: video / audio / … / None),
         previous, player, reason (selected / player / off)
 """
 
@@ -102,9 +102,9 @@ class SourceWatch:
             if src.suppressed:
                 continue
             state = ctrl.player_state(src)
-            if src.key == SOURCE_VIDEO and state in _VIDEO_ON:
+            if src.kind == SOURCE_VIDEO and state in _VIDEO_ON:
                 on.append(src.key)
-            elif src.key == SOURCE_AUDIO and state in _AUDIO_PLAYING and ctrl.follow.group_counts(src):
+            elif src.kind == SOURCE_AUDIO and state in _AUDIO_PLAYING and ctrl.follow.group_counts(src):
                 on.append(src.key)
         return on
 
@@ -143,14 +143,13 @@ class SourceWatch:
             return self._held
         if self._fresh_request() is not None and self._usable(self._requested[0]):
             return self._requested[0]  # turned on with it (e.g. music, not playing yet)
-        audio = ctrl.sources.get(SOURCE_AUDIO)
-        if (
-            audio is not None
-            and ctrl.player_state(audio) == MediaPlayerState.PAUSED
-            and self._announced in (SOURCE_AUDIO, _UNSET)  # (also at the first look after a start)
-            and self._usable(SOURCE_AUDIO)
-        ):
-            return SOURCE_AUDIO  # paused: still the room's source while it has power for it
+        for audio in ctrl.of_kind(SOURCE_AUDIO):
+            if (
+                ctrl.player_state(audio) == MediaPlayerState.PAUSED
+                and (self._announced == audio.key or (self._announced is _UNSET and audio is ctrl.music))  # (also at the first look after a start)
+                and self._usable(audio.key)
+            ):
+                return audio.key  # paused: still the room's source while it has power for it
         return None
 
     def _fresh_request(self) -> str | None:

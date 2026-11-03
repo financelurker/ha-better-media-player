@@ -48,13 +48,13 @@ Picking a route (*Show route*) turns Live off; switching it on again shows what 
 
 ## Players, devices and cables
 
-- **+ Add** (above the drawing): a player (video or music; at most one each, a player of the room's area is proposed) or a device: display, AV receiver / soundbar, amplifier, speakers, subwoofer, HDMI switch, mixer, splitter, passive speakers.
+- **+ Add** (above the drawing): a player – a video player (needs picture and sound) or a music player (needs the sound); as many as the room has, a player of the room's area is proposed for the first of each – or a device: display, AV receiver / soundbar, amplifier, speakers, subwoofer, HDMI switch, mixer, splitter, passive speakers.
 - **A cable:** click the right dot of a tile, then the tile it plugs into (Esc cancels). What it carries is proposed from the two ends.
 - **Details:** click a tile or a cable, and they open on the right (× goes back to the room's overview there). Entities and the area are picked with Home Assistant's own selector (search by name, area or ID; only entities that fit the field are offered).
 
 | Details of | What you set |
 |---|---|
-| **A player** | Its entity. *Switched on and off by*: **Automatic** (the player's own on/off if it offers one, e.g. Kodi with your Wake-on-LAN, else its own actions), **Player**, **Actions** (a script or button each), **None** (the room only wakes it by playing). The plug of its hardware, with its waits (after it is on; before it goes off, for the player to shut down). |
+| **A player** | Its entity and ID (`video` and `audio` for the first of each, else `video_2`, `audio_2`, …; it can be changed until the player is saved, then it is fixed: automations use it, e.g. `source:` of `wake`). *Needs*: picture and sound, or sound only (what it is for; the players with the IDs `video` and `audio` keep theirs). *Kind of player*: what its system brings (Kodi, Better Kodi, Music Assistant, or a media player with the basic functions – see [Players of other systems](players.md)). *Switched on and off by*: **Automatic** (the player's own on/off if it offers one, e.g. Kodi with your Wake-on-LAN, else its own actions), **Player**, **Actions** (a script or button each), **None** (the room only wakes it by playing). The plug of its hardware, with its waits (after it is on; before it goes off, for the player to shut down). |
 | **A device** | Name and ID (the ID can be changed until the device is saved, then it is fixed: automations use it, e.g. `set_setting` with `device:`). *Switched* or *Passive*; plugs, devices that switch themselves (a TV, an AV receiver, a remote), own on/off actions, power sensors (for [waiting for standby](room.md#wait-for-standby)); who switches it on and off (BMP, CEC, never). Inputs: via a media player's source list, or an action per input (IR). Its volume, and *Use as the room's volume*. Its settings: wait after on, standby, off at night. |
 | **A cable** | What it carries, the input on the device, who chooses it (BMP, CEC, never); *Insert in between* puts a mixer or a splitter into it. |
 
@@ -65,6 +65,7 @@ Picking a route (*Show route*) turns Live off; switching it on again shows what 
 ![The room's settings in the panel](images/panel-settings.png)
 
 - **Room:** name, area (the room's device's), *Delete room* – at once, after a question: its room player, controls and device go; its devices are not touched.
+- **Players:** *Starts with* – the player the room starts with when it is turned on (and for a wake that names no source); without one, the player used last. *Main music player* (with several music players): follow me and announcements use the music player that plays, else this one.
 - **Room volume:** on the players, or on a device of the room that has a volume.
 - **Follow me:** presence sensors; with them the room takes part.
 - **Behaviour:** the room's settings (night, presets, times, announcements, sleep timer and wake, follow me); its devices' are in their details. All of them: [Reference](reference.md#settings).

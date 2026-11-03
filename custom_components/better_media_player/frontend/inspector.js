@@ -1,7 +1,7 @@
 // The details on the right: a player, a device or a cable of the room's draft, editable.
 
 import { html, nothing } from "./vendor/lit.js";
-import { DOMAINS, PASSIVE, idProblem, insertInto, removeDevice, removeSource, renameId, setHost, setPassive, setVolume } from "./editor.js";
+import { DOMAINS, PASSIVE, SOURCE_KINDS, idProblem, insertInto, removeDevice, removeSource, renameId, setHost, setKind, setPassive, setVolume, sourceIdProblem } from "./editor.js";
 import { checkField, entitiesField, entityField, segField, settingRow, textField } from "./forms.js";
 
 const STANDBY = ["standby", "standby_w", "standby_max"]; // only with power sensors
@@ -62,9 +62,21 @@ function source(p, d, s) {
     : t("onoff.auto_player");
   const hint = { auto: autoText, player: offers === false ? t("onoff.player_cannot") : t("onoff.player"), actions: t("onoff.actions"), none: t("onoff.none") }[how];
   const actions = how === "actions" || (how === "auto" && offers === false);
-  return html`<h2>${p._sourceName(s)}</h2><div class="kind">${t("kind.player")} · ${t(`source.${s.id}`)}</div>
+  const isNew = d.newIds.includes(s.id);
+  const problem = sourceIdProblem(d, s);
+  const system = systemOf(p, s);
+  return html`<h2>${p._sourceName(s)}</h2><div class="kind">${t("kind.player")} · ${t(`source.${s.kind}`)}</div>
     ${problemsOf(p, d, s.id)}
     ${entityField(p, { label: t("insp.entity"), value: s.player, domains: DOMAINS.player, onChange: (v) => v && ch(() => { s.player = v; s.name = p.hass.states[v]?.attributes.friendly_name || null; s.offers_onoff = p._offersOnoff(v); }) })}
+    ${isNew
+      ? textField(p, { id: "f-sid", label: t("insp.id"), value: s.id, mono: true, hint: problem ? t(`problem.${problem}`, { device: s.id }) : t("insp.source_id_new", { id: s.id }),
+          onChange: (v) => ch(() => { const old = s.id; if (!renameId(d, s, v.trim())) p._notice = t("insp.id_taken", { id: v.trim() }); else if (p._selected?.id === old) p._selected = { type: "node", id: s.id }; }) })
+      : html`<div class="field"><span class="lbl">${t("insp.id")}</span><code class="ent">${s.id}</code><small class="muted">${t("insp.source_id_fixed")}</small></div>`}
+    ${SOURCE_KINDS.includes(s.id)
+      ? html`<div class="field"><span class="lbl">${t("insp.needs")}</span><div>${t(`insp.needs_${s.kind}`)}</div><small class="muted">${t("insp.needs_fixed", { id: s.id })}</small></div>`
+      : html`${segField(t("insp.needs"), s.kind, SOURCE_KINDS.map((k) => [k, t(`insp.needs_${k}`)]), (v) => ch(() => setKind(d, s, v)))}
+        <p class="muted hint">${t(`insp.needs_hint_${s.kind}`)}</p>`}
+    ${s.player ? html`<div class="field"><span class="lbl">${t("insp.system")}</span><div>${t(`system.${system}`)}</div><small class="muted">${t(`system.${system}_hint`)}</small></div>` : nothing}
     ${segField(t("onoff.label"), how, [["auto", t("onoff.opt_auto")], ["player", t("onoff.opt_player")], ["actions", t("onoff.opt_actions")], ["none", t("onoff.opt_none")]], (v) => ch(() => { s.onoff = v; }))}
     <p class="muted hint">${hint}</p>
     ${actions ? html`
@@ -74,6 +86,14 @@ function source(p, d, s) {
     ${s.host && s.settings ? html`<div class="settings">
         ${["off_wait", "on_wait"].map((k) => settingRow(p, k, s.settings[k], (v) => ch(() => { s.settings[k] = v; }), { units: p._units }))}</div>` : nothing}
     <hr><button class="btn danger" @click=${() => ch(() => { removeSource(d, s.id); p._selected = null; })}>${t("insp.remove_player")}</button>`;
+}
+
+// what the player's system brings (as the room uses it): Kodi for video, Music Assistant for music
+function systemOf(p, s) {
+  const platform = p.hass.entities?.[s.player]?.platform;
+  if (s.kind === "video" && (platform === "kodi" || platform === "better_kodi")) return platform;
+  if (s.kind === "audio" && platform === "music_assistant") return platform;
+  return "other";
 }
 
 // ------------------------------------------------------------------ a device

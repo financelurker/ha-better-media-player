@@ -15,7 +15,7 @@ Entities, settings and states of a room. `<room>` is the room's part of the enti
 | `binary_sensor.<room>_speakers_needed` | a device for the sound (speakers, receiver, subwoofer, …) is needed right now |
 | `switch.<room>_automatic_power` | off: no automatic switching; commands to the room player still work |
 | `switch.<room>_keep_on` | [keep on](room.md#keep-on): nothing is switched off automatically until it is turned off or *All off* |
-| `sensor.<room>_<device>_off_at` | when the device [goes off](room.md#when-devices-go-off) (the end of the idle timeout once nothing plays); `unknown` while none is planned (also for a device the room never switches off), and then hidden ([dynamic controls](dashboards.md#dynamic-controls)). `<device>` is the device's ID (`display`, `speakers`, …; `video_host` / `audio_host` for a player's hardware plug); passive devices have none |
+| `sensor.<room>_<device>_off_at` | when the device [goes off](room.md#when-devices-go-off) (the end of the idle timeout once nothing plays); `unknown` while none is planned (also for a device the room never switches off), and then hidden ([dynamic controls](dashboards.md#dynamic-controls)). `<device>` is the device's ID (`display`, `speakers`, …; `<player>_host` for a player's hardware plug, e.g. `video_host`, `audio_host`); passive devices have none |
 | `button.<room>_all_off` | same as turning the room player off |
 | `number.<room>_sleep_timer` | sleep timer: minutes left, 0 = off |
 | `button.<room>_sleep_timer_15_min` | sleep timer +15 min (starts one if none runs) |

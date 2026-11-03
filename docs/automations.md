@@ -103,6 +103,7 @@ data:
   fade_minutes: 10          # default 10
   max_duration_minutes: 60  # optional: then the sleep timer fades out and turns the room off
   night_mode: false         # optional: switch the night mode before
+  source: audio             # optional: the player's ID (default: the one the room starts with if set, else the main music player)
 ```
 
 ### Follow me
@@ -123,7 +124,7 @@ target:
   entity_id: media_player.living_room
 data:
   destination: media_player.kitchen
-  source: audio                 # optional: audio or video (default: what plays)
+  source: audio                 # optional: a player's ID, e.g. audio or video (default: what plays)
   keep_source_playing: false    # optional: this room plays on (Better Kodi only)
 ```
 
@@ -181,18 +182,18 @@ data:
 
 ## Source changes
 
-When the room's source changes, the event `better_media_player_source_changed` is fired, e.g. to switch the TV input by IR. The source is `video` while the video player is on, `audio` while the music player plays (also in a group) or is paused while the room still has power for it, or `null` when no player is active any more. A source chosen through the room player (on, source, play, wake) is the room's source from then on, even before something plays (e.g. turned on with music) and during a snooze, until another source plays or the room goes off.
+When the room's source changes, the event `better_media_player_source_changed` is fired, e.g. to switch the TV input by IR. The source is the ID of the player: a video player's while it is on, a music player's while it plays (also in a group) or is paused while the room still has power for it, or `null` when no player is active any more. The first video and music player have the IDs `video` and `audio`; further ones the ID chosen in the panel (e.g. `video_2`, `radio`). A source chosen through the room player (on, source, play, wake) is the room's source from then on, even before something plays (e.g. turned on with music) and during a snooze, until another source plays or the room goes off.
 
 | Data | |
 |---|---|
 | `entity_id`, `entry_id`, `room` | the room player and the room |
-| `source`, `previous` | `video`, `audio` or `null` |
+| `source`, `previous` | the player's ID (`video`, `audio`, …) or `null` |
 | `player` | the player of the new source |
 | `reason` | `selected` (through the room player: source, on, play, wake), `player` (a player took over by itself, e.g. a film cast to Kodi), `off` |
 
 - Fired once the room is ready for it: after the power-on sequence, so the TV already has power (plus its wait after switching on).
 - Only for a stable change: two players at the same time for a moment fire nothing. A pause, new media on the same player, a dropout of the current source's player or a restart of Home Assistant fire nothing either. Another player that is unavailable (e.g. behind its host plug) counts as off.
-- The same as **device triggers** in the automation editor: *Source changed*, *Switched to video*, *Switched to music*, *Source off*.
+- The same as **device triggers** in the automation editor: *Source changed*, *Switched to video*, *Switched to music*, *Switched to …* (one for each further player, by its ID), *Source off*.
 
 ```yaml
 trigger:

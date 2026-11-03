@@ -1,4 +1,5 @@
-"""Device triggers of a room: its source changes (see room/source_event.py), its
+"""Device triggers of a room: its source changes (see room/source_event.py; video
+and audio have a type each, any other source source_started with its id as subtype), its
 night mode (see room/night.py) and its devices' run-down (see room/controller.py)."""
 
 from __future__ import annotations
@@ -40,7 +41,12 @@ TRIGGERS: dict[str, tuple[str, dict[str, Any]]] = {
     "run_down_off": (EVENT_RUN_DOWN, {"type": "off"}),
 }
 
-TRIGGER_SCHEMA = DEVICE_TRIGGER_BASE_SCHEMA.extend({vol.Required(CONF_TYPE): vol.In(TRIGGERS)})
+SOURCE_STARTED = "source_started"  # subtype: the source's id
+CONF_SUBTYPE = "subtype"
+
+TRIGGER_SCHEMA = DEVICE_TRIGGER_BASE_SCHEMA.extend(
+    {vol.Required(CONF_TYPE): vol.In([*TRIGGERS, SOURCE_STARTED]), vol.Optional(CONF_SUBTYPE): str}
+)
 
 
 def _entry_id(hass: HomeAssistant, device_id: str) -> str | None:
@@ -64,8 +70,11 @@ async def async_get_triggers(hass: HomeAssistant, device_id: str) -> list[dict[s
     # from the options: also for a room that is not loaded right now
     sources = set(sources_of(options))
     types = [t for t, (_event, data) in TRIGGERS.items() if data.get("source") in (None, *sources)]
-    return [
-        {CONF_PLATFORM: "device", CONF_DOMAIN: DOMAIN, CONF_DEVICE_ID: device_id, CONF_TYPE: t} for t in types
+    base = {CONF_PLATFORM: "device", CONF_DOMAIN: DOMAIN, CONF_DEVICE_ID: device_id}
+    return [{**base, CONF_TYPE: t} for t in types] + [
+        {**base, CONF_TYPE: SOURCE_STARTED, CONF_SUBTYPE: key}
+        for key in sources_of(options)
+        if key not in (SOURCE_VIDEO, SOURCE_AUDIO)
     ]
 
 
@@ -76,7 +85,10 @@ async def async_attach_trigger(
     trigger_info: TriggerInfo,
 ) -> CALLBACK_TYPE:
     entry_id = _entry_id(hass, config[CONF_DEVICE_ID])
-    event, data = TRIGGERS[config[CONF_TYPE]]
+    if config[CONF_TYPE] == SOURCE_STARTED:
+        event, data = EVENT_SOURCE_CHANGED, {"source": config.get(CONF_SUBTYPE)}
+    else:
+        event, data = TRIGGERS[config[CONF_TYPE]]
     event_config = event_trigger.TRIGGER_SCHEMA(
         {
             event_trigger.CONF_PLATFORM: "event",

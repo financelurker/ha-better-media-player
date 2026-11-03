@@ -142,8 +142,7 @@ class RoomAnnouncer:
             if self.can(current):
                 return current
             return next((s for s in ctrl.sources.values() if s is not current and self.can(s)), None)
-        for key in (SOURCE_AUDIO, SOURCE_VIDEO):
-            src = ctrl.sources.get(key)
+        for src in (ctrl.music, ctrl.video):
             if src is not None and self.can(src):
                 return src
         return None
@@ -163,11 +162,11 @@ class RoomAnnouncer:
                 and not src.backend.groups_of(src.player)
             )
 
-        audio, video = ctrl.sources.get(SOURCE_AUDIO), ctrl.sources.get(SOURCE_VIDEO)
+        audio, video = ctrl.music, ctrl.video
         active = [s for s in ctrl.sources.values() if ctrl.source_active(s)]
         if active:
             current = ctrl.active_source if ctrl.active_source in active else active[0]
-            if current is video and usable(audio) and ctrl.player_state(audio) in _IDLE | {"paused"}:
+            if current.kind == SOURCE_VIDEO and usable(audio) and ctrl.player_state(audio) in _IDLE | {"paused"}:
                 return audio
             return current if usable(current) else None  # (in a group: left alone)
         return next((s for s in (audio, video) if usable(s)), None)
@@ -198,7 +197,7 @@ class RoomAnnouncer:
 
     def film(self, src: Source) -> Source | None:
         """The film that plays while another player announces."""
-        video = self.ctrl.sources.get(SOURCE_VIDEO)
+        video = self.ctrl.video
         if video is None or video is src or not self.ctrl.source_active(video):
             return None
         held = self._film_count > 0  # (paused by an announcement that still runs)
@@ -559,7 +558,7 @@ async def async_announce_rooms(
             alone.append(room)
     tasks = []
     for group, members in by_group.items():
-        players = {r.sources[SOURCE_AUDIO].player for r in members}
+        players = {r.audio_player for r in members}
         listed = set(hass.states.get(group).attributes.get("group_members") or [])
         if listed and listed <= players:
             tasks.append(_announce_group(group, members, media_id, media_type, volume, extra))
@@ -580,7 +579,7 @@ def _playing_group(hass: HomeAssistant, room: RoomController) -> str | None:
     """The playing group whose member announces for the room (only when the
     music player announces and no film plays: the group knows nothing of it)."""
     src = room.announce.choose()
-    if src is None or src.key != SOURCE_AUDIO or room.announce.film(src) is not None:
+    if src is None or src.kind != SOURCE_AUDIO or room.announce.film(src) is not None:
         return None
     for group in src.backend.groups_of(src.player):
         state = hass.states.get(group)
@@ -607,7 +606,7 @@ async def _announce_group(
     data = {**(extra or {})}
     if levels:
         data[ANNOUNCE_VOLUME] = min(levels)
-    players = {r: [r.sources[SOURCE_AUDIO].player] for r in rooms}
+    players = {r: [r.audio_player] for r in rooms}
     for room in rooms:
         room.announce.begin([])
         room.announce.protect(players[room])

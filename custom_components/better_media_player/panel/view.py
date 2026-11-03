@@ -32,7 +32,10 @@ from ..model import (
     PASSIVE_KINDS,
     ROOM_SETTINGS,
     SOURCE_SETTINGS,
+    OPT_MUSIC_SOURCE,
+    OPT_START_SOURCE,
     device_setting,
+    source_kind,
     devices_of,
     shows_picture,
     source_setting,
@@ -111,9 +114,10 @@ def room_view(hass: HomeAssistant, entry: ConfigEntry, data: dict | None, layout
     sources = [
         {
             "id": key,
+            "kind": source_kind(s),
             "player": s["player"],
             "name": _name(hass, s["player"]),
-            "needs": [str(x) for x in NEEDS[key]],
+            "needs": [str(x) for x in NEEDS[source_kind(s)]],
             "host": s.get("host") or None,
             "onoff": s.get("onoff") or "auto",
             # what the player offers (the panel says what "auto" does with it)
@@ -124,7 +128,6 @@ def room_view(hass: HomeAssistant, entry: ConfigEntry, data: dict | None, layout
             "settings": {k: source_setting(data, key, k) for k in SOURCE_SETTINGS} if s.get("host") and data is not None else None,
         }
         for key, s in sources_of(o).items()
-        if key in NEEDS
     ]
     devices = []
     for d in devices_of(o):
@@ -150,6 +153,8 @@ def room_view(hass: HomeAssistant, entry: ConfigEntry, data: dict | None, layout
         "routes": routes_of(sources, devices, cables),
         "volume": dict(o.get(OPT_VOLUME) or {"where": "players"}),
         "occupancy": list(o.get(CONF_OCCUPANCY) or []),
+        "start_source": o.get(OPT_START_SOURCE) or None,
+        "music_source": o.get(OPT_MUSIC_SOURCE) or None,
         "settings": {k: data.get(k, v) for k, v in ROOM_SETTINGS.items()} if data is not None else None,
         "layout": dict(layout or {}),
     }

@@ -173,7 +173,7 @@ def test_what_a_kind_cannot_have_is_left_out():
     }]))
     mixer = setup["devices"][0]
     assert (mixer["power"], mixer["control"], mixer["inputs"], mixer["volume"]) == (None, None, None, None)
-    assert setup["sources"][0] == {"id": "video", "player": KODI, "host": None, "onoff": "auto", "on_action": None, "off_action": None}
+    assert setup["sources"][0] == {"id": "video", "kind": "video", "player": KODI, "host": None, "onoff": "auto", "on_action": None, "off_action": None}
     SETUP_SCHEMA(setup)  # (stored as it is checked)
 
 

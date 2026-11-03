@@ -1,12 +1,15 @@
 // A room's draft in the panel: what can be changed, how it is changed, and what
 // is sent to save it (better_media_player/room/save, room/create). Plain data, no UI.
 
-export const SOURCE_KINDS = ["video", "audio"];
+export const SOURCE_KINDS = ["video", "audio"]; // what a player is for (its needs); any number of each
 export const DEVICE_KINDS = ["display", "receiver", "amp", "speakers", "subwoofer", "switch", "mixer", "splitter"];
 export const PASSIVE = ["mixer", "splitter"];
 export const SOUND_KINDS = ["receiver", "amp", "speakers", "subwoofer"];
 export const ID_PATTERN = /^[a-z][a-z0-9_]{0,31}$/;
 const RESERVED = ["video", "audio", "video_host", "audio_host"];
+export const needsOf = (kind) => (kind === "video" ? ["picture", "sound"] : ["sound"]);
+// ids a device cannot have: the reserved ones, the players' and their plugs'
+const taken = (d) => [...RESERVED, ...d.sources.flatMap((s) => [s.id, `${s.id}_host`])];
 
 // the domains each field takes (as the integration checks them)
 export const DOMAINS = {
@@ -36,6 +39,8 @@ export function draftOf(room) {
     cables: clone(room.cables),
     volume: clone(room.volume),
     occupancy: clone(room.occupancy),
+    start_source: room.start_source ?? null,
+    music_source: room.music_source ?? null,
     settings: room.settings ? clone(room.settings) : null,
     layout: clone(room.layout || {}),
     newIds: [...(room.newIds || [])], // devices not saved yet: their id can still change
@@ -55,6 +60,8 @@ export function newRoom(name, settings) {
     cables: [],
     volume: { where: "players" },
     occupancy: [],
+    start_source: null,
+    music_source: null,
     settings: clone(settings),
     layout: {},
     newIds: [],
@@ -65,7 +72,7 @@ export function newRoom(name, settings) {
 
 // the same as what was loaded (nothing to save)?
 export function same(a, b) {
-  const pick = (d) => JSON.stringify([d.name, d.area_id ?? null, d.sources, d.devices, d.cables, d.volume, d.occupancy, d.settings]);
+  const pick = (d) => JSON.stringify([d.name, d.area_id ?? null, d.sources, d.devices, d.cables, d.volume, d.occupancy, d.start_source ?? null, d.music_source ?? null, d.settings]);
   return pick(a) === pick(b);
 }
 
@@ -91,7 +98,7 @@ export function changedSettings(d, base) {
 // what the integration takes: setup and settings
 export function payload(d, base = null) {
   const sources = d.sources.map((s) => ({
-    id: s.id, player: s.player, host: s.host || null, onoff: s.onoff || "auto",
+    id: s.id, kind: s.kind, player: s.player, host: s.host || null, onoff: s.onoff || "auto",
     on_action: s.on_action || null, off_action: s.off_action || null,
   }));
   const devices = d.devices.map((x) => {
@@ -108,20 +115,43 @@ export function payload(d, base = null) {
   return {
     name: d.name,
     area_id: d.area_id || null,
-    setup: { sources, devices, cables: clone(d.cables), volume: clone(d.volume), occupancy: [...d.occupancy] },
+    setup: {
+      sources, devices, cables: clone(d.cables), volume: clone(d.volume), occupancy: [...d.occupancy],
+      start_source: d.start_source || null, music_source: d.music_source || null,
+    },
     settings: d.loaded ? settings : {},
   };
 }
 
 // --------------------------------------------------------------- players
 
-export function addSource(d, key, player) {
-  d.sources.push({
-    id: key, player, host: null, onoff: "auto", on_action: null, off_action: null,
-    needs: key === "video" ? ["picture", "sound"] : ["sound"], settings: null,
-  });
-  d.sources.sort((a, b) => SOURCE_KINDS.indexOf(a.id) - SOURCE_KINDS.indexOf(b.id));
-  return d.sources.find((s) => s.id === key);
+// a new player of a kind: its id is the kind's (video, audio) while free, else kind_2, …
+export function addSource(d, kind, player) {
+  let id = kind, k = 2;
+  while (taken(d).includes(id) || d.devices.some((x) => x.id === id)) id = `${kind}_${k++}`;
+  const src = {
+    id, kind, player, host: null, onoff: "auto", on_action: null, off_action: null,
+    needs: needsOf(kind), settings: null,
+  };
+  d.sources.push(src);
+  d.sources.sort((a, b) => SOURCE_KINDS.indexOf(a.kind) - SOURCE_KINDS.indexOf(b.kind)); // (stable)
+  d.newIds.push(id);
+  return src;
+}
+
+// what it is for; the players with the ids video and audio keep theirs (automations mean that)
+export function setKind(d, src, kind) {
+  if (SOURCE_KINDS.includes(src.id)) return;
+  src.kind = kind;
+  src.needs = needsOf(kind);
+  if (kind !== "audio" && d.music_source === src.id) d.music_source = null;
+}
+
+export function sourceIdProblem(d, src) {
+  if (!ID_PATTERN.test(src.id) || src.id.endsWith("_host")) return "bad_id";
+  if (RESERVED.includes(src.id) && src.id !== src.kind) return "reserved_id";
+  if (d.sources.filter((x) => x.id === src.id).length > 1 || d.devices.some((x) => x.id === src.id)) return "dup_id";
+  return null;
 }
 
 export function setHost(d, src, plug, defaults) {
@@ -132,19 +162,22 @@ export function setHost(d, src, plug, defaults) {
 export function removeSource(d, key) {
   d.sources = d.sources.filter((s) => s.id !== key);
   d.cables = d.cables.filter((c) => c.from !== key && c.to !== key);
+  if (d.start_source === key) d.start_source = null;
+  if (d.music_source === key) d.music_source = null;
+  d.newIds = d.newIds.filter((x) => x !== key);
 }
 
 // --------------------------------------------------------------- devices
 
 export function proposeId(d, kind) {
   let id = kind, k = 2;
-  while (d.devices.some((x) => x.id === id) || RESERVED.includes(id)) id = `${kind}_${k++}`;
+  while (d.devices.some((x) => x.id === id) || taken(d).includes(id)) id = `${kind}_${k++}`;
   return id;
 }
 
 export function idProblem(d, dev) {
   if (!ID_PATTERN.test(dev.id)) return "bad_id";
-  if (RESERVED.includes(dev.id)) return "reserved_id";
+  if (taken(d).includes(dev.id)) return "reserved_id";
   if (d.devices.filter((x) => x.id === dev.id).length > 1) return "dup_id";
   return null;
 }
@@ -165,11 +198,19 @@ export function addDevice(d, kind, defaults, { passive = false } = {}) {
   return dev;
 }
 
+// a new device's or player's id (fixed once saved)
 export function renameId(d, dev, id) {
   const old = dev.id;
   if (id === old) return true;
-  if (RESERVED.includes(id) || d.devices.some((x) => x !== dev && x.id === id) || d.sources.some((s) => s.id === id)) return false;
+  const isSource = d.sources.includes(dev);
+  const others = [...d.devices, ...d.sources].filter((x) => x !== dev).map((x) => x.id);
+  const hosts = d.sources.filter((s) => s !== dev).map((s) => `${s.id}_host`);
+  if (others.includes(id) || hosts.includes(id) || (RESERVED.includes(id) && !(isSource && id === dev.kind))) return false;
   dev.id = id;
+  if (isSource) {
+    if (d.start_source === old) d.start_source = id;
+    if (d.music_source === old) d.music_source = id;
+  }
   for (const c of d.cables) {
     if (c.from === old) c.from = id;
     if (c.to === old) c.to = id;
@@ -216,14 +257,14 @@ export function defaultSignals(d, from, to) {
   const target = d.devices.find((x) => x.id === to);
   if (target?.kind === "display") return ["picture"];
   if (target && SOUND_KINDS.includes(target.kind)) return ["sound"];
-  if (from === "video") return ["picture", "sound"];
-  if (from === "audio") return ["sound"];
+  const src = d.sources.find((s) => s.id === from);
+  if (src) return needsOf(src.kind);
   const arrives = new Set(d.cables.filter((c) => c.to === from).flatMap((c) => c.signals));
   return arrives.size ? [...arrives].sort() : ["sound"];
 }
 
 export function canConnect(d, from, to) {
-  if (from === to || SOURCE_KINDS.includes(to)) return false;
+  if (from === to || d.sources.some((s) => s.id === to)) return false;
   return !d.cables.some((c) => c.from === from && c.to === to);
 }
 

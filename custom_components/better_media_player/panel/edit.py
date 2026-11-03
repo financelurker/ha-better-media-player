@@ -47,7 +47,11 @@ from ..model import (
     ROOM_SETTINGS,
     SOURCE_ONOFF,
     SOURCE_SETTINGS,
+    OPT_MUSIC_SOURCE,
+    OPT_START_SOURCE,
     check_value,
+    host_key,
+    source_kind,
     power_entities,
     switched_of,
 )
@@ -64,7 +68,8 @@ def _of(domains: list[str]):
 
 SOURCE_SCHEMA = vol.Schema(
     {
-        vol.Required("id"): vol.In([SOURCE_VIDEO, SOURCE_AUDIO]),
+        vol.Required("id"): str,
+        vol.Optional("kind", default=None): vol.Any(None, vol.In([SOURCE_VIDEO, SOURCE_AUDIO])),
         vol.Required("player"): vol.All(cv.entity_id, cv.entity_domain(["media_player"])),
         vol.Optional("host", default=None): vol.Any(None, vol.All(cv.entity_id, cv.entity_domain(SWITCH_DOMAINS))),
         vol.Optional("onoff", default="auto"): vol.In(SOURCE_ONOFF),
@@ -133,6 +138,8 @@ SETUP_SCHEMA = vol.Schema(
         ),
         vol.Optional(CONF_OCCUPANCY, default=list): _of(["binary_sensor"]),
         vol.Optional(CONF_AREA, default=None): vol.Any(None, str),
+        vol.Optional(OPT_START_SOURCE, default=None): vol.Any(None, str),
+        vol.Optional(OPT_MUSIC_SOURCE, default=None): vol.Any(None, str),
     }
 )
 SETTINGS_SCHEMA = vol.Schema(
@@ -147,13 +154,16 @@ SETTINGS_SCHEMA = vol.Schema(
 def clean_setup(setup: dict) -> dict:
     """The setup as it is stored: what a kind cannot have is left out."""
     out = SETUP_SCHEMA(setup)
+    for s in out[OPT_SOURCES]:
+        s["kind"] = source_kind(s)  # (stored, so the id can be anything)
     for d in out[OPT_DEVICES]:
         if d["kind"] in PASSIVE_KINDS:
             d["power"], d["control"], d["inputs"], d["volume"] = None, None, None, None
         if d["inputs"] is not None and not d["inputs"]["entity"] and not d["inputs"]["actions"]:
             d["inputs"] = None
-    if not out[CONF_AREA]:
-        out.pop(CONF_AREA)
+    for key in (CONF_AREA, OPT_START_SOURCE, OPT_MUSIC_SOURCE):
+        if not out[key]:
+            out.pop(key)
     return out
 
 
@@ -185,8 +195,19 @@ def check_room(hass: HomeAssistant, entry_id: str | None, setup: dict, settings:
     if not sources:
         err("no_player")
     keys = [s["id"] for s in sources]
-    if len(set(keys)) != len(keys):
-        err("two_players_of_a_kind")
+    for key in keys:
+        if not re.match(ID_PATTERN, key) or key.endswith("_host"):
+            err("bad_id", device=key)
+        elif keys.count(key) > 1:
+            err("dup_id", device=key)
+    for s in sources:
+        if s["id"] in (SOURCE_VIDEO, SOURCE_AUDIO) and source_kind(s) != s["id"]:
+            err("source_kind_fixed", source=s["id"])  # (its triggers and actions mean that kind)
+    for key in (OPT_START_SOURCE, OPT_MUSIC_SOURCE):
+        if setup.get(key) and setup[key] not in keys:
+            err("source_missing", source=setup[key])
+    if (music := setup.get(OPT_MUSIC_SOURCE)) and any(s["id"] == music and source_kind(s) != SOURCE_AUDIO for s in sources):
+        err("music_source_not_music", source=music)
     players = [s["player"] for s in sources]
     if len(set(players)) != len(players):
         err("same_player", entity=players[0])
@@ -206,7 +227,7 @@ def check_room(hass: HomeAssistant, entry_id: str | None, setup: dict, settings:
     for d in devices:
         if not re.match(ID_PATTERN, d["id"]):
             err("bad_id", device=d["id"])
-        elif d["id"] in RESERVED_IDS:
+        elif d["id"] in RESERVED_IDS or d["id"] in keys or d["id"] in {host_key(k) for k in keys}:
             err("reserved_id", device=d["id"])
         elif ids.count(d["id"]) > 1:
             err("dup_id", device=d["id"])
@@ -274,7 +295,7 @@ def check_room(hass: HomeAssistant, entry_id: str | None, setup: dict, settings:
     by_id = {d["id"]: d for d in devices}
     for key in keys:
         wanted: dict[str, set[str]] = {}
-        for signal in NEEDS[key]:
+        for signal in NEEDS[source_kind(next(s for s in sources if s["id"] == key))]:
             reached, todo = {key}, [key]
             while todo:
                 at = todo.pop()
@@ -306,7 +327,7 @@ def check_room(hass: HomeAssistant, entry_id: str | None, setup: dict, settings:
     # devices on no player's way switch for nothing
     if sources and not any(p["error"] for p in out if p["code"] in ("cycle", "cable_end_missing")):
         routed = set()
-        for r in routes_of([{**s, "needs": [str(x) for x in NEEDS[s["id"]]]} for s in sources], devices, cables).values():
+        for r in routes_of([{**s, "needs": [str(x) for x in NEEDS[source_kind(s)]]} for s in sources], devices, cables).values():
             routed |= set(r["devices"])
         for d in devices:
             if d["id"] not in routed:

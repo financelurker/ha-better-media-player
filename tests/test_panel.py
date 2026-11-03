@@ -264,6 +264,8 @@ def test_panel_texts_exist_in_every_language():
         "choice": tuple(x for spec in SPECS.values() if isinstance(spec, list) for x in spec),
         "problem": tuple(problems),
         "add.player": ("_video", "_audio"),
+        "insp.needs": ("_video", "_audio", "_hint_video", "_hint_audio"),
+        "system": (*(f"{x}{h}" for x in ("kodi", "better_kodi", "music_assistant", "other") for h in ("", "_hint")),),
         "add.kind": tuple(f"_{k}" for k in kinds),
         "insp.passive": ("_mixer", "_splitter"),
         "insp.mode": ("_bmp", "_cec", "_never"),

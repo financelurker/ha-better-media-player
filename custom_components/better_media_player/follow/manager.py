@@ -71,8 +71,6 @@ from ..const import (
     FOLLOW_UNKNOWN,
     FOLLOW_WAITING,
     FOLLOW_WAKING,
-    SOURCE_AUDIO,
-    SOURCE_VIDEO,
     STORAGE_VERSION,
     TICK_SECONDS,
 )
@@ -290,7 +288,7 @@ class FollowManager:
         if room.quiet:
             return "start_quiet", names
         if room.video_active:
-            return "start_video", {**names, "player": self._name(room.sources[SOURCE_VIDEO].player)}
+            return "start_video", {**names, "player": self._name(room.video.player)}
         if room.audio_playing_directly:
             return None
         player = room.audio_player
@@ -673,7 +671,7 @@ class FollowManager:
         player = room.audio_player
         if not self._due(player, f"join:{group}"):
             return True  # MA has not reported the last join yet
-        src = room.sources[SOURCE_AUDIO]
+        src = room.music
         if room.power_controlled(src) and room.player_state(src) == STATE_OFF:
             await room._player(src, SERVICE_TURN_ON)  # its own on/off (e.g. Music Assistant's fake power)
         if keep_volume:
@@ -704,7 +702,7 @@ class FollowManager:
         # stays 'backed' until MA really removed it, so it can never turn into an override
         self.session.leaving.add(room.entry.entry_id)
         self.session.empty_since.pop(room.entry.entry_id, None)
-        if (src := room.sources.get(SOURCE_AUDIO)) is not None:
+        if (src := room.music) is not None:
             room.end_use(src)  # its speakers go off without waiting for the idle timeout
         await self._unjoin(room.audio_player, f"{room.entry.title}: {why}")
 
