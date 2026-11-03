@@ -67,7 +67,7 @@ function source(p, d, s) {
   const system = systemOf(p, s);
   return html`<h2>${p._sourceName(s)}</h2><div class="kind">${t("kind.player")} · ${t(`source.${s.kind}`)}</div>
     ${problemsOf(p, d, s.id)}
-    ${entityField(p, { label: t("insp.entity"), value: s.player, domains: DOMAINS.player, onChange: (v) => v && ch(() => { s.player = v; s.name = p.hass.states[v]?.attributes.friendly_name || null; s.offers_onoff = p._offersOnoff(v); }) })}
+    ${entityField(p, { label: t("insp.entity"), value: s.player, domains: DOMAINS.player, exclude: notOffered(p, d), onChange: (v) => v && ch(() => { s.player = v; s.name = p.hass.states[v]?.attributes.friendly_name || null; s.offers_onoff = p._offersOnoff(v); }) })}
     ${isNew
       ? textField(p, { id: "f-sid", label: t("insp.id"), value: s.id, mono: true, hint: problem ? t(`problem.${problem}`, { device: s.id }) : t("insp.source_id_new", { id: s.id }),
           onChange: (v) => ch(() => { const old = s.id; if (!renameId(d, s, v.trim())) p._notice = t("insp.id_taken", { id: v.trim() }); else if (p._selected?.id === old) p._selected = { type: "node", id: s.id }; }) })
@@ -86,6 +86,34 @@ function source(p, d, s) {
     ${s.host && s.settings ? html`<div class="settings">
         ${["off_wait", "on_wait"].map((k) => settingRow(p, k, s.settings[k], (v) => ch(() => { s.settings[k] = v; }), { units: p._units }))}</div>` : nothing}
     <hr><button class="btn danger" @click=${() => ch(() => { removeSource(d, s.id); p._selected = null; })}>${t("insp.remove_player")}</button>`;
+}
+
+// the media players not offered for a room's player: Better Media Player's own, group
+// players, the follow-me player, what a room has already (players, devices, volume) and
+// players of another area than the room's (one without an area is offered)
+function notOffered(p, d) {
+  const hass = p.hass;
+  const used = new Set([p._central?.follow_player].filter(Boolean));
+  for (const r of Object.values(p._drafts)) {
+    for (const s of r.sources) if (s.player) used.add(s.player);
+    for (const x of r.devices) {
+      for (const e of x.power?.devices || []) used.add(e);
+      if (x.volume) used.add(x.volume);
+      if (x.inputs?.entity) used.add(x.inputs.entity);
+    }
+  }
+  const areaOf = (e) => {
+    const ent = hass.entities?.[e];
+    return ent?.area_id || hass.devices?.[ent?.device_id]?.area_id || null;
+  };
+  return Object.keys(hass.states).filter((e) => {
+    if (!e.startsWith("media_player.")) return false;
+    const st = hass.states[e];
+    if (used.has(e) || hass.entities?.[e]?.platform === "better_media_player") return true;
+    if (st.attributes.mass_player_type === "group" || Array.isArray(st.attributes.entity_id)) return true; // (group players)
+    const area = areaOf(e);
+    return !!(d.area_id && area && area !== d.area_id);
+  });
 }
 
 // what the player's system brings (as the room uses it): Kodi for video, Music Assistant for music

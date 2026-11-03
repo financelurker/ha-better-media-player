@@ -24,10 +24,10 @@ function picked(onChange, multiple) {
   };
 }
 
-function selector(p, { label, value, domains, onChange, hint, multiple }) {
+function selector(p, { label, value, domains, onChange, hint, multiple, exclude }) {
   return html`<div class="field">
     <ha-selector .hass=${p.hass} .label=${label} .helper=${hint} .required=${false}
-      .selector=${{ entity: { multiple, filter: { domain: domains } } }} .value=${value ?? (multiple ? [] : "")}
+      .selector=${{ entity: { multiple, filter: { domain: domains }, ...(exclude?.length ? { exclude_entities: exclude } : {}) } }} .value=${value ?? (multiple ? [] : "")}
       @value-changed=${picked(onChange, multiple)}></ha-selector>
     ${unknown(p, multiple ? value || [] : value ? [value] : [])}
   </div>`;
@@ -40,9 +40,9 @@ function unknown(p, ids) {
 }
 
 // the entities of these domains, for an <input list>
-function options(hass, domains) {
+function options(hass, domains, exclude = []) {
   return Object.keys(hass.states)
-    .filter((id) => domains.includes(id.split(".")[0]))
+    .filter((id) => domains.includes(id.split(".")[0]) && !exclude.includes(id))
     .sort()
     .map((id) => html`<option value=${id}>${hass.states[id].attributes.friendly_name || ""}</option>`);
 }
@@ -52,8 +52,10 @@ export function friendly(hass, id) {
 }
 
 // one entity (or none); onChange(value | null)
-export function entityField(p, { label, value, domains, onChange, hint }) {
-  if (rich(p)) return selector(p, { label, value, domains, onChange, hint, multiple: false });
+// one entity; exclude: entities not offered (the chosen one always is)
+export function entityField(p, { label, value, domains, onChange, hint, exclude = [] }) {
+  exclude = exclude.filter((e) => e !== value);
+  if (rich(p)) return selector(p, { label, value, domains, onChange, hint, multiple: false, exclude });
   const lid = `bmp-list-${++listId}`;
   return html`<div class="field">
     <label class="lbl" for=${lid + "-in"}>${label}</label>
@@ -61,7 +63,7 @@ export function entityField(p, { label, value, domains, onChange, hint }) {
       <input id=${lid + "-in"} list=${lid} .value=${value || ""} placeholder=${p._t("form.choose_entity")} spellcheck="false"
         @change=${(e) => onChange(e.target.value.trim() || null)}>
       ${value ? html`<button class="x" title=${p._t("form.clear")} aria-label=${p._t("form.clear")} @click=${() => onChange(null)}>×</button>` : nothing}
-      <datalist id=${lid}>${options(p.hass, domains)}</datalist>
+      <datalist id=${lid}>${options(p.hass, domains, exclude)}</datalist>
     </div>
     ${value && p.hass.states[value] ? html`<small class="muted">${friendly(p.hass, value)}</small>` : unknown(p, value ? [value] : [])}
     ${hint ? html`<small class="muted">${hint}</small>` : nothing}
