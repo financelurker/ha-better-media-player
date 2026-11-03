@@ -20,6 +20,20 @@ What a particular system does on top, or differently, lives in a backend of its 
 - Turned off (in its app, say): the speakers go off at once.
 - It stays on while it is in a playing or paused group (the group decides) and while its speakers are on or needed (manual mode, a wake's snooze). With automatic power off it is left alone.
 
+## A player that runs on another player or a device
+
+Some players only exist while something else runs: a Sendspin player of Music Assistant as an add-on in Kodi, HEOS on a Denon or Marantz receiver. Set **Runs on** in the player's details (the panel) to that player or device:
+
+- **Starting it:** the player it runs on comes up first – its plug, Kodi woken, or the receiver switched on – then the room waits (start timeout) until this player is there, then it plays.
+- **Its route:** its sound (and picture) goes out through the cables of what it runs on; it has no cables and no plug of its own (the tile sits above, with a dotted line).
+- **Its playing is its own:** while it plays, Kodi's own *playing* (Kodi plays its stream) is its, not a film; if Kodi reports first, the room waits a moment (1 s) for it. Kodi on in its menu while the music is in use is no film either, so the TV stays off.
+- **A film after all:** Kodi playing something of its own (a film chosen in Kodi) for a moment is the film again; so is choosing Kodi through the room player. Kodi turned on by itself, with the music not in use, is a film as ever.
+- **Off:** once it is no longer used (its idle timeout, turned off), Kodi goes off with it – after the sound – and then its plug; a receiver it runs on goes off unless something else needs it.
+- **Choosing it while a film plays:** the film stops, Kodi stays on for it.
+- Its volume is its own player's (Kodi's Sendspin add-on sets Kodi's volume, as set in Music Assistant).
+
+*Tested: simulated only, not yet on real devices.* Jellyfin in Kodi is no player of its own: the Jellyfin add-on plays through Kodi's player (Home Assistant's Jellyfin player exists only per session), so it is Kodi.
+
 Another system is one more module in `players/` with a subclass of `VideoBackend` or `MusicBackend` (`players/base.py`), added to the list in `players/__init__.py` (contributions welcome). Follow me works with Music Assistant only: it needs a group player and a system that can move a queue.
 
 ---

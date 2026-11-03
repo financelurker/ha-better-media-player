@@ -31,6 +31,8 @@ def _source(ctrl: RoomController, src: Source) -> dict[str, Any]:
         "expired": src.expired,
         "going_off": ctrl.player_going_off(src),
         "starting": seq.running and seq.source == src.key,
+        # on for the players that run on it (their playing is theirs)
+        "serving": [g.key for g in ctrl.guests(src)] if ctrl.serving(src) else [],
     }
 
 

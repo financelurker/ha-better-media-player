@@ -86,8 +86,9 @@ class PowerSequence:
                 needed_sources = set()
                 nodes = [n for k in power.on_order if power.needed(n := power.nodes[k])]
 
-            # the players' plugs and what carries the picture before the player, the sound after
-            before_player = [n for n in nodes if n.device is None or n.picture]
+            # the players' plugs and what carries the picture before the player, the sound
+            # after (the device the player runs on before it)
+            before_player = [n for n in nodes if n.device is None or n.picture or (src is not None and n.key == src.runs_on)]
             after_player = [n for n in nodes if n not in before_player]
 
             await power.devices.async_bring_up(before_player, switched)
@@ -95,6 +96,18 @@ class PowerSequence:
             if src is not None and src.key in needed_sources:
                 # one deadline for the whole player start
                 deadline = clock.now() + float(ctrl.setting(CONF_START_TIMEOUT))
+                if (host := ctrl.host_of(src)) is not None:
+                    # first the player it runs on (e.g. Kodi woken), then it is there
+                    if host.host and not await ctrl._wait_until(lambda: ctrl.player_available(host), deadline - clock.now()):
+                        raise _StartFailed(f"{host.player} did not become available")
+                    if not ctrl.source_ready(host):
+                        await ctrl._source_on(host)
+                        if not await ctrl._wait_until(lambda: ctrl.source_ready(host), deadline - clock.now()):
+                            raise _StartFailed(f"{host.player} did not start")
+                if (host is not None or src.runs_on) and not await ctrl._wait_until(
+                    lambda: ctrl.player_available(src), deadline - clock.now()
+                ):
+                    raise _StartFailed(f"{src.player} did not become available")
                 if src.host and not await ctrl._wait_until(
                     lambda: ctrl.player_available(src), deadline - clock.now()
                 ):

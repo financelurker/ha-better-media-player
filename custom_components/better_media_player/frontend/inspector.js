@@ -1,7 +1,7 @@
 // The details on the right: a player, a device or a cable of the room's draft, editable.
 
 import { html, nothing } from "./vendor/lit.js";
-import { DOMAINS, PASSIVE, SOURCE_KINDS, idProblem, insertInto, removeDevice, removeSource, renameId, setHost, setKind, setPassive, setVolume, sourceIdProblem } from "./editor.js";
+import { DOMAINS, PASSIVE, SOURCE_KINDS, hostsFor, idProblem, insertInto, removeDevice, removeSource, renameId, setHost, setKind, setPassive, setRunsOn, setVolume, sourceIdProblem } from "./editor.js";
 import { checkField, entitiesField, entityField, segField, settingRow, textField } from "./forms.js";
 
 const STANDBY = ["standby", "standby_w", "standby_max"]; // only with power sensors
@@ -82,9 +82,11 @@ function source(p, d, s) {
     ${actions ? html`
       ${entityField(p, { label: t("insp.on_action"), value: s.on_action, domains: DOMAINS.action, onChange: (v) => ch(() => { s.on_action = v; }) })}
       ${entityField(p, { label: t("insp.off_action"), value: s.off_action, domains: DOMAINS.action, onChange: (v) => ch(() => { s.off_action = v; }) })}` : nothing}
+    ${runsOnField(p, d, s)}
+    ${s.runs_on ? nothing : html`
     ${entityField(p, { label: t("insp.host"), value: s.host, domains: DOMAINS.plug, hint: t("insp.host_hint"), onChange: (v) => ch(() => setHost(d, s, v, p._config.defaults)) })}
     ${s.host && s.settings ? html`<div class="settings">
-        ${["off_wait", "on_wait"].map((k) => settingRow(p, k, s.settings[k], (v) => ch(() => { s.settings[k] = v; }), { units: p._units }))}</div>` : nothing}
+        ${["off_wait", "on_wait"].map((k) => settingRow(p, k, s.settings[k], (v) => ch(() => { s.settings[k] = v; }), { units: p._units }))}</div>` : nothing}`}
     <hr><button class="btn danger" @click=${() => ch(() => { removeSource(d, s.id); p._selected = null; })}>${t("insp.remove_player")}</button>`;
 }
 
@@ -114,6 +116,24 @@ function notOffered(p, d) {
     const area = areaOf(e);
     return !!(d.area_id && area && area !== d.area_id);
   });
+}
+
+// what the player runs on: its own hardware, another player (Sendspin in Kodi) or a device
+// (HEOS on a receiver); not for one others run on
+function runsOnField(p, d, s) {
+  const t = p._t;
+  if (d.sources.some((g) => g.runs_on === s.id)) return html`<div class="field"><span class="lbl">${t("insp.runs_on")}</span><small class="muted">${t("insp.runs_on_host")}</small></div>`;
+  const hosts = hostsFor(d, s);
+  const name = (x) => (d.sources.includes(x) ? p._sourceName(x) : x.name || t(`kind.${x.kind}`));
+  const on = hosts.find((x) => x.id === s.runs_on);
+  const hint = !on ? t("insp.runs_on_hint") : d.sources.includes(on)
+    ? t("insp.runs_on_player", { host: name(on), player: p._sourceName(s) })
+    : t("insp.runs_on_device", { host: name(on), player: p._sourceName(s) });
+  return html`<div class="field"><label class="lbl" for="f-runs">${t("insp.runs_on")}</label>
+    <select id="f-runs" @change=${(e) => p._change(d, () => setRunsOn(d, s, e.target.value))}>
+      <option value="" ?selected=${!s.runs_on}>${t("insp.runs_on_own")}</option>
+      ${hosts.map((x) => html`<option value=${x.id} ?selected=${x.id === s.runs_on}>${name(x)} · ${d.sources.includes(x) ? t("kind.player") : t(`kind.${x.kind}`)}</option>`)}
+    </select><small class="muted">${hint}</small></div>`;
 }
 
 // what the player's system brings (as the room uses it): Kodi for video, Music Assistant for music

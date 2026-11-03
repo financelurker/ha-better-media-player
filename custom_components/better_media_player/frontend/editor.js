@@ -98,7 +98,8 @@ export function changedSettings(d, base) {
 // what the integration takes: setup and settings
 export function payload(d, base = null) {
   const sources = d.sources.map((s) => ({
-    id: s.id, kind: s.kind, player: s.player, host: s.host || null, onoff: s.onoff || "auto",
+    id: s.id, kind: s.kind, player: s.player, host: s.runs_on ? null : s.host || null, onoff: s.onoff || "auto",
+    runs_on: s.runs_on || null,
     on_action: s.on_action || null, off_action: s.off_action || null,
   }));
   const devices = d.devices.map((x) => {
@@ -160,7 +161,28 @@ export function setHost(d, src, plug, defaults) {
   src.settings = src.host ? src.settings || { ...defaults.sources } : null;
 }
 
+// a player that runs on another player or on a device (null: its own hardware):
+// no plug of its own, no cables of its own (it goes out through what it runs on)
+export function setRunsOn(d, src, id) {
+  src.runs_on = id || null;
+  if (src.runs_on) {
+    src.host = null;
+    src.settings = null;
+    d.cables = d.cables.filter((c) => c.from !== src.id);
+  }
+}
+
+// what a player can run on: another player (not one that runs on something itself)
+// or a switched device
+export function hostsFor(d, src) {
+  return [
+    ...d.sources.filter((s) => s !== src && !s.runs_on),
+    ...d.devices.filter((x) => x.power),
+  ];
+}
+
 export function removeSource(d, key) {
+  for (const s of d.sources) if (s.runs_on === key) s.runs_on = null;
   d.sources = d.sources.filter((s) => s.id !== key);
   d.cables = d.cables.filter((c) => c.from !== key && c.to !== key);
   if (d.start_source === key) d.start_source = null;
@@ -209,6 +231,7 @@ export function renameId(d, dev, id) {
   if (others.includes(id) || hosts.includes(id) || (RESERVED.includes(id) && !(isSource && id === dev.kind))) return false;
   if (isSource && d.devices.some((x) => x.id === `${id}_host`)) return false;
   dev.id = id;
+  for (const s of d.sources) if (s.runs_on === old) s.runs_on = id;
   if (isSource) {
     if (d.start_source === old) d.start_source = id;
     if (d.music_source === old) d.music_source = id;
@@ -227,6 +250,7 @@ export function renameId(d, dev, id) {
 }
 
 export function removeDevice(d, id) {
+  for (const s of d.sources) if (s.runs_on === id) s.runs_on = null;
   d.devices = d.devices.filter((x) => x.id !== id);
   d.cables = d.cables.filter((c) => c.from !== id && c.to !== id);
   if (d.volume.device === id) d.volume = { where: "players" };
@@ -266,7 +290,7 @@ export function defaultSignals(d, from, to) {
 }
 
 export function canConnect(d, from, to) {
-  if (from === to || d.sources.some((s) => s.id === to)) return false;
+  if (from === to || d.sources.some((s) => s.id === to || (s.id === from && s.runs_on))) return false;
   return !d.cables.some((c) => c.from === from && c.to === to);
 }
 

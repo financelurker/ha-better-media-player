@@ -378,5 +378,19 @@
   "system.other_hint": "Basic functions: power, route and inputs, idle timeout, volume, play / pause, its media browser if it has one. No follow me, announcements or handover.",
   "problem.source_kind_fixed": "{source}: the player with this ID keeps what it is for.",
   "problem.source_missing": "The player “{source}” chosen under Room & behaviour is no longer in the room.",
-  "problem.music_source_not_music": "{source} is no music player: it cannot be the main music player."
+  "problem.music_source_not_music": "{source} is no music player: it cannot be the main music player.",
+  "tile.runs_on": "runs on {name}",
+  "route.waits_there": "waits until it is there",
+  "live.serving": "on · for {player}",
+  "insp.runs_on": "Runs on",
+  "insp.runs_on_own": "– its own hardware –",
+  "insp.runs_on_hint": "E.g. a Sendspin player in Kodi, HEOS on a receiver: it only exists while that runs.",
+  "insp.runs_on_player": "Starts: {host} is woken, then the room waits (start timeout) until {player} is there. Its sound goes out through {host}'s cables, its plug is {host}'s. While {player} plays, {host}'s own “playing” is its; {host} on in its menu is no film of its own. When {player} is no longer used, {host} goes off with it (after the sound).",
+  "insp.runs_on_device": "Starts: {host} is switched on, then the room waits (start timeout) until {player} is there. Its sound goes out through {host}'s cables. {host} goes off with it unless something else needs it.",
+  "insp.runs_on_host": "Other players run on it: it runs on its own hardware.",
+  "problem.runs_on_itself": "{source} cannot run on itself.",
+  "problem.runs_on_guest": "{source} runs on {device}, which runs on something itself.",
+  "problem.runs_on_passive": "{source} runs on {device}, which is passive (not switched).",
+  "problem.runs_on_missing": "{source} runs on “{device}”, which is no longer in the room.",
+  "problem.guest_cable": "{source} runs on something: its sound and picture go out through that one's cables, not its own."
 }

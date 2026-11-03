@@ -73,6 +73,7 @@ SOURCE_SCHEMA = vol.Schema(
         vol.Required("player"): vol.All(cv.entity_id, cv.entity_domain(["media_player"])),
         vol.Optional("host", default=None): vol.Any(None, vol.All(cv.entity_id, cv.entity_domain(SWITCH_DOMAINS))),
         vol.Optional("onoff", default="auto"): vol.In(SOURCE_ONOFF),
+        vol.Optional("runs_on", default=None): vol.Any(None, str),
         vol.Optional("on_action", default=None): _ACTION,
         vol.Optional("off_action", default=None): _ACTION,
     }
@@ -156,6 +157,10 @@ def clean_setup(setup: dict) -> dict:
     out = SETUP_SCHEMA(setup)
     for s in out[OPT_SOURCES]:
         s["kind"] = source_kind(s)  # (stored, so the id can be anything)
+        if s["runs_on"]:
+            s["host"] = None  # (its plug is the one of what it runs on)
+        else:
+            s.pop("runs_on")
     for d in out[OPT_DEVICES]:
         if d["kind"] in PASSIVE_KINDS:
             d["power"], d["control"], d["inputs"], d["volume"] = None, None, None, None
@@ -203,6 +208,24 @@ def check_room(hass: HomeAssistant, entry_id: str | None, setup: dict, settings:
     for s in sources:
         if s["id"] in (SOURCE_VIDEO, SOURCE_AUDIO) and source_kind(s) != s["id"]:
             err("source_kind_fixed", source=s["id"])  # (its triggers and actions mean that kind)
+    # a player that runs on another player or a device
+    device_ids = {d["id"]: d for d in devices}
+    by_key = {s["id"]: s for s in sources}
+    for s in sources:
+        if not (on := s.get("runs_on")):
+            continue
+        if on == s["id"]:
+            err("runs_on_itself", source=s["id"])
+        elif on in by_key:
+            if by_key[on].get("runs_on"):
+                err("runs_on_guest", source=s["id"], device=on)
+        elif on in device_ids:
+            if device_ids[on]["power"] is None:
+                err("runs_on_passive", source=s["id"], device=on)
+        else:
+            err("runs_on_missing", source=s["id"], device=on)
+        if any(c["from"] == s["id"] for c in cables):
+            err("guest_cable", source=s["id"])
     for key in (OPT_START_SOURCE, OPT_MUSIC_SOURCE):
         if setup.get(key) and setup[key] not in keys:
             err("source_missing", source=setup[key])
