@@ -66,7 +66,8 @@ export function liveRoute(room, live) {
   if (!pick) return null;
   const [key, s] = pick;
   const r = room.routes?.[key];
-  return r ? { key, flowing: s.playing, cables: new Set(r.cables), tiles: new Set([key, ...r.devices]), direct: new Set(r.direct) } : null;
+  const on = room.sources.find((x) => x.id === key)?.runs_on; // (the player it runs on is part of it)
+  return r ? { key, flowing: s.playing, cables: new Set(r.cables), tiles: new Set([key, ...(on ? [on] : []), ...r.devices]), direct: new Set(r.direct) } : null;
 }
 
 // the line under a tile: {cls, text} (cls: on, play, wait, down, off, err, manual)

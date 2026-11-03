@@ -492,7 +492,8 @@ class BmpPanel extends LitElement {
     const live = this._lv;
     const inUse = live ? liveRoute(room, live) : null;
     const route = this._source ? room.routes?.[this._source] : inUse ? room.routes?.[inUse.key] : null;
-    const onRoute = this._source ? (route ? new Set([this._source, ...route.devices]) : null) : inUse ? inUse.tiles : null;
+    const host = room.sources.find((s) => s.id === this._source)?.runs_on; // (what the picked player runs on is part of its route)
+    const onRoute = this._source ? (route ? new Set([this._source, ...(host ? [host] : []), ...route.devices]) : null) : inUse ? inUse.tiles : null;
     const v = this._view();
     // direct feeds: a source to a device no cable reaches
     const directs = new Map();
