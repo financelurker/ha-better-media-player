@@ -129,3 +129,74 @@ async def test_cec_off_without_fallback_is_told(hass, home, freezer, caplog):
     live = entry.runtime_data.power.devices.live(node, 0)
     assert live["stuck"] == [LG]
     assert live["cec"] == [], "no longer waits for CEC"
+
+
+async def test_a_plug_that_does_not_come_on_is_given_up_without_a_loop(hass, home, freezer, caplog):
+    from .conftest import TV
+
+    hass.states.async_set(LG, "off")
+    entry = await setup_room(hass, display=[TV])
+    home.kodi_boots = True
+    handle = home.handle
+
+    def deaf(domain, service, entity_id, data, context):
+        if entity_id == TV and service == "turn_on":
+            home.calls.append((domain, service, entity_id))
+            return True
+        return handle(domain, service, entity_id, data, context)
+
+    home.handle = deaf
+    hass.async_create_task(_turn_on(hass))
+    await tick(hass, freezer, 10 * 60, step=5)
+    ctrl = entry.runtime_data
+    assert len(_calls(home, TV, "turn_on")) == COMMAND_TRIES
+    assert TV in ctrl.power.held
+    assert not ctrl.sequence.running, "no start over and over"
+    assert len(_warnings(caplog, "was not switched on after")) == 1
+
+
+async def test_a_tv_booting_behind_its_plug_is_not_given_up(hass, home, freezer):
+    """It reports off (not unavailable) while it boots and ignores turn_on meanwhile."""
+    from homeassistant.util import dt as dt_util
+
+    from .conftest import TV
+
+    hass.states.async_set(LG, "off")
+    entry = await setup_room(hass, display=[TV, LG])
+    home.kodi_boots = True
+    home.lg_obeys = False
+    hass.async_create_task(_turn_on(hass))
+    start = dt_util.utcnow()
+
+    def boot():
+        if (dt_util.utcnow() - start).total_seconds() >= 100:
+            home.lg_obeys = True
+
+    await tick(hass, freezer, 300, step=5, between=boot)
+    assert hass.states.get(LG).state == "on"
+    assert LG not in entry.runtime_data.power.held
+
+
+async def test_a_forced_repeat_is_no_new_try(hass, home, freezer):
+    hass.states.async_set(LG, "off")
+    entry = await setup_room(hass, display=[LG])
+    home.lg_obeys = False
+    devices = entry.runtime_data.power.devices
+    for _ in range(5):
+        await devices._switch(LG, True, force=True)
+    assert len(_calls(home, LG, "turn_on")) == 5
+    assert devices._tries[LG][1] == 1
+    assert LG not in entry.runtime_data.power.held
+
+
+async def test_a_late_report_ends_the_hold(hass, home, freezer):
+    hass.states.async_set(LG, "off")
+    entry = await setup_room(hass, display=[LG])
+    home.kodi_boots = True
+    home.lg_obeys = False
+    await _turn_on(hass)
+    await tick(hass, freezer, 3 * 60, step=5)
+    assert LG in entry.runtime_data.power.held
+    hass.states.async_set(LG, "on")  # came on after all
+    await hass.async_block_till_done()
+    assert LG not in entry.runtime_data.power.held

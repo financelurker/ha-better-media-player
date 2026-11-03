@@ -74,9 +74,9 @@ class DeviceGroup:
         # or did not become available)
         self.held: set[str] = set()
         self._last_command: dict[str, tuple[bool, float]] = {}
-        # commands sent without effect per entity (direction, count); above
-        # COMMAND_TRIES: given up until the next start or the other direction
-        self._tries: dict[str, tuple[bool, int]] = {}
+        # commands sent without effect per entity (direction, count, when counted
+        # last); above COMMAND_TRIES: given up until the next start or the other direction
+        self._tries: dict[str, tuple[bool, int, float]] = {}
         # recent commands per entity, to recognise late device reports as our own
         self._recent_commands: dict[str, deque[tuple[bool, float]]] = {}
         # CEC: power states expected from someone else, since when
@@ -181,7 +181,7 @@ class DeviceGroup:
         """Everything of the node is on (a device behind a plug only once it is there
         and on; something unavailable otherwise does not hold it up)."""
         plugs = self.plugs_of(node)
-        return all(self.is_on(e) or self._pending_on(e) or not self.is_available(e) for e in plugs) and all(
+        return all(self.is_on(e) or self._pending_on(e) or not self.is_available(e) or e in self.held for e in plugs) and all(
             self.is_on(e)
             or self._pending_on(e)
             or e in self.held
@@ -243,7 +243,7 @@ class DeviceGroup:
     def _give_up(self, entity_id: str, on: bool, how: str) -> None:
         if self.given_up(entity_id, on):
             return
-        self._tries[entity_id] = (on, COMMAND_TRIES + 1)
+        self._tries[entity_id] = (on, COMMAND_TRIES + 1, _now())
         if on:
             _LOGGER.warning("%s: %s was not switched on %s, left off until the next start", self.owner.name, entity_id, how)
             self.held.add(entity_id)
@@ -366,11 +366,15 @@ class DeviceGroup:
         if not force and last is not None and last[0] == on and now - last[1] < COMMAND_RETRY_SECONDS:
             return
         tries = self._tries.get(entity_id)
-        count = tries[1] + 1 if tries is not None and tries[0] == on else 1
-        if count > COMMAND_TRIES:
-            self._give_up(entity_id, on, f"after {COMMAND_TRIES} commands")
-            return
-        self._tries[entity_id] = (on, count)
+        if tries is None or tries[0] != on:
+            self._tries[entity_id] = (on, 1, now)
+        elif now - tries[2] >= COMMAND_RETRY_SECONDS and not (on and self._booting(entity_id, now)):
+            # (a forced repeat within the retry time, or a device still booting
+            # behind its plug, is no new try)
+            if tries[1] >= COMMAND_TRIES:
+                self._give_up(entity_id, on, f"after {COMMAND_TRIES} commands")
+                return
+            self._tries[entity_id] = (on, tries[1] + 1, now)
         self._last_command[entity_id] = (on, now)
         self._recent_commands.setdefault(entity_id, deque(maxlen=4)).append((on, now))
         service = SERVICE_TURN_ON if on else SERVICE_TURN_OFF
@@ -385,6 +389,21 @@ class DeviceGroup:
         if domain not in (*SWITCH_DOMAINS, *DEVICE_DOMAINS):
             domain = "homeassistant"
         await self.owner.call(domain, service, {ATTR_ENTITY_ID: entity_id})
+
+    def _booting(self, entity_id: str, now: float) -> bool:
+        """A device whose plug came on only a moment ago (it may still boot,
+        reporting off meanwhile)."""
+        if self.kind(entity_id) != "device":
+            return False
+        timeout = self.owner.start_timeout()
+        for node in self.nodes.values():
+            if entity_id not in node.entities:
+                continue
+            for plug in self.plugs_of(node):
+                last = self._last_command.get(plug)
+                if last is not None and last[0] and now - last[1] < timeout:
+                    return True
+        return False
 
     def _needed_elsewhere(self, node: Node) -> set[str]:
         """What another (still demanded) node needs: never cut."""
