@@ -71,6 +71,16 @@ async def test_it_is_started_after_the_player_it_runs_on(hass, home, freezer):
     assert home.on(SPEAKERS) and not home.on(TV), "its sound through Kodi's cable; no picture"
 
 
+async def test_one_that_does_not_come_says_so(hass, home, freezer):
+    _off(hass, home)
+    home.kodi_boots = True
+    entry = await _room(hass, freezer)
+    await hass.services.async_call("media_player", "select_source", {"entity_id": ROOM, "source": "kodi_music"}, blocking=True)
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 100, step=5)
+    assert entry.runtime_data.error == f"{SENDSPIN} did not become available"
+
+
 async def test_its_playing_is_not_a_film(hass, home, freezer):
     _off(hass, home, plug="on")
     entry = await _room(hass, freezer)
@@ -88,6 +98,12 @@ async def test_its_playing_is_not_a_film(hass, home, freezer):
     assert ctrl.serving(ctrl.sources["video"])
     assert home.on(SPEAKERS) and not home.on(TV), "music in Kodi: the TV goes off"
     assert ctrl.active_source.key == "kodi_music" and ctrl.last_source == "kodi_music"
+    video = ctrl.sources["video"]
+    assert not ctrl.source_playing(video) and not ctrl.video_active, "no film: e.g. follow me takes the room"
+    assert hass.states.get(ROOM).attributes["source"] == "Kitchen Player"
+    from custom_components.better_media_player.room.live import room_live
+
+    assert room_live(ctrl)["sources"]["video"]["serving"] == ["kodi_music"], "the panel: on for it"
     assert [e.data["source"] for e in events][-1] == "kodi_music"
 
 
@@ -130,6 +146,7 @@ async def test_kodi_playing_on_its_own_is_a_film(hass, home, freezer):
 async def test_kodi_in_its_menu_after_the_music_is_no_film(hass, home, freezer):
     _off(hass, home, plug="on")
     entry = await _room(hass, freezer)
+    events = async_capture_events(hass, EVENT_SOURCE_CHANGED)
     home.kodi("playing")
     home.kitchen("playing")
     await hass.async_block_till_done()
@@ -139,6 +156,7 @@ async def test_kodi_in_its_menu_after_the_music_is_no_film(hass, home, freezer):
     await hass.async_block_till_done()
     await tick(hass, freezer, 20)
     assert not home.on(TV) and home.on(SPEAKERS), "the music holds; Kodi's menu is no film"
+    assert "video" not in [e.data["source"] for e in events], "no source change to video either"
     assert entry.runtime_data.sources["kodi_music"].in_use
 
 
@@ -154,7 +172,8 @@ async def test_kodi_goes_off_with_the_music(hass, home, freezer):
     await hass.async_block_till_done()
     await tick(hass, freezer, 31 * 60, step=30)
     assert not home.on(SPEAKERS)
-    assert calls_to(home, KODI, "turn_off"), "Kodi goes off after the sound"
+    order = [c[2] for c in home.calls if c[1] == "turn_off" and c[2] in (KODI, SPEAKERS)]
+    assert order == [SPEAKERS, KODI], "Kodi goes off after the sound (and not before)"
     await tick(hass, freezer, 3 * 60, step=30)
     assert not home.on(HOST), "its plug after its off_wait"
     assert not home.on(TV)
@@ -189,6 +208,14 @@ async def test_its_plug_is_the_one_of_kodi(hass, home, freezer):
     power = entry.runtime_data.power
     assert power.nodes["video_host"].sources == ("video", "kodi_music")
     assert power.routes["kodi_music"].nodes == {"speakers"}
+
+
+async def test_its_route_goes_on_from_kodi(hass, home, freezer):
+    mixer = {**device("mix", "mixer"), "power": None}
+    cables = [{"from": "video", "to": "mix", "signals": ["sound"]}, {"from": "mix", "to": "speakers", "signals": ["sound"]}]
+    entry = await _room(hass, freezer, devices=[device("display", "display", TV), mixer, device("speakers", "speakers", SPEAKERS)], cables=cables)
+    route = entry.runtime_data.power.routes["kodi_music"]
+    assert route.nodes == {"mix", "speakers"} and not route.direct, "through Kodi's cables, not fed directly"
 
 
 async def test_on_a_device(hass, home, freezer):

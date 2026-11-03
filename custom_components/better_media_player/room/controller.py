@@ -543,10 +543,7 @@ class RoomController:
         src.expired = False
         src.begun = True
         if self.guests(src):
-            src.own = True  # started for itself
-        if (host := self.host_of(src)) is not None:
-            host.own = False
-            host.alone_since = None
+            src.own = True  # started for itself (one that runs on it: _update_host)
 
     @callback
     def end_use(self, src: Source) -> None:
@@ -833,6 +830,13 @@ class RoomController:
         if state in (STATE_OFF, STATE_STANDBY, None) and not any(g.in_use for g in guests):
             src.own = True  # off: on by itself next time, it is for itself
 
+    def _used(self, src: Source) -> bool:
+        """In use, or about to be (playing, started; the first look: paused)."""
+        state = self.player_state(src)
+        return bool(src.in_use) or src.begun or state in PLAYING_STATES or (
+            src.in_use is None and state == MediaPlayerState.PAUSED
+        )
+
     @callback
     def _later(self, seconds: float, reason: str) -> None:
         """Look again in a moment (e.g. whether a player plays on its own)."""
@@ -854,7 +858,7 @@ class RoomController:
         state = self.player_state(src)
         if self.serving(src):
             src.in_use, src.hold_since, src.begun = False, None, False
-            if any(g.in_use for g in self.guests(src)):
+            if any(self._used(g) for g in self.guests(src)):
                 src.expired, src.going_off = False, False
             elif state in POWERED_STATES and not src.expired:
                 _LOGGER.info("%s: %s goes off with what runs on it", self.entry.title, src.player)
