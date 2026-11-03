@@ -24,19 +24,29 @@ class RoomHandover:
 
     def source(self, source: str | None = None) -> Source | None:
         """What would be handed over: the given source, or the one that plays
-        (paused counts; music also in a group)."""
+        (paused counts; music also in a group). Is there none (e.g. Kodi in its
+        menu while the music is paused): the paused one the room still holds
+        (the one used last if several)."""
         ctrl = self.ctrl
-        src = ctrl.sources.get(source) if source else ctrl.active_source
-        if src is None:
-            return None
+        if source:
+            src = ctrl.sources.get(source)
+            return src if src is not None and self._has_playback(src) else None
+        src = ctrl.active_source
+        if src is not None and self._has_playback(src):
+            return src
+        held = [s for s in ctrl.sources.values() if s.in_use and self._has_playback(s)]
+        last = ctrl.sources.get(ctrl.last_source)
+        return last if last in held else next(iter(held), None)
+
+    def _has_playback(self, src: Source) -> bool:
+        """It plays or is paused (music also in a group)."""
+        ctrl = self.ctrl
         state = ctrl.player_state(src)
         if src.kind == SOURCE_VIDEO:
-            return src if state in GROUP_ACTIVE_STATES else None
-        if state in GROUP_ACTIVE_STATES or any(
+            return state in GROUP_ACTIVE_STATES
+        return state in GROUP_ACTIVE_STATES or any(
             ctrl.player_state_of(g) in GROUP_ACTIVE_STATES for g in src.backend.groups_of(src.player)
-        ):
-            return src
-        return None
+        )
 
     def blocker(
         self, dest: RoomController | None, source: str | None = None, keep: bool = False, dest_id: str | None = None
