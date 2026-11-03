@@ -558,7 +558,7 @@ async def async_announce_rooms(
             alone.append(room)
     tasks = []
     for group, members in by_group.items():
-        players = {r.audio_player for r in members}
+        players = {src.player for r in members if (src := r.announce.choose()) is not None}
         listed = set(hass.states.get(group).attributes.get("group_members") or [])
         if listed and listed <= players:
             tasks.append(_announce_group(group, members, media_id, media_type, volume, extra))
@@ -606,7 +606,7 @@ async def _announce_group(
     data = {**(extra or {})}
     if levels:
         data[ANNOUNCE_VOLUME] = min(levels)
-    players = {r: [r.audio_player] for r in rooms}
+    players = {r: [src.player] if (src := r.announce.choose()) is not None else [] for r in rooms}
     for room in rooms:
         room.announce.begin([])
         room.announce.protect(players[room])

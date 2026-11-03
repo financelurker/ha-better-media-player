@@ -83,6 +83,12 @@
       "audio_host_off_at": {
         "name": "Musik-Player-Hardware aus um"
       },
+      "video_host_named_off_at": {
+        "name": "Video-Player-Hardware ({player}) aus um"
+      },
+      "audio_host_named_off_at": {
+        "name": "Musik-Player-Hardware ({player}) aus um"
+      },
       "display_off_at": {
         "name": "Display aus um"
       },

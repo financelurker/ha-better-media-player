@@ -195,7 +195,7 @@ def check_room(hass: HomeAssistant, entry_id: str | None, setup: dict, settings:
     if not sources:
         err("no_player")
     keys = [s["id"] for s in sources]
-    for key in keys:
+    for key in dict.fromkeys(keys):
         if not re.match(ID_PATTERN, key) or key.endswith("_host"):
             err("bad_id", device=key)
         elif keys.count(key) > 1:

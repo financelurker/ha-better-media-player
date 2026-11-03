@@ -146,7 +146,7 @@ class SourceWatch:
         for audio in ctrl.of_kind(SOURCE_AUDIO):
             if (
                 ctrl.player_state(audio) == MediaPlayerState.PAUSED
-                and (self._announced == audio.key or (self._announced is _UNSET and audio is ctrl.music))  # (also at the first look after a start)
+                and self._announced in (audio.key, _UNSET)  # (also at the first look after a start)
                 and self._usable(audio.key)
             ):
                 return audio.key  # paused: still the room's source while it has power for it

@@ -83,6 +83,12 @@
       "audio_host_off_at": {
         "name": "Music player hardware off at"
       },
+      "video_host_named_off_at": {
+        "name": "Video player hardware ({player}) off at"
+      },
+      "audio_host_named_off_at": {
+        "name": "Music player hardware ({player}) off at"
+      },
       "display_off_at": {
         "name": "Display off at"
       },

@@ -22,6 +22,7 @@ from homeassistant.helpers import entity_registry as er
 from ..const import CENTRAL_SETTINGS, CONF_AREA, CONF_FOLLOW_PLAYER, CONF_OCCUPANCY, DOMAIN
 from ..devices.graph import route
 from ..players import suggested_role
+from ..room import room_device
 from ..devices.model import Edge, Mode, Node, Signal
 from ..model import (
     DEVICE_SETTINGS,
@@ -102,7 +103,7 @@ def setup_version(entry: ConfigEntry) -> str:
 
 def area_of(hass: HomeAssistant, entry: ConfigEntry) -> str | None:
     """The room's area (id): its device's (set in Home Assistant), else the one chosen at setup."""
-    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, entry.entry_id)})
+    device = room_device(hass, entry.entry_id)
     area_id = (device.area_id if device else None) or entry.options.get(CONF_AREA)
     return area_id if area_id and ar.async_get(hass).async_get_area(area_id) else None
 

@@ -11,9 +11,9 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry, async_
 from homeassistant.components import automation
 from homeassistant.components.device_automation import DeviceAutomationType, async_get_device_automations
 from homeassistant.exceptions import ServiceValidationError
-from homeassistant.helpers import device_registry as dr
 from homeassistant.setup import async_setup_component
 
+from custom_components.better_media_player.room import room_device
 from custom_components.better_media_player.const import CONF_ENTRY_TYPE, DOMAIN, ENTRY_TYPE_ROOM, EVENT_SOURCE_CHANGED
 from custom_components.better_media_player.panel.edit import SETUP_SCHEMA, check_room, clean_setup
 from custom_components.better_media_player.room.handover import target_of
@@ -140,7 +140,7 @@ async def test_a_player_s_plug(hass, home, freezer):
 
 async def test_a_trigger_for_each_further_player(hass, home, freezer):
     entry = await _room(hass, freezer)
-    dev = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, entry.entry_id)})
+    dev = room_device(hass, entry.entry_id)
     triggers = (await async_get_device_automations(hass, DeviceAutomationType.TRIGGER, [dev.id]))[dev.id]
     started = sorted(t["subtype"] for t in triggers if t["type"] == "source_started")
     assert started == ["film2", "kitchen"]
@@ -283,3 +283,84 @@ async def test_the_panel_shows_what_a_player_is_for(hass, home, freezer):
     view = room_view(hass, entry, None)
     assert [(s["id"], s["kind"], s["needs"]) for s in view["sources"]][2:] == [("kitchen", "audio", ["sound"]), ("film2", "video", ["picture", "sound"])]
     assert view["start_source"] == "film2" and view["music_source"] is None
+
+
+async def test_the_room_s_music_player_is_the_one_in_a_group(hass, home, freezer):
+    """Follow me joined the further player (the group pauses): that one is the room's."""
+    entry = await _room(hass, freezer)
+    home.group("paused", [KITCHEN])
+    await hass.async_block_till_done()
+    assert entry.runtime_data.music.key == "kitchen"
+
+
+async def test_one_playing_on_its_own_before_one_in_a_group(hass, home, freezer):
+    entry = await _room(hass, freezer)
+    home.group("playing", [MUSIC])
+    _kitchen(home, "playing")
+    await hass.async_block_till_done()
+    assert entry.runtime_data.music.key == "kitchen"
+
+
+async def test_a_wake_s_player_is_the_room_s_music_player(hass, home, freezer):
+    entry = await _room(hass, freezer)
+    entry.runtime_data.data["wake"] = {"source": "kitchen"}
+    assert entry.runtime_data.music.key == "kitchen"
+
+
+async def test_a_follow_wake_takes_the_music_player(hass, home, freezer, monkeypatch):
+    entry = await _room(hass, freezer, start_source="film2")
+    keys = []
+
+    async def _wake(key, *args, **kwargs):
+        keys.append(key)
+
+    monkeypatch.setattr(entry.runtime_data.wake, "async_wake", _wake)
+    for follow in (False, True):
+        await hass.services.async_call(DOMAIN, "wake", {"entity_id": ROOM, "media_content_id": "x", "media_content_type": "music", "follow": follow}, blocking=True)
+    assert keys == ["film2", "audio"]
+
+
+async def test_turning_on_a_room_that_is_on_keeps_what_plays(hass, home, freezer):
+    entry = await _room(hass, freezer, start_source="film2")
+    _kitchen(home, "playing")
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 5)
+    await hass.services.async_call("media_player", "turn_on", {"entity_id": ROOM}, blocking=True)
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 5)
+    assert entry.runtime_data.last_source == "kitchen" and not home.on(TV)
+
+
+async def test_a_further_player_s_plug_has_a_name(hass, home, freezer):
+    await _room(hass, freezer, sources=_sources(host=KITCHEN_HOST))
+    from homeassistant.helpers import entity_registry as er
+
+    entity_id = next(e.entity_id for e in er.async_get(hass).entities.values() if e.unique_id.endswith("kitchen_host_off_at"))
+    assert er.async_get(hass).async_get(entity_id).translation_key == "audio_host_named_off_at"
+    assert hass.states.get(entity_id) is None or "Kitchen Player" in hass.states.get(entity_id).name
+
+
+def test_a_player_s_trigger_needs_its_id():
+    import voluptuous as vol
+
+    from custom_components.better_media_player.device_trigger import TRIGGER_SCHEMA
+
+    base = {"platform": "device", "domain": DOMAIN, "device_id": "x"}
+    TRIGGER_SCHEMA({**base, "type": "source_started", "subtype": "kitchen"})
+    TRIGGER_SCHEMA({**base, "type": "source_video"})
+    with pytest.raises(vol.Invalid):
+        TRIGGER_SCHEMA({**base, "type": "source_started"})
+
+
+async def test_a_reload_after_the_start_logs_no_error(hass, home, freezer, caplog):
+    from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
+    from homeassistant.core import CoreState
+
+    hass.set_state(CoreState.not_running)
+    entry = await _room(hass, freezer)
+    hass.set_state(CoreState.running)
+    hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
+    await hass.async_block_till_done()
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert "Unable to remove unknown job listener" not in caplog.text

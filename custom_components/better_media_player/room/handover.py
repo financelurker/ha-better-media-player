@@ -93,7 +93,7 @@ class RoomHandover:
         if src.kind == SOURCE_AUDIO and hub is not None and any(hub.follows(g) for g in src.backend.groups_of(src.player)):
             # follow me plays it: it ends, the music goes to dest (the others stop)
             await dest.async_prepare(target.key)
-            await hub.async_follow_stop(ctrl, to=dest)
+            await hub.async_follow_stop(ctrl, to=dest, player=target.player)
         else:
             await dest.async_prepare(target.key)
             if not await src.backend.handover(src.player, target.player, keep):

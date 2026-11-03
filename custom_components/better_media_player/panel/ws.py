@@ -16,7 +16,7 @@ from ..const import CENTRAL_SETTINGS, CONF_ENTRY_TYPE, CONF_FOLLOW_PLAYER, DOMAI
 from ..follow import get_hub
 from ..model import KINDS, ROOM_SETTINGS, SOURCE_SETTINGS, SPECS, check_value, device_defaults, device_setting, source_setting
 from ..players.music_assistant import MusicAssistant
-from ..room import get_rooms
+from ..room import get_rooms, room_device
 from ..room.controller import RoomController
 from .edit import SETTINGS_SCHEMA, check_room, clean_setup, has_errors
 from .view import central_view, player_suggestions, room_view, routes_of, setup_version
@@ -214,9 +214,8 @@ async def _reloaded(hass: HomeAssistant, entry_id: str, before: RoomController |
 
 def _set_area(hass: HomeAssistant, entry_id: str, area_id: str | None) -> None:
     """The room's area is its device's (as Home Assistant shows it)."""
-    reg = dr.async_get(hass)
-    if (device := reg.async_get_device(identifiers={(DOMAIN, entry_id)})) is not None and device.area_id != area_id:
-        reg.async_update_device(device.id, area_id=area_id)
+    if (device := room_device(hass, entry_id)) is not None and device.area_id != area_id:
+        dr.async_get(hass).async_update_device(device.id, area_id=area_id)
 
 
 _ROOM_FIELDS = {vol.Required("name"): vol.All(str, vol.Length(min=1, max=60)), vol.Optional("area_id"): vol.Any(None, str)}

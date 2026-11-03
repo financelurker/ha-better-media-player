@@ -11,9 +11,9 @@ from pytest_homeassistant_custom_component.common import async_capture_events
 from homeassistant.components import automation
 from homeassistant.core import callback
 from homeassistant.exceptions import ServiceValidationError
-from homeassistant.helpers import device_registry as dr
 from homeassistant.setup import async_setup_component
 
+from custom_components.better_media_player.room import room_device
 from custom_components.better_media_player.const import DOMAIN, EVENT_NIGHT_MODE, EVENT_SOURCE_CHANGED
 from custom_components.better_media_player.follow import get_hub
 
@@ -641,7 +641,7 @@ async def test_a_restart_with_the_room_on_tells_nothing(hass, home, freezer):
 
 async def test_device_triggers(hass, home, freezer):
     entry = await _room(hass, freezer)
-    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, entry.entry_id)})
+    device = room_device(hass, entry.entry_id)
     hits: list[str] = []
     hass.services.async_register("test", "hit", lambda call: hits.append(call.data["type"]))
     assert await async_setup_component(

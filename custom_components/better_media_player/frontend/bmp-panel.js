@@ -204,6 +204,9 @@ class BmpPanel extends LitElement {
       const body = payload(d);
       const local = d.sources.filter((s) => !s.player).map((s) => ({ error: true, code: "player_missing", source: s.id }));
       body.setup.sources = body.setup.sources.filter((s) => s.player);
+      for (const k of ["start_source", "music_source"]) { // (one without its entity yet: told above)
+        if (!body.setup.sources.some((s) => s.id === body.setup[k])) body.setup[k] = null;
+      }
       try {
         const sources = body.setup.sources.map((s) => ({ ...s, needs: needsOf(s.kind) }));
         const [routes, checked] = await Promise.all([

@@ -501,7 +501,8 @@ class RoomMediaPlayer(BetterMediaPlayerEntity, MediaPlayerEntity):
             data = {"media_content_type": inner_type or media_content_type, "media_content_id": inner_id}
             room_mode = self._browser.player_mode(key, inner_id)
         else:
-            key = source or self.ctrl.wake_source
+            music = self.ctrl.music
+            key = source or (music.key if follow and music is not None else self.ctrl.wake_source)
             data = {"media_content_type": media_content_type, "media_content_id": media_content_id}
         if key not in self.ctrl.sources:
             raise ServiceValidationError(

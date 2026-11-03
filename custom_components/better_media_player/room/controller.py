@@ -572,9 +572,19 @@ class RoomController:
     @property
     def music(self) -> Source | None:
         """The room's music player for follow me, announcements and a wake: the
-        one that plays (or is in use), else the one chosen in the setup, else the first."""
+        one that plays (on its own before one in a group), else one in a group, else
+        a wake's, else one in use, else the one chosen in the setup, else the first."""
         music = self.of_kind(SOURCE_AUDIO)
-        for test in (self.source_playing, lambda s: bool(s.in_use)):
+        if len(music) < 2:
+            return next(iter(music), None)
+        wake = (self.data.get("wake") or {}).get("source")
+        for test in (
+            lambda s: self.source_playing(s) and not s.backend.groups_of(s.player),
+            self.source_playing,
+            lambda s: bool(s.backend.groups_of(s.player, idle=True)),
+            lambda s: s.key == wake,
+            lambda s: bool(s.in_use),
+        ):
             if (src := next((s for s in music if test(s)), None)) is not None:
                 return src
         chosen = self.sources.get(self.opts.get(OPT_MUSIC_SOURCE) or "")
@@ -989,7 +999,7 @@ class RoomController:
     async def async_turn_on(self, source: str | None = None) -> None:
         """Explicit wish: power the room up with source (default: the one it starts with)."""
         self._reset_overrides()
-        key = source or self.start_source
+        key = source or (self.start_source if not self.room_on else self.last_source)
         if key not in self.sources:
             key = next(iter(self.sources))
         self.source_watch.note_request(key)

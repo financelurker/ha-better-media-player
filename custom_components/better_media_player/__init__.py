@@ -8,11 +8,11 @@ A central entry adds "follow me" with a Music Assistant group player.
 from __future__ import annotations
 
 from homeassistant.config_entries import SIGNAL_CONFIG_ENTRY_CHANGED, ConfigEntry, ConfigEntryChange
-from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
-from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
@@ -159,11 +159,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: BetterMediaPlayerConfigE
 
         entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_CONFIG_ENTRY_CHANGED, _central_changed))
         @callback
-        def _started(_event: Event) -> None:
+        def _started(_hass: HomeAssistant) -> None:
             controller.notify()  # a central entry that is never set up (disabled): its defaults count from now
 
         if not hass.is_running:
-            entry.async_on_unload(hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _started))
+            # (async_at_started: its unsubscribe is safe after it fired, e.g. a reload after the start)
+            entry.async_on_unload(async_at_started(hass, _started))
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
 

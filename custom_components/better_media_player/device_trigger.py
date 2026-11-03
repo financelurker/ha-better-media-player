@@ -44,8 +44,9 @@ TRIGGERS: dict[str, tuple[str, dict[str, Any]]] = {
 SOURCE_STARTED = "source_started"  # subtype: the source's id
 CONF_SUBTYPE = "subtype"
 
-TRIGGER_SCHEMA = DEVICE_TRIGGER_BASE_SCHEMA.extend(
-    {vol.Required(CONF_TYPE): vol.In([*TRIGGERS, SOURCE_STARTED]), vol.Optional(CONF_SUBTYPE): str}
+TRIGGER_SCHEMA = vol.Any(
+    DEVICE_TRIGGER_BASE_SCHEMA.extend({vol.Required(CONF_TYPE): vol.In(TRIGGERS)}),
+    DEVICE_TRIGGER_BASE_SCHEMA.extend({vol.Required(CONF_TYPE): SOURCE_STARTED, vol.Required(CONF_SUBTYPE): str}),
 )
 
 
@@ -86,7 +87,7 @@ async def async_attach_trigger(
 ) -> CALLBACK_TYPE:
     entry_id = _entry_id(hass, config[CONF_DEVICE_ID])
     if config[CONF_TYPE] == SOURCE_STARTED:
-        event, data = EVENT_SOURCE_CHANGED, {"source": config.get(CONF_SUBTYPE)}
+        event, data = EVENT_SOURCE_CHANGED, {"source": config[CONF_SUBTYPE]}
     else:
         event, data = TRIGGERS[config[CONF_TYPE]]
     event_config = event_trigger.TRIGGER_SCHEMA(

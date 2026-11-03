@@ -372,9 +372,11 @@ class FollowManager:
         _LOGGER.info("Follow me started in %s", room.entry.title)
         self.async_schedule("follow_start")
 
-    async def async_follow_stop(self, room: RoomController | None = None, to: RoomController | None = None) -> None:
+    async def async_follow_stop(
+        self, room: RoomController | None = None, to: RoomController | None = None, player: str | None = None
+    ) -> None:
         """Follow me off: the music goes back to one room (to: this one, e.g. a
-        handover), the others stop."""
+        handover; player: its player that takes it), the others stop."""
         async with self._lock:
             if not self.active:
                 raise ServiceValidationError(translation_domain=DOMAIN, translation_key="follow_not_running")
@@ -392,11 +394,12 @@ class FollowManager:
             for member in members:
                 await self._unjoin(member, "follow me stopped")
             moved = True
-            if target is not None and target.audio_player:
-                moved = await self._transfer(group, target.audio_player, auto_play=playing, position=position)
+            dest = player or (target.audio_player if target is not None else None)
+            if dest:
+                moved = await self._transfer(group, dest, auto_play=playing, position=position)
             await self._deactivate(f"stopped in {room.entry.title}" if room else "stopped")
             if not moved:
-                raise HomeAssistantError(f"Could not move the queue of {group} to {target.audio_player}")
+                raise HomeAssistantError(f"Could not move the queue of {group} to {dest}")
         self.async_schedule("follow_stop")
 
     @callback
@@ -702,9 +705,10 @@ class FollowManager:
         # stays 'backed' until MA really removed it, so it can never turn into an override
         self.session.leaving.add(room.entry.entry_id)
         self.session.empty_since.pop(room.entry.entry_id, None)
-        if (src := room.music) is not None:
+        src = room.music  # (before end_use: it may be the one in use)
+        if src is not None:
             room.end_use(src)  # its speakers go off without waiting for the idle timeout
-        await self._unjoin(room.audio_player, f"{room.entry.title}: {why}")
+        await self._unjoin(src.player if src is not None else None, f"{room.entry.title}: {why}")
 
     @callback
     def room_turned_off(self, room: RoomController) -> None:

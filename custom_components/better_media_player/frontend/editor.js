@@ -128,7 +128,8 @@ export function payload(d, base = null) {
 // a new player of a kind: its id is the kind's (video, audio) while free, else kind_2, …
 export function addSource(d, kind, player) {
   let id = kind, k = 2;
-  while (taken(d).includes(id) || d.devices.some((x) => x.id === id)) id = `${kind}_${k++}`;
+  const used = (x) => d.sources.some((s) => s.id === x || `${s.id}_host` === x) || d.devices.some((v) => v.id === x || v.id === `${x}_host`);
+  while (used(id)) id = `${kind}_${k++}`;
   const src = {
     id, kind, player, host: null, onoff: "auto", on_action: null, off_action: null,
     needs: needsOf(kind), settings: null,
@@ -150,7 +151,7 @@ export function setKind(d, src, kind) {
 export function sourceIdProblem(d, src) {
   if (!ID_PATTERN.test(src.id) || src.id.endsWith("_host")) return "bad_id";
   if (RESERVED.includes(src.id) && src.id !== src.kind) return "reserved_id";
-  if (d.sources.filter((x) => x.id === src.id).length > 1 || d.devices.some((x) => x.id === src.id)) return "dup_id";
+  if (d.sources.filter((x) => x.id === src.id).length > 1 || d.devices.some((x) => x.id === src.id || x.id === `${src.id}_host`)) return "dup_id";
   return null;
 }
 
@@ -206,6 +207,7 @@ export function renameId(d, dev, id) {
   const others = [...d.devices, ...d.sources].filter((x) => x !== dev).map((x) => x.id);
   const hosts = d.sources.filter((s) => s !== dev).map((s) => `${s.id}_host`);
   if (others.includes(id) || hosts.includes(id) || (RESERVED.includes(id) && !(isSource && id === dev.kind))) return false;
+  if (isSource && d.devices.some((x) => x.id === `${id}_host`)) return false;
   dev.id = id;
   if (isSource) {
     if (d.start_source === old) d.start_source = id;

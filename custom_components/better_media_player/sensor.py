@@ -63,7 +63,12 @@ class OffAtSensor(ControlEntity, SensorEntity):
         self._key = key
         node = ctrl.power.nodes[key]
         if node.device is None:
-            self._attr_translation_key = f"{node.sources[0]}_host_off_at"
+            src = ctrl.sources[node.sources[0]]
+            if src.key == src.kind:  # (video, audio: as before)
+                self._attr_translation_key = f"{src.key}_host_off_at"
+            else:
+                self._attr_translation_key = f"{src.kind}_host_named_off_at"
+                self._attr_translation_placeholders = {"player": ctrl.source_name(src)}
         elif node.device.get("name"):
             self._attr_translation_key = "device_off_at"
             self._attr_translation_placeholders = {"device": node.device["name"]}
