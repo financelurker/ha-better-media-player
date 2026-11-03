@@ -7,7 +7,7 @@ Continue what plays in one room in another: the music or the video goes on there
 <img src="images/handover.png" alt="The room's select Hand over to, open: the rooms that can take over" width="420">
 
 - **The destination powers up first** (its power sequence for that source: TV, player, speakers), then the playback moves: **music** with its queue, going on where the track was, paused music stays paused (Music Assistant); **video** with Better Kodi's handover (it continues where the video was). The destination plays at its own room volume (night mode and presets apply there).
-- **Without `source`:** what plays (paused counts); if nothing does – e.g. Kodi in its menu while the music is paused – the paused one the room still holds (the one used last if several). A film that plays goes before paused music.
+- **Without `source`:** what plays (paused counts); if nothing does – e.g. Kodi in its menu while the music is paused – the paused one the room still holds (the one used last if several). A video that plays goes before paused music.
 - **What the destination played before** is replaced, as with a source change.
 - **During follow me**, handing the music over ends follow me: the music goes to the destination, the other rooms stop.
 - **This room goes off** afterwards (its sleep timer or wake end with it), unless `keep_source_playing` (only where the player's system can: Better Kodi; a Music Assistant queue moves), or its other source is in use (e.g. paused music handed over from behind a video: the video plays on).
