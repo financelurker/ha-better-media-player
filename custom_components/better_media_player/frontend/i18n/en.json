@@ -289,6 +289,7 @@
   "live.plug_on": "hardware on",
   "live.night_off": "night: off",
   "live.held": "left off until the next start",
+  "live.stuck": "not switched off, left on until the next start",
   "live.cec": "waiting for CEC · {left} s",
   "live.switching_on": "switching on …",
   "live.standby": "waiting for standby",

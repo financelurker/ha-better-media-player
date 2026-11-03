@@ -14,6 +14,7 @@ DEVICE_DOMAINS = ["media_player", "remote"]  # devices that turn themselves on/o
 ACTION_ID = "better_media_player_action"  # virtual entity domain of a node's own on/off actions
 
 COMMAND_RETRY_SECONDS = 30
+COMMAND_TRIES = 3  # commands without effect, then a device is left as it is until the next start
 DEVICE_OFF_SECONDS = 60  # a node's plugs wait at most this long for its devices to go off
 OWN_CHANGE_SECONDS = 30
 STANDBY_HOLD_SECONDS = 30  # below the standby power this long: in standby

@@ -227,6 +227,10 @@ class RoomPower:
         """Devices left off until the next start."""
         return self.devices.held
 
+    def release(self) -> None:
+        """The next start switches everything again (held, given up)."""
+        self.devices.release()
+
     def needed(self, node: RoomNode) -> bool:
         """Demanded right now."""
         return bool(self.reasons(node))
