@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.media_player import MediaPlayerState
@@ -109,15 +109,23 @@ class RoomPower:
                 device=d,
                 picture=shows_picture(d, options.get(OPT_CABLES) or []),
             )
-        # what each source needs: its route through the cables
-        self.routes: dict[str, Route] = {key: route(key, NEEDS[src.kind], every, edges) for key, src in ctrl.sources.items()}
+        # what each source needs: its route through the cables (a player that runs on
+        # another player or on a device: from there on, with that device)
+        self.routes: dict[str, Route] = {}
+        for key, src in ctrl.sources.items():
+            start = src.runs_on or key
+            r = route(start, NEEDS[src.kind], every, edges)
+            if start in every:
+                r = replace(r, nodes=r.nodes | {start})
+            self.routes[key] = r
         for node in every.values():
             node.sources = tuple(s for s, r in self.routes.items() if node.key in r.nodes)
         # what is switched: devices with power (plugs, devices, own actions) and the players' plugs
         self.nodes: dict[str, RoomNode] = {k: n for k, n in every.items() if n.entities}
         for key, src in sources_of(options).items():
             if src.get("host") and key in ctrl.sources:
-                self.nodes[host_key(key)] = RoomNode(key=host_key(key), entities=[src["host"]], sources=(key,))
+                guests = tuple(g.key for g in ctrl.guests(ctrl.sources[key]))
+                self.nodes[host_key(key)] = RoomNode(key=host_key(key), entities=[src["host"]], sources=(key, *guests))
         # the order to switch on: plugs, picture, sound; each from the source on
         cables = list(options.get(OPT_CABLES) or [])
         devs = switch_order([n.device for n in self.nodes.values() if n.device is not None], cables, list(ctrl.sources))

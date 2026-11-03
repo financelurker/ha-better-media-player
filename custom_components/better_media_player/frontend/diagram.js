@@ -19,6 +19,7 @@ export function nodesOf(room, t) {
     name: s.name || s.player || t(`source.${s.kind}`),
     sub: s.player || "",
     source: s,
+    runsOn: s.runs_on || null, // (a player that runs on another player or a device: in the band above)
   }));
   const devices = room.devices.map((d) => {
     const p = d.power || {};
@@ -43,6 +44,7 @@ function depthOf(nodes, cables, id, seen = new Set()) {
 // in each column a tile sits near the average height of what feeds it (fewer
 // crossing cables), pushed apart so nothing overlaps
 export function arrange(nodes, cables, saved = {}) {
+  const band = nodes.some((n) => n.runsOn && !saved[n.id]) ? ROWGAP : 0; // (players that run on something: above)
   const depth = Object.fromEntries(nodes.map((n) => [n.id, depthOf(nodes, cables, n.id)]));
   const maxDepth = Math.max(0, ...Object.values(depth));
   const ys = {};
@@ -56,14 +58,14 @@ export function arrange(nodes, cables, saved = {}) {
     } else n.placed = false;
   }
   for (let c = 0; c <= maxDepth; c++) {
-    const col = nodes.filter((n) => !n.placed && depth[n.id] === c);
+    const col = nodes.filter((n) => !n.placed && !n.runsOn && depth[n.id] === c);
     const want = col
       .map((n, i) => {
         const feeds = cables.filter((k) => k.to === n.id && ys[k.from] != null).map((k) => ys[k.from]);
-        return { n, i, y: feeds.length ? feeds.reduce((a, b) => a + b, 0) / feeds.length : ROWY0 + i * ROWGAP };
+        return { n, i, y: feeds.length ? feeds.reduce((a, b) => a + b, 0) / feeds.length : ROWY0 + band + i * ROWGAP };
       })
       .sort((a, b) => a.y - b.y || a.i - b.i);
-    let next = ROWY0;
+    let next = ROWY0 + band;
     for (const w of want) {
       const y = Math.max(w.y, next);
       w.n.x = X0 + c * COLW;
@@ -71,6 +73,17 @@ export function arrange(nodes, cables, saved = {}) {
       ys[w.n.id] = w.n.y;
       next = w.n.y + ROWGAP;
     }
+  }
+  // above what they run on, side by side where several want the same spot
+  const above = nodes.filter((n) => !n.placed && n.runsOn);
+  const spots = nodes.filter((n) => n.placed && n.runsOn).map((n) => n.x);
+  for (const n of above) {
+    const host = nodes.find((x) => x.id === n.runsOn);
+    let x = host ? host.x : X0;
+    while (spots.some((s) => Math.abs(s - x) < W + 24)) x += W + 24;
+    n.x = x;
+    n.y = ROWY0;
+    spots.push(x);
   }
   return nodes;
 }

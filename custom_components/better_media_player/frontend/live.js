@@ -78,6 +78,10 @@ export function tileStatus(p, room, live, id) {
     const host = live.nodes[`${id}_host`];
     if (live.error && live.error.startsWith(`${src.player} `)) return { cls: "err", text: t("live.not_started") };
     if (src.playing) return { cls: "play", text: t("live.playing") };
+    if (src.serving?.length && src.on) {
+      const guest = room.sources.find((x) => x.id === src.serving.find((k) => live.sources[k]?.playing) || src.serving[0]);
+      return { cls: "on", text: t("live.serving", { player: guest ? p._sourceName(guest) : src.serving[0] }) };
+    }
     if (src.starting) return { cls: "wait", text: t("live.starting") };
     if (src.going_off) return { cls: "wait", text: t("live.going_off") };
     if (src.in_use && src.since != null) {

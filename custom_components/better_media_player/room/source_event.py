@@ -99,8 +99,8 @@ class SourceWatch:
         ctrl = self.ctrl
         on = []
         for src in ctrl.sources.values():
-            if src.suppressed:
-                continue
+            if src.suppressed or ctrl.serving(src):
+                continue  # (a player only on for one that runs on it: that one's)
             state = ctrl.player_state(src)
             if src.kind == SOURCE_VIDEO and state in _VIDEO_ON:
                 on.append(src.key)

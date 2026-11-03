@@ -498,7 +498,8 @@ class BmpPanel extends LitElement {
     const directs = new Map();
     for (const s of room.sources) {
       if ((this._source && s.id !== this._source) || (!this._source && inUse && s.id !== inUse.key)) continue;
-      for (const d of room.routes?.[s.id]?.direct || []) directs.set(`${s.id}>${d}`, [s.id, d]);
+      const from = s.runs_on || s.id; // (one that runs on something: its feeds come from there)
+      for (const d of room.routes?.[s.id]?.direct || []) directs.set(`${from}>${d}`, [from, d]);
     }
     const taken = nodes.map((n) => [n.x - 8, n.y - 10, n.x + W + 8, n.y + H + (live ? 26 : 4)]);
     const labels = [];
@@ -529,7 +530,10 @@ class BmpPanel extends LitElement {
     return html`<div class="canvas-wrap ${this._armed ? "armed" : ""}" tabindex="0" @wheel=${this._onWheel} @keydown=${this._onKey}>
       <svg id="canvas" @pointerdown=${this._onPanStart} @click=${this._onCanvasClick} aria-label=${t("tab.wiring")}>
         <g id="world" transform="translate(${v.tx} ${v.ty}) scale(${v.k})">
-          <g>${[...directs.values()].map(([from, to]) => {
+          <g>${nodes.filter((n) => n.runsOn && byId[n.runsOn]).map((n) => {
+            const h = byId[n.runsOn], x1 = n.x + W / 2, y1 = n.y + H, x2 = h.x + W / 2, y2 = h.y;
+            return svg`<path class="cable runs${onRoute && !onRoute.has(n.id) ? " dim" : ""}" d=${`M${x1} ${y1} C${x1} ${y1 + 40} ${x2} ${y2 - 50} ${x2} ${y2}`}></path>`;
+          })}${[...directs.values()].map(([from, to]) => {
             const a = byId[from], b = byId[to];
             const d = a && b ? curve(a.x + W, a.y + H / 2, b.x, b.y + H / 2) : null;
             return d ? svg`<path class="cable direct" d=${d}></path>${inUse?.flowing ? svg`<path d=${d} class="flow"></path>` : nothing}` : nothing;
@@ -554,7 +558,9 @@ class BmpPanel extends LitElement {
     const sel = this._selected?.type === "node" && this._selected.id === n.id;
     const passive = PASSIVE.includes(n.kind) || (n.device && !n.device.power);
     const name = n.name.length > 19 ? `${n.name.slice(0, 18)}…` : n.name;
-    const sub = n.sub.length > 23 ? `${n.sub.slice(0, 22)}…` : n.sub;
+    const on = n.runsOn && (room.sources.find((x) => x.id === n.runsOn) || room.devices.find((x) => x.id === n.runsOn));
+    const raw = on ? this._t("tile.runs_on", { name: on.kind && room.devices.includes(on) ? on.name || this._t(`kind.${on.kind}`) : this._sourceName(on) }) : n.sub;
+    const sub = raw.length > 23 ? `${raw.slice(0, 22)}…` : raw;
     const cec = n.device?.control?.on === "cec" && n.device.power?.devices?.length;
     const roomVolume = room.volume.where === "device" && room.volume.device === n.id && n.device?.volume;
     const armed = this._armed === n.id;
@@ -573,7 +579,7 @@ class BmpPanel extends LitElement {
       ${roomVolume ? svg`<g class="badge vol" transform="translate(8 -8)"><rect width="84" height="16" rx="7"></rect><text x="42" y="11.5" text-anchor="middle">${this._t("insp.room_volume")}</text></g>` : nothing}
       ${status ? (() => { const max = Math.floor((W + 36 - 28) / 6.1), text = status.text.length > max ? `${status.text.slice(0, max - 1)}…` : status.text; const w = Math.max(48, text.length * 6.1 + 28); return svg`<g class="pill ${status.cls}" transform="translate(${(W - w) / 2} ${H + 6})"><rect width=${w} height="18" rx="9"></rect><circle cx="11" cy="9" r="3.5"></circle><text x="20" y="12.8">${text}</text><title>${status.text}</title></g>`; })() : nothing}
       ${n.kind !== "player" ? svg`<circle class="port" cx="0" cy=${H / 2} r="6"></circle>` : nothing}
-      ${feeds || !SINKS.includes(n.kind) || armed
+      ${n.runsOn ? nothing : feeds || !SINKS.includes(n.kind) || armed
         ? svg`<circle class="port out${armed ? " armed" : ""}" cx=${W} cy=${H / 2} r="7" tabindex="0" role="button" aria-label=${this._t("cable.from", { device: n.name })}
             @pointerdown=${(e) => e.stopPropagation()} @click=${(e) => this._arm(e, n)}><title>${this._t("cable.from", { device: n.name })}</title></circle>`
         : svg`<circle class="port out faint" cx=${W} cy=${H / 2} r="6" tabindex="0" role="button" aria-label=${this._t("cable.from", { device: n.name })}
@@ -605,10 +611,14 @@ class BmpPanel extends LitElement {
         ? html` <span class="tag in">${inp.input}${inp.mode === "cec" ? " · CEC" : ""}</span>`
         : r.direct.includes(d.id) ? html` <span class="tag">${t("route.direct")}</span>` : nothing}</span>`;
     };
+    // one that runs on another player (woken first) or on a device (on first)
+    const host = room.sources.find((x) => x.id === src.runs_on);
+    const first = (d) => r.picture.includes(d.id) || d.id === src.runs_on;
     return html`<div class="route"><b>${t("route.starts", { source: this._sourceLabel(src) })}</b>
-      ${devices.filter((d) => r.picture.includes(d.id)).map(step)}
-      <span class="step"><b>${this._sourceName(src)}</b> <span class="tag">${t("route.woken")}</span></span>
-      ${devices.filter((d) => !r.picture.includes(d.id)).map(step)}</div>`;
+      ${devices.filter(first).map(step)}
+      ${host ? html`<span class="step"><b>${this._sourceName(host)}</b> <span class="tag">${t("route.woken")}</span></span>` : nothing}
+      <span class="step"><b>${this._sourceName(src)}</b> <span class="tag">${t(src.runs_on ? "route.waits_there" : "route.woken")}</span></span>
+      ${devices.filter((d) => !first(d)).map(step)}</div>`;
   }
 
   _renderDialog() {
@@ -1109,6 +1119,7 @@ class BmpPanel extends LitElement {
     .cable.sel { stroke-width: 5; }
     .cable.dim { opacity: .15; }
     .cable.direct { stroke: var(--bmp-muted); stroke-width: 1.5; stroke-dasharray: 2 5; opacity: .7; }
+    .cable.runs { stroke: var(--bmp-muted); stroke-width: 2.5; stroke-dasharray: 1 6; stroke-linecap: round; fill: none; }
     .cable-hit { fill: none; stroke: transparent; stroke-width: 14; cursor: pointer; }
     .clabel { cursor: pointer; }
     .clabel rect { fill: var(--bmp-card); stroke: var(--bmp-line); }

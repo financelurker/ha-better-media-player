@@ -6,7 +6,9 @@ Setup (options, a change reloads the room):
               "on_action", "off_action"}; any number, one plays at a time. kind: what it
               needs (video: picture and sound, active while on; audio: sound, active while
               it plays); without one the id is the kind (rooms up to 4.2: ids video / audio).
-              onoff: how the room switches the player itself (SOURCE_ONOFF)
+              onoff: how the room switches the player itself (SOURCE_ONOFF);
+              runs_on: another player's or a device's id the player runs on (e.g. a
+              Sendspin player in Kodi): started after it, through its cables, no plug
     start_source  the source the room starts with (turned on, a wake without one); None:
               the one used last
     music_source  follow me's and the announcements' music player while none plays (with

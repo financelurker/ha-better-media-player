@@ -378,5 +378,19 @@
   "system.other_hint": "Grundfunktionen: Strom, Weg und Eingänge, Haltezeit, Lautstärke, Wiedergabe/Pause, sein Medienbrowser, falls vorhanden. Kein Follow me, keine Durchsagen, kein Handover.",
   "problem.source_kind_fixed": "{source}: Der Player mit dieser ID behält, wofür er da ist.",
   "problem.source_missing": "Der unter „Raum & Verhalten“ gewählte Player „{source}“ ist nicht mehr im Raum.",
-  "problem.music_source_not_music": "{source} ist kein Musik-Player: Er kann nicht der Haupt-Musik-Player sein."
+  "problem.music_source_not_music": "{source} ist kein Musik-Player: Er kann nicht der Haupt-Musik-Player sein.",
+  "tile.runs_on": "läuft auf {name}",
+  "route.waits_there": "wartet, bis er da ist",
+  "live.serving": "an · für {player}",
+  "insp.runs_on": "Läuft auf",
+  "insp.runs_on_own": "– eigener Hardware –",
+  "insp.runs_on_hint": "Z. B. ein Sendspin-Player in Kodi, HEOS auf einem Receiver: Es gibt ihn nur, solange das läuft.",
+  "insp.runs_on_player": "Start: {host} wird geweckt, dann wartet der Raum (Start-Timeout), bis {player} da ist. Sein Ton geht über die Kabel von {host}, seine Steckdose ist die von {host}. Während {player} spielt, gehört das „playing“ von {host} ihm; {host} im Menü ist kein eigener Film. Wird {player} nicht mehr genutzt, geht {host} mit aus (nach dem Ton).",
+  "insp.runs_on_device": "Start: {host} wird eingeschaltet, dann wartet der Raum (Start-Timeout), bis {player} da ist. Sein Ton geht über die Kabel von {host}. {host} geht mit aus, außer etwas anderes braucht es.",
+  "insp.runs_on_host": "Andere Player laufen auf ihm: Er läuft auf eigener Hardware.",
+  "problem.runs_on_itself": "{source} kann nicht auf sich selbst laufen.",
+  "problem.runs_on_guest": "{source} läuft auf {device}, das selbst auf etwas läuft.",
+  "problem.runs_on_passive": "{source} läuft auf {device}, das passiv ist (nicht geschaltet).",
+  "problem.runs_on_missing": "{source} läuft auf „{device}“, das nicht mehr im Raum ist.",
+  "problem.guest_cable": "{source} läuft auf etwas: Ton und Bild gehen über dessen Kabel, nicht über eigene."
 }

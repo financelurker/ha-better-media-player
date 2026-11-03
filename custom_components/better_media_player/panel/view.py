@@ -8,6 +8,7 @@ calculation that switches the room.
 from __future__ import annotations
 
 import hashlib
+from dataclasses import replace
 import json
 from typing import Any
 
@@ -73,12 +74,15 @@ def routes_of(sources: list[dict], devices: list[dict], cables: list[dict]) -> d
     out: dict[str, dict] = {}
     for src in sources:
         needs = [Signal(x) for x in src.get("needs") or ()]
-        r = route(src["id"], needs, nodes, edges)
+        start = src.get("runs_on") or src["id"]  # (one that runs on another player or a device: from there)
+        r = route(start, needs, nodes, edges)
+        if start in nodes:
+            r = replace(r, nodes=r.nodes | {start})
         on = [d for d in devices if d["id"] in r.nodes and d["kind"] not in PASSIVE_KINDS]
         out[src["id"]] = {
             "devices": sorted(r.nodes),
             # the order they come on in: the picture's before the player, the sound's after it
-            "order": switch_order(on, cables, [src["id"]]),
+            "order": switch_order(on, cables, [start]),
             "picture": sorted(d["id"] for d in on if shows_picture(d, cables)),
             "cables": sorted(r.edges),
             "direct": sorted(r.direct),
@@ -125,6 +129,7 @@ def room_view(hass: HomeAssistant, entry: ConfigEntry, data: dict | None, layout
             "offers_onoff": _offers_onoff(hass, s["player"]),
             "on_action": s.get("on_action") or None,
             "off_action": s.get("off_action") or None,
+            "runs_on": s.get("runs_on") or None,
             # the settings of its hardware plug (with one, while the room is loaded)
             "settings": {k: source_setting(data, key, k) for k in SOURCE_SETTINGS} if s.get("host") and data is not None else None,
         }
