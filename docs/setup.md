@@ -44,7 +44,7 @@ The **Central settings** (follow me's player and default volume, dynamic control
 
 ## Hide the used entities
 
-The room players stand in for the players and devices behind them. With the central setting **Hide used entities** (`hide_used`, default `none`), those entities are hidden in Home Assistant (as *hidden by the integration*); they still work in your own cards, automations and Music Assistant.
+The room players stand in for the players and devices behind them. With the central setting **Hide used entities** (`hide_used`, default `none`), those entities are hidden in Home Assistant (as *hidden by the integration*); they still work in your own cards, automations and Music Assistant. Hidden entities are left out wherever Home Assistant leaves out hidden ones: the automatic dashboards, a HomeKit Bridge that does not include them by name, and voice assistants (Assist, Google Assistant, Alexa) unless they are exposed explicitly.
 
 | Value | Hidden |
 |---|---|
@@ -56,6 +56,7 @@ The room players stand in for the players and devices behind them. With the cent
 - Only what Better Media Player hid is shown again: when the value goes down, when no enabled room uses an entity any more (removed from the room, the room deleted or disabled), and when the central settings are removed or disabled.
 - What you hid yourself stays hidden. One you show again yourself stays shown, until the setting is set to `none` once (or the entity is no longer used).
 - An entity without a unique id cannot be hidden.
+- While the central settings cannot be loaded (an error), nothing is hidden or shown again.
 
 ## Repairs
 

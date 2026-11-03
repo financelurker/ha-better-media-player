@@ -188,3 +188,42 @@ async def test_a_disabled_central_entry_shows_everything(hass, home, freezer):
     await hass.async_block_till_done()
     await tick(hass, freezer, 2)
     assert _hidden(hass) == {}
+
+
+async def test_one_hidden_by_hand_and_shown_again_stays_shown(hass, home, freezer):
+    await _setup(hass, home, freezer)
+    reg = er.async_get(hass)
+    reg.async_update_entity(KODI, hidden_by=USER)
+    await _level(hass, freezer, "players")
+    reg.async_update_entity(KODI, hidden_by=None)
+    await hass.async_block_till_done()
+    await _level(hass, freezer, "devices")  # (any later look)
+    assert KODI not in _hidden(hass)
+
+
+async def test_a_renamed_one_shown_by_hand_stays_shown(hass, home, freezer):
+    room, _hub = await _setup(hass, home, freezer)
+    reg = er.async_get(hass)
+    await _level(hass, freezer, "players")
+    reg.async_update_entity(KODI, hidden_by=None)
+    await hass.async_block_till_done()
+    reg.async_update_entity(KODI, new_entity_id="media_player.kodi_new")
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 5)  # the room follows the new id (issues.py)
+    await _level(hass, freezer, "devices")
+    assert reg.async_get("media_player.kodi_new").hidden_by is None
+
+
+async def test_one_that_comes_back_is_still_ours(hass, home, freezer):
+    """The registry keeps hidden_by for a removed entity that is added again."""
+    await _setup(hass, home, freezer)
+    reg = er.async_get(hass)
+    await _level(hass, freezer, "players")
+    reg.async_remove(KODI)
+    await hass.async_block_till_done()
+    hass.states.async_remove(KODI)
+    reg.async_get_or_create("media_player", "demo", "kodi", suggested_object_id="kodi")
+    await hass.async_block_till_done()
+    assert reg.async_get(KODI).hidden_by is INTEGRATION
+    await _level(hass, freezer, "none")
+    assert reg.async_get(KODI).hidden_by is None
