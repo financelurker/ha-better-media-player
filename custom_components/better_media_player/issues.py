@@ -23,7 +23,15 @@ from collections.abc import Callable
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, EVENT_HOMEASSISTANT_STOP, STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.const import (
+    ATTR_DOMAIN,
+    ATTR_SERVICE,
+    EVENT_CALL_SERVICE,
+    EVENT_HOMEASSISTANT_STARTED,
+    EVENT_HOMEASSISTANT_STOP,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+)
 from homeassistant.core import CALLBACK_TYPE, CoreState, Event, HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
@@ -37,6 +45,7 @@ _LOGGER = logging.getLogger(__name__)
 
 START_DELAY = 60  # s after Home Assistant has started
 RECHECK_DELAY = 1  # s: changes come in bursts (a reload, several registry updates)
+SCRIPT_RELOAD_DELAY = 3  # s: the call comes before the scripts are loaded again
 RENAME_DELAY = 0.5  # s: a device's entities are renamed one after the other
 NOT_KNOWN = (STATE_UNAVAILABLE, STATE_UNKNOWN)
 REMOVED_KEY = "removed_entities"  # in a room's or the central entry's store: setting entities removed (version 4)
@@ -102,6 +111,14 @@ class IssueChecker:
         self._unsubs.append(self.hass.bus.async_listen(er.EVENT_ENTITY_REGISTRY_UPDATED, self._registry_updated))
         # an automation changed: a removed entity may no longer be used
         self._unsubs.append(self.hass.bus.async_listen("automation_reloaded", callback(lambda _e: self.changed())))
+        # a script changed (saved in the editor, or script.reload): scripts fire no event of their own
+        self._unsubs.append(
+            self.hass.bus.async_listen(
+                EVENT_CALL_SERVICE,
+                callback(lambda _e: self.changed(SCRIPT_RELOAD_DELAY)),
+                event_filter=callback(lambda data: data.get(ATTR_DOMAIN) == "script" and data.get(ATTR_SERVICE) == "reload"),
+            )
+        )
         if self.hass.state is CoreState.running:
             self._schedule(START_DELAY)
             return
@@ -138,10 +155,10 @@ class IssueChecker:
         self.changed()
 
     @callback
-    def changed(self) -> None:
+    def changed(self, delay: float = RECHECK_DELAY) -> None:
         """Entries or entities changed: check again (soon, once the first check was due)."""
         if self._ready:
-            self._schedule(RECHECK_DELAY)
+            self._schedule(delay)
 
     @callback
     def _schedule(self, delay: float) -> None:

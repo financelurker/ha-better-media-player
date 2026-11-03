@@ -237,3 +237,19 @@ async def test_a_room_of_a_pre_release_gets_the_idle_timeout(hass, home, hass_st
     data = entry.runtime_data.data
     assert not {"video_idle_timeout", "night_video_idle_timeout"} & set(data)
     assert data["devices"]["display"] == {"on_wait": 3} and data["devices"]["speakers"] == {}
+
+
+async def test_scripts_that_use_a_removed_entity_are_in_repairs_until_changed(hass, home, hass_storage, freezer):
+    entry = await _room_v3(hass, hass_storage)
+    uses = {"sequence": [{"action": "number.set_value", "target": {"entity_id": "number.living_room_night_max_volume"}, "data": {"value": 20}}]}
+    assert await async_setup_component(hass, "script", {"script": {"night_limit": uses}})
+    await _setup(hass, entry)
+    await tick(hass, freezer, START_DELAY + 3)
+    assert [i for (d, i) in ir.async_get(hass).issues if d == DOMAIN and i.startswith("removed_entities")]
+    # the script changed to the action (saved in the editor: script.reload): the issue goes
+    fixed = {"sequence": [{"action": "better_media_player.set_setting",
+                           "data": {"entity_id": "media_player.living_room", "setting": "night_max_volume", "value": 20}}]}
+    with patch("homeassistant.config.load_yaml_config_file", return_value={"script": {"night_limit": fixed}}):
+        await hass.services.async_call("script", "reload", blocking=True)
+    await tick(hass, freezer, 5)
+    assert not [i for (d, i) in ir.async_get(hass).issues if d == DOMAIN]
