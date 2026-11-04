@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any
@@ -140,6 +141,7 @@ class FakeHome:
     lg_obeys: bool = True  # the LG TV follows turn_on / turn_off
     inputs_obey: bool = True  # the LG TV and the AVR follow select_source
     volume_lag: float = 0.0  # s a player reports a volume it was set to (in order)
+    _volume_reports: dict[str, deque] = field(default_factory=dict)  # volumes set, not reported yet
     ma_power: bool = False  # the music players have Music Assistant's (fake) power control
     ma_announce: bool = False  # the music players announce (Music Assistant)
     plays_media: bool = False  # play_media plays (a tts clip is over right away), media_play resumes
@@ -350,10 +352,15 @@ class FakeHome:
                     self.set(entity_id, g.state, group_members=members)
                     self.set(p, g.state if g.state in ("playing", "paused") else "idle")
             elif service == "volume_set" and self.volume_lag > 0:
-                level = data["volume_level"]
+                # reported volume_lag s later, in the order they were set: each report
+                # takes the oldest one waiting (timers due in the same tick fire in
+                # no fixed order)
+                waiting = self._volume_reports.setdefault(entity_id, deque())
+                waiting.append(data["volume_level"])
 
                 @callback
-                def _report(_now, entity_id=entity_id, level=level) -> None:
+                def _report(_now, entity_id=entity_id) -> None:
+                    level = self._volume_reports[entity_id].popleft()
                     cur = self.hass.states.get(entity_id)
                     self.set(entity_id, cur.state, volume_level=level)
 
