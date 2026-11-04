@@ -392,6 +392,9 @@ class FollowManager:
                 target = to
             else:
                 target = room if room is not None and room.audio_player in members else self.origin
+            if to is None and target is not None and (src := target.music) is not None and src.player in members:
+                # it goes on there as it is heard (a fade back after the night: where it goes)
+                target.volume.keep(src, self.volume.member_target(src.player))
             for wake_room in get_rooms(self.hass).values():
                 if wake_room.wake.follows and wake_room.wake.active:
                     await wake_room.wake.async_finish(WAKE_END_STOPPED)

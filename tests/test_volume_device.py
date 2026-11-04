@@ -319,7 +319,9 @@ async def test_follow_from_a_device_room_keeps_follow_me_volume(hass, home, free
     assert vol(hass, KITCHEN) == 0.25, "the kitchen joined at the device room's fixed player level"
 
 
-async def test_player_gets_its_own_level_back_after_group_playback(hass, home, freezer):
+async def test_follow_me_ended_here_keeps_the_players_level(hass, home, freezer):
+    """Follow me stopped in this room: the player plays on at the level the group
+    gave it; its own level comes back the next time it plays on its own."""
     from .conftest import start_follow
 
     await _device_house(hass, home)
@@ -331,11 +333,18 @@ async def test_player_gets_its_own_level_back_after_group_playback(hass, home, f
     await hass.async_block_till_done()
     await start_follow(hass, home)  # the group sets the player to follow me's volume
     await tick(hass, freezer, 3)
-    assert vol(hass, MUSIC) != 1.0
+    joined = vol(hass, MUSIC)
+    assert joined != 1.0
     await hass.services.async_call(DOMAIN, "stop_follow", {"entity_id": ROOM}, blocking=True)
     await hass.async_block_till_done()
     await tick(hass, freezer, 5)
-    assert vol(hass, MUSIC) == 1.0, "after group playback the player stays at the group's volume"
+    assert vol(hass, MUSIC) == joined, "it plays on at that level"
+    home.music("idle")
+    await hass.async_block_till_done()
+    home.music("playing")  # the next time: its own level again
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 5)
+    assert vol(hass, MUSIC) == 1.0
 
 
 async def test_group_with_only_device_rooms_not_limited_at_night(hass, home, freezer):
@@ -531,21 +540,24 @@ async def test_coarse_number_night_fade_back(hass, home, freezer):
 
 
 async def test_player_level_changed_on_its_own_is_kept(hass, home, freezer):
-    from .conftest import start_follow
+    """Learned while it plays on its own; given back after group playback."""
+    from .conftest import GROUP
 
     await _device_house(hass, home)
-    hass.states.async_set(LIVING_OCC, "on")
     home.music("playing", volume_level=1.0)
     await hass.async_block_till_done()
     await tick(hass, freezer, 3)
     home.music("playing", volume_level=0.9)  # the user sets the player's own level
     await hass.async_block_till_done()
     await tick(hass, freezer, 3)
+    home.group("playing", [MUSIC], GROUP)
+    home.music("playing", volume_level=0.5)  # the group's volume
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 3)
+    home.group("idle", [], GROUP)
     home.music("idle")
     await hass.async_block_till_done()
-    await start_follow(hass, home)
-    await tick(hass, freezer, 3)
-    await hass.services.async_call(DOMAIN, "stop_follow", {"entity_id": ROOM}, blocking=True)
+    home.music("playing")  # on its own again
     await hass.async_block_till_done()
     await tick(hass, freezer, 5)
     assert vol(hass, MUSIC) == 0.9

@@ -72,6 +72,11 @@ class VolumeRamp:
     def _volume(self) -> float | None:
         return self.output.level()
 
+    @property
+    def target(self) -> float:
+        """Where it goes (also once there)."""
+        return self._target
+
     @callback
     def start(self, target: float, seconds: float) -> bool:
         """Ramp from the current volume to target; False if there is nothing to do."""
