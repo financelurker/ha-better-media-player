@@ -243,6 +243,20 @@ class RoomVolume:
         self.ctrl._notify()
 
     @callback
+    def keep(self, src: Source) -> None:
+        """The player goes on on its own at the volume a group gave it (follow me
+        ended here): that is the room's volume now (with a volume device: the
+        player's own level), so it does not jump back to the one from before."""
+        current = _volume(self.hass.states.get(src.player))
+        if current is None or not self._takes_part(src):
+            return
+        if self.ctrl.volume_device is not None:
+            self._levels[src.player] = round(current, 3)
+            self.ctrl._save()
+        else:
+            self.learn(current)
+
+    @callback
     def learn_wish(self, src: Source, volume: float) -> None:
         """Volume set through the room player."""
         if self.ctrl.volume_device is not None:

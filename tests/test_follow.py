@@ -1132,3 +1132,24 @@ async def test_music_assistant_on_a_clock_ahead(hass, house, freezer):
     house.set(FOLLOW, "idle", media_content_id=TRACK, media_position=0.0, media_position_updated_at=house.now())
     await _start(hass, house, freezer)  # its old report looks fresh to HA: not taken
     assert _seeks(house, FOLLOW) == []
+
+
+async def test_stop_keeps_the_volume_it_played_at(hass, house, freezer):
+    """Follow me ends in a room that played along: it goes on at follow me's
+    volume there (the room's own volume from before does not come back)."""
+    from custom_components.better_media_player.room import get_rooms
+
+    kitchen = next(r for r in get_rooms(hass).values() if r.entry.title == "Kitchen")
+    kitchen.data["room_volume"] = 0.8  # its own, from before
+    hass.states.async_set(LIVING_OCC, "on")
+    await follow_from(hass, house)
+    hass.states.async_set(KITCHEN_OCC, "on")
+    await hass.async_block_till_done()
+    joined = hass.states.get(KITCHEN).attributes["volume_level"]
+    assert joined < 0.8
+    await stop_follow(hass, KROOM)
+    await tick(hass, freezer, 5)
+    assert hass.states.get(KITCHEN).state == "playing"
+    assert hass.states.get(KITCHEN).attributes["volume_level"] == pytest.approx(joined, abs=0.01)
+    assert kitchen.volume.value == pytest.approx(joined, abs=0.01), "the room's volume now"
+

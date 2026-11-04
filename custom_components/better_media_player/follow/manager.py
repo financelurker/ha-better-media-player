@@ -396,6 +396,8 @@ class FollowManager:
                 if wake_room.wake.follows and wake_room.wake.active:
                     await wake_room.wake.async_finish(WAKE_END_STOPPED)
             position = self.ma.position(group)  # (the group stops with its last member)
+            if to is None and target is not None and (src := target.music) is not None and src.player in members:
+                target.volume.keep(src)  # it goes on there as it was heard: follow me's volume stays
             for member in members:
                 await self._unjoin(member, "follow me stopped")
             moved = True

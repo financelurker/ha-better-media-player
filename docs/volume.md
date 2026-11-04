@@ -16,7 +16,7 @@ A room has one volume, not one per player. It is the volume last chosen in the r
 With an amplifier, AV receiver or soundbar that has its own volume, choose **Room volume: Own device** and the **Volume device** in *Devices and volume*: a media player that can set a volume, or a `number` / `input_number` (its range counts as 0–100 %, e.g. −80…0 dB).
 
 - The room's volume is the device's. Volume, steps and mute of the room player go there (mute only with a media player); changes on the device itself (its remote, its app) are learned, also during group playback.
-- The players keep their own level: set it once yourself (e.g. Kodi at 100 %). Better Media Player does not change it; after group playback (below) a player gets its own level back when it plays on its own again.
+- The players keep their own level: set it once yourself (e.g. Kodi at 100 %). Better Media Player does not change it; after group playback (below) a player gets its own level back when it plays on its own again – except where follow me was stopped: there it keeps the level it had.
 - Sleep timer fade, wake fade, night mode limit and the fade back after the night act on the device.
 - While the device is off, a volume set on the room player is remembered; the device gets the room's volume as soon as it is up again (e.g. after its plug switched on), whatever it comes back with.
 - **Groups and follow me** still set the players' volume (follow me's volume plus the room's offset): there the group decides. The night mode limits the device, not the player in the group. Started in such a room, follow me keeps its last volume (the player's own level says nothing about loudness).

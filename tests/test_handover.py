@@ -349,3 +349,33 @@ async def test_paused_music_while_kodi_is_in_its_menu(hass, rooms, freezer):
     await tick(hass, freezer, 3)
     await _handover(hass, ROOM, KROOM)
     assert home.transferred[-1] == (MUSIC, KITCHEN)
+
+
+async def test_out_of_follow_me_into_a_room_that_plays_along_at_its_own_volume(hass, rooms, freezer):
+    """A handover is more than ending follow me: the destination plays at its own
+    room volume, also when it played along (stopping follow me there keeps the volume)."""
+    from custom_components.better_media_player.follow import get_hub
+    from custom_components.better_media_player.room import get_rooms
+
+    home = rooms
+    home.group("idle", [], FOLLOW)
+    await setup_hub(hass)
+    living = next(e for e in hass.config_entries.async_entries(DOMAIN) if e.title == "Living Room")
+    hass.config_entries.async_update_entry(living, options={**living.options, "occupancy": [LIVING_OCC]})
+    await hass.async_block_till_done()
+    kitchen = next(r for r in get_rooms(hass).values() if r.entry.title == "Kitchen")
+    kitchen.data["room_volume"] = 0.8
+    hass.states.async_set(LIVING_OCC, "on")
+    await _music(hass, home, freezer)
+    await hass.services.async_call(DOMAIN, "start_follow", {"entity_id": ROOM}, blocking=True)
+    await hass.async_block_till_done()
+    hass.states.async_set(KITCHEN_OCC, "on")
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 3)
+    assert KITCHEN in home.members(FOLLOW)
+    assert hass.states.get(KITCHEN).attributes["volume_level"] < 0.8
+    await _handover(hass, ROOM, KROOM)
+    await tick(hass, freezer, 5)
+    assert not get_hub(hass).active
+    assert hass.states.get(KITCHEN).state == "playing"
+    assert hass.states.get(KITCHEN).attributes["volume_level"] == pytest.approx(0.8, abs=0.01)
