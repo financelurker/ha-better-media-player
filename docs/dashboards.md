@@ -8,7 +8,7 @@ The room on a dashboard, and how its controls show and hide themselves.
 
 The screenshots are taken from the Home Assistant demo integration: two demo players stand in for Kodi and a Music Assistant player, the plugs are template switches ([how](../scripts/screenshots/README.md)).
 
-**Movie night:** Kodi plays, so the TV, the speakers and the subwoofer have power. The room player shows what is playing and controls it.
+**Video night:** Kodi plays, so the TV, the speakers and the subwoofer have power. The room player shows what is playing and controls it.
 
 ![Dashboard while Kodi plays](images/dashboard.png)
 

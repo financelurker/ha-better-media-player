@@ -13,7 +13,7 @@ Set up Better Media Player once it is [installed](../README.md#installation): ad
 
 1. **Add the integration:** Settings → Devices & services → Add integration → **Better Media Player**. It asks only for the follow-me player (optional, also later in the panel). The panel **Better Media Player** appears in the sidebar.
 2. **Add a room** in the panel (**+ Add room**, left): name and area.
-3. **Its players and devices** (Devices & cabling → **+ Add**): a video player (e.g. Kodi) and/or a music player (the room's own player, not a group) – one of the room's area is proposed; then its devices – display, AV receiver or soundbar, amplifier, speakers, subwoofer – and in each device's details what switches it: plugs and/or the [device itself](room.md#devices-instead-of-plugs) (a media player or remote), or own on/off actions (e.g. IR scripts); power sensors for [waiting for standby](room.md#wait-for-standby). A player whose hardware hangs on a plug gets that plug in its details.
+3. **Its players and devices** (Devices & cabling → **+ Add**): a video player (e.g. Kodi) and/or a music player (the room's own player, not a group) – a Kodi or Music Assistant player of the room's area is proposed; then its devices – display, AV receiver or soundbar, amplifier, speakers, subwoofer – and in each device's details what switches it: plugs and/or the [device itself](room.md#devices-instead-of-plugs) (a media player or remote), or own on/off actions (e.g. IR scripts); power sensors for [waiting for standby](room.md#wait-for-standby). A player whose hardware hangs on a plug gets that plug in its details.
 4. **Optional:** cables (inputs, CEC: [Cabling and inputs](devices.md)), where the room's volume is set, presence sensors for follow me (Room & behaviour).
 5. **Save.** The room appears as a device with its room player `media_player.<room>`.
 
@@ -38,9 +38,9 @@ Each room is a device (Settings → Devices & services → Better Media Player �
 
 ![Device page](images/device.png)
 
-How the room behaves – times, waits, standby, night mode, volume presets and follow me – are the room's settings, each device of the room has its own (wait after on, standby, off at night). The [panel](designer.md) shows them; the action `better_media_player.set_setting` changes one, at once and kept ([examples](automations.md#settings)). To start, you can leave them all at their defaults. All of them, with their defaults: [Reference](reference.md#settings).
+How the room behaves – times, waits, standby, night mode, volume presets and follow me – are the room's settings, each device of the room has its own (wait after on, standby, off at night), and so does a player with a plug for its hardware (its waits). The [panel](designer.md) shows them; the action `better_media_player.set_setting` changes one, at once and kept ([examples](automations.md#settings)). To start, you can leave them all at their defaults. All of them, with their defaults: [Reference](reference.md#settings).
 
-The **Central settings** (follow me's player and default volume, dynamic controls, hide delay, hiding the used entities) are on the panel's page *General*, or set with the action, without a room.
+The **Central settings** (follow me's player and default volume, dynamic controls, hide delay, hiding the used entities) are on the panel's page *General*; all but the follow-me player can also be set with the action, without a room.
 
 ## Hide the used entities
 

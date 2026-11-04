@@ -63,9 +63,9 @@ Display, speakers and subwoofer can also be devices that turn themselves on and 
 | Kind | Switched with | On when |
 |---|---|---|
 | Plug (`switch`, `light`, `input_boolean`) | `turn_on` / `turn_off` | `on` |
-| Media player (TV, AV receiver, soundbar) | `media_player.turn_on` / `turn_off` | on, idle, playing, paused |
+| Media player (TV, AV receiver, soundbar) | `media_player.turn_on` / `turn_off` | on, idle, playing, paused, buffering |
 | Remote (e.g. a Harmony activity) | `remote.turn_on` / `turn_off` | `on` |
-| Own on/off actions (script, button, scene, automation) | the on / the off action | what was sent last (no feedback) |
+| Own on/off actions (script, button, input button, scene, automation, switch) | the on / the off action | what was sent last (no feedback) |
 
 - **Plug and device in one role:** on: the plug, then the device once it is there (at most the start timeout; a device that does not come is left out until the next start). Off: the device first, the plug once the device reports off (at most 60 s), after the standby wait if switched on (only a role with a plug waits for standby).
 - **A device that does not follow its commands:** a command without effect is sent again after 30 s; after 3 commands the room gives up and logs a warning (while a device boots behind a plug that just came on, up to the start timeout, its commands do not count). A device not switched on is left off until the next start (the panel shows *left off until the next start*), one not switched off is left on (*not switched off, left on until the next start*; its plug still cuts it). The count starts anew once the device reports the state, when the other direction is wanted, and with the next start.
