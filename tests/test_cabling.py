@@ -57,7 +57,7 @@ async def test_without_connections_no_input_is_chosen(hass, home, freezer):
 # ------------------------------------------------------------------ inputs
 
 
-async def test_a_film_puts_tv_and_receiver_on_its_inputs(hass, home, freezer):
+async def test_a_video_puts_tv_and_receiver_on_its_inputs(hass, home, freezer):
     await _room(hass, home)
     await _start_video(hass, home, freezer)
     assert hass.states.get(LG).attributes["source"] == "HDMI 2"
@@ -80,11 +80,11 @@ async def test_the_inputs_follow_the_source_in_use(hass, home, freezer):
     home.music("playing")
     await hass.async_block_till_done()
     await tick(hass, freezer, 10)
-    home.kodi("playing")  # a film: video takes over
+    home.kodi("playing")  # a video: video takes over
     await hass.async_block_till_done()
     await tick(hass, freezer, 10)
     assert hass.states.get(AVR).attributes["source"] == "BD"
-    home.kodi("off")  # film over, the music still plays: its input again
+    home.kodi("off")  # video over, the music still plays: its input again
     await hass.async_block_till_done()
     await tick(hass, freezer, 10)
     assert hass.states.get(AVR).attributes["source"] == "NET"
@@ -316,7 +316,7 @@ async def test_back_on_its_default_input_after_a_power_cycle(hass, home, freezer
 
 
 async def test_a_change_by_hand_is_forgotten_with_the_next_source(hass, home, freezer):
-    same = {**VIDEO_AVR, "input": "NET"}  # film and music on the same input
+    same = {**VIDEO_AVR, "input": "NET"}  # video and music on the same input
     await _room(hass, home, connections=(same, MUSIC_AVR))
     home.music("playing")
     await hass.async_block_till_done()

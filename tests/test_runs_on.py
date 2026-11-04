@@ -82,7 +82,7 @@ async def test_one_that_does_not_come_says_so(hass, home, freezer):
     assert entry.runtime_data.error == f"{SENDSPIN} did not become available"
 
 
-async def test_its_playing_is_not_a_film(hass, home, freezer):
+async def test_its_playing_is_not_a_video(hass, home, freezer):
     _off(hass, home, plug="on")
     entry = await _room(hass, freezer)
     ctrl = entry.runtime_data
@@ -91,7 +91,7 @@ async def test_its_playing_is_not_a_film(hass, home, freezer):
     home.kitchen("idle")
     await hass.async_block_till_done()
     await tick(hass, freezer, 3)
-    assert home.on(TV), "Kodi on by itself: a film (as ever)"
+    assert home.on(TV), "Kodi on by itself: a video (as ever)"
     home.kitchen("playing")
     home.kodi("playing")
     await hass.async_block_till_done()
@@ -100,7 +100,7 @@ async def test_its_playing_is_not_a_film(hass, home, freezer):
     assert home.on(SPEAKERS) and not home.on(TV), "music in Kodi: the TV goes off"
     assert ctrl.active_source.key == "kodi_music" and ctrl.last_source == "kodi_music"
     video = ctrl.sources["video"]
-    assert not ctrl.source_playing(video) and not ctrl.video_active, "no film: e.g. follow me takes the room"
+    assert not ctrl.source_playing(video) and not ctrl.video_active, "no video: e.g. follow me takes the room"
     assert hass.states.get(ROOM).attributes["source"] == "Kitchen Player"
     from custom_components.better_media_player.room.live import room_live
 
@@ -109,7 +109,7 @@ async def test_its_playing_is_not_a_film(hass, home, freezer):
 
 
 async def test_kodi_playing_first_waits_a_moment(hass, home, freezer):
-    """Kodi reports playing a moment before the Sendspin player: no film for that moment."""
+    """Kodi reports playing a moment before the Sendspin player: no video for that moment."""
     _off(hass, home, plug="on")
     entry = await _room(hass, freezer)
     await hass.services.async_call("media_player", "select_source", {"entity_id": ROOM, "source": "kodi_music"}, blocking=True)
@@ -127,7 +127,7 @@ async def test_kodi_playing_first_waits_a_moment(hass, home, freezer):
     assert not home.on(TV) and entry.runtime_data.serving(entry.runtime_data.sources["video"])
 
 
-async def test_kodi_playing_on_its_own_is_a_film(hass, home, freezer):
+async def test_kodi_playing_on_its_own_is_a_video(hass, home, freezer):
     _off(hass, home, plug="on")
     entry = await _room(hass, freezer)
     ctrl = entry.runtime_data
@@ -137,14 +137,14 @@ async def test_kodi_playing_on_its_own_is_a_film(hass, home, freezer):
     await tick(hass, freezer, 3)
     assert not home.on(TV)
     home.kitchen("idle")
-    home.kodi("playing")  # a film chosen in Kodi
+    home.kodi("playing")  # a video chosen in Kodi
     await hass.async_block_till_done()
     await tick(hass, freezer, 3)
     assert not ctrl.serving(ctrl.sources["video"]) and home.on(TV)
     assert ctrl.active_source.key == "video"
 
 
-async def test_kodi_in_its_menu_after_the_music_is_no_film(hass, home, freezer):
+async def test_kodi_in_its_menu_after_the_music_is_no_video(hass, home, freezer):
     _off(hass, home, plug="on")
     entry = await _room(hass, freezer)
     events = async_capture_events(hass, EVENT_SOURCE_CHANGED)
@@ -156,7 +156,7 @@ async def test_kodi_in_its_menu_after_the_music_is_no_film(hass, home, freezer):
     home.kitchen("paused")
     await hass.async_block_till_done()
     await tick(hass, freezer, 20)
-    assert not home.on(TV) and home.on(SPEAKERS), "the music holds; Kodi's menu is no film"
+    assert not home.on(TV) and home.on(SPEAKERS), "the music holds; Kodi's menu is no video"
     assert "video" not in [e.data["source"] for e in events], "no source change to video either"
     assert entry.runtime_data.sources["kodi_music"].in_use
 
@@ -178,10 +178,10 @@ async def test_kodi_goes_off_with_the_music(hass, home, freezer):
     await tick(hass, freezer, 3 * 60, step=30)
     assert not home.on(HOST), "its plug after its off_wait"
     assert not home.on(TV)
-    assert entry.runtime_data.sources["video"].own, "off: on by itself next time is a film"
+    assert entry.runtime_data.sources["video"].own, "off: on by itself next time is a video"
 
 
-async def test_starting_it_while_a_film_plays_keeps_kodi_on(hass, home, freezer):
+async def test_starting_it_while_a_video_plays_keeps_kodi_on(hass, home, freezer):
     _off(hass, home, plug="on")
     await _room(hass, freezer)
     home.kodi("playing")
@@ -193,7 +193,7 @@ async def test_starting_it_while_a_film_plays_keeps_kodi_on(hass, home, freezer)
     assert calls_to(home, KODI, "media_stop") and not calls_to(home, KODI, "turn_off")
 
 
-async def test_after_a_restart_paused_music_in_kodi_is_no_film(hass, home, freezer):
+async def test_after_a_restart_paused_music_in_kodi_is_no_video(hass, home, freezer):
     hass.states.async_set(HOST, "on")
     hass.states.async_set(SPEAKERS, "on")
     home.kodi("idle")
@@ -297,8 +297,8 @@ def _stored(hass_storage, entry_id, **data):
     hass_storage[f"{DOMAIN}.{entry_id}"] = {"version": STORAGE_VERSION, "minor_version": 1, "key": f"{DOMAIN}.{entry_id}", "data": data}
 
 
-async def test_playing_on_it_while_a_film_plays_keeps_kodi_on(hass, home, freezer):
-    """From the browser (a wake, a handover alike): the film stops, Kodi stays on for it."""
+async def test_playing_on_it_while_a_video_plays_keeps_kodi_on(hass, home, freezer):
+    """From the browser (a wake, a handover alike): the video stops, Kodi stays on for it."""
     _off(hass, home, plug="on")
     entry = await _room(hass, freezer)
     ctrl = entry.runtime_data
@@ -334,7 +334,7 @@ async def test_choosing_kodi_while_the_music_plays(hass, home, freezer):
     assert home.on(TV) and not calls_to(home, KODI, "turn_off")
 
 
-async def test_music_assistant_dropping_out_is_no_film(hass, home, freezer):
+async def test_music_assistant_dropping_out_is_no_video(hass, home, freezer):
     _off(hass, home, plug="on")
     entry = await _room(hass, freezer)
     home.kodi("playing")
@@ -392,7 +392,7 @@ async def test_a_kodi_the_room_does_not_switch_off(hass, home, freezer, caplog):
     await hass.async_block_till_done()
     await tick(hass, freezer, 40 * 60, step=30)
     assert caplog.text.count("goes off after its sound devices") == 0
-    home.kodi("playing")  # a film chosen in Kodi
+    home.kodi("playing")  # a video chosen in Kodi
     await hass.async_block_till_done()
     await tick(hass, freezer, 5)
     assert home.on(TV) and not entry.runtime_data.sources["video"].suppressed

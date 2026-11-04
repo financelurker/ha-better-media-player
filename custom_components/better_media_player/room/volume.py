@@ -15,7 +15,7 @@ The room remembers the volume last chosen for it, wherever it was changed:
 through the room player, or directly on one of its players (Music Assistant
 app, Kodi remote, ...). When a player of the room starts to play on its own
 (not as a member of a group), it gets that volume. So switching from music to
-video, or starting a film by casting to Kodi, keeps the room's volume.
+video, or starting a video by casting to Kodi, keeps the room's volume.
 
 Not learned: what Better Media Player sets itself (sleep timer fade and
 restore, this sync, follow me's join volume) and anything that happens while

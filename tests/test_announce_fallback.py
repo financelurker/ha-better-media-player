@@ -91,7 +91,7 @@ async def test_a_room_that_is_off_comes_up_and_goes_off(hass, home, freezer):
     assert not home.on(SPEAKERS)
 
 
-async def _film(hass, home, freezer, music="idle"):
+async def _video(hass, home, freezer, music="idle"):
     entry = await _room(hass, home, freezer, state=music)
     home.kodi("playing", media_content_id="movie-3", media_content_type="movie", media_position=600.0,
               media_position_updated_at=home.now(), media_duration=5400.0, volume_level=0.6)
@@ -101,16 +101,16 @@ async def _film(hass, home, freezer, music="idle"):
     return entry
 
 
-async def test_a_film_while_the_music_player_is_free_is_handled_as_usual(hass, home, freezer):
-    await _film(hass, home, freezer)
+async def test_a_video_while_the_music_player_is_free_is_handled_as_usual(hass, home, freezer):
+    await _video(hass, home, freezer)
     await speak(hass)
     assert ("play_media", TTS) in [(s, d.get("media_content_id")) for s, d in _played(home, MUSIC)]
     kodi = [s for s, _d in _played(home, KODI) if s in ("media_pause", "media_play", "play_media")]
     assert kodi == ["media_pause", "media_play"], "paused and on again (the setting), not replaced"
 
 
-async def test_the_film_player_announces_when_the_music_player_is_off(hass, home, freezer):
-    await _film(hass, home, freezer, music="off")
+async def test_the_video_player_announces_when_the_music_player_is_off(hass, home, freezer):
+    await _video(hass, home, freezer, music="off")
     await speak(hass)
     calls = [(s, d.get("media_content_id")) for s, d in _played(home, KODI) if s in ("media_pause", "play_media")]
     assert calls == [("media_pause", None), ("play_media", TTS), ("play_media", "movie-3")]
@@ -222,7 +222,7 @@ async def test_a_player_in_a_group_is_left_alone(hass, home, freezer):
     assert not [p for p in _played(home, MUSIC) if p[0] == "play_media"]
 
 
-# ------------------------------------------------------- films, night, streams
+# ------------------------------------------------------- videos, night, streams
 
 
 async def test_music_is_announced_on_the_music_player_also_with_kodi_idle(hass, home, freezer):
@@ -235,13 +235,13 @@ async def test_music_is_announced_on_the_music_player_also_with_kodi_idle(hass, 
     assert ("play_media", TTS) in [(s, d.get("media_content_id")) for s, d in _played(home, MUSIC)]
 
 
-async def test_a_film_with_paused_music_keeps_both(hass, home, freezer):
-    await _film(hass, home, freezer, music="paused")
+async def test_a_video_with_paused_music_keeps_both(hass, home, freezer):
+    await _video(hass, home, freezer, music="paused")
     await speak(hass)
     music = [(s, d.get("media_content_id")) for s, d in _played(home, MUSIC) if s in ("play_media", "media_pause")]
     assert music == [("play_media", TTS), ("play_media", "track-7"), ("media_pause", None)]
     kodi = [s for s, _d in _played(home, KODI) if s in ("media_pause", "media_play", "play_media")]
-    assert kodi == ["media_pause", "media_play"], "the film is paused and goes on, not replaced"
+    assert kodi == ["media_pause", "media_play"], "the video is paused and goes on, not replaced"
 
 
 async def test_at_night_the_volume_comes_back_too(hass, home, freezer):
@@ -267,8 +267,8 @@ async def test_something_started_meanwhile_is_not_replaced(hass, home, freezer):
     assert not [d for s, d in _played(home, MUSIC) if s == "play_media" and d["media_content_id"] == "track-7"]
 
 
-async def test_two_over_a_film_resume_it_after_the_last(hass, home, freezer):
-    await _film(hass, home, freezer)
+async def test_two_over_a_video_resume_it_after_the_last(hass, home, freezer):
+    await _video(hass, home, freezer)
     home.clip_seconds = 6.0
     first = speak_later(hass)
     await settle_held(hass)

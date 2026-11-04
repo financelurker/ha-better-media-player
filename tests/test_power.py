@@ -54,7 +54,7 @@ async def test_start_timeout_rolls_back(hass, home, freezer):
 
 
 async def test_a_failed_start_leaves_on_what_music_still_needs(hass, home, freezer):
-    """Music paused (it holds the speakers); a film that does not start switches off
+    """Music paused (it holds the speakers); a video that does not start switches off
     only what it switched on."""
     await setup_room(hass)
     home.music("playing")

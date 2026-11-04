@@ -48,7 +48,7 @@ class KeepOnSwitch(ControlEntity, SwitchEntity):
     what is on stays on. Starting still switches on. Stays on until turned off
     or All off (also over a restart).
 
-    Shown while something of the room is on (it is set ahead too, during a film)
+    Shown while something of the room is on (it is set ahead too, during a video)
     or it is on."""
 
     @property
