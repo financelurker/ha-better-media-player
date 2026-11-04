@@ -71,7 +71,7 @@ async def test_room_player_icon_follows_the_source(hass, home, freezer):
     await hass.async_block_till_done()
     await tick(hass, freezer, 5)
     assert _icon(hass) == "mdi:music"
-    home.kodi("playing")  # a film cast to Kodi: the video takes over
+    home.kodi("playing")  # a video cast to Kodi: the video takes over
     await hass.async_block_till_done()
     await tick(hass, freezer, 5)
     assert _icon(hass) == "mdi:television-play"

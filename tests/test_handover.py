@@ -304,14 +304,14 @@ async def test_after_follow_me_the_source_room_goes_off(hass, rooms, freezer):
     assert not home.on(SPEAKERS), "the living room went off (no run-down)"
 
 
-async def test_music_from_behind_a_film_keeps_the_film(hass, rooms, freezer):
+async def test_music_from_behind_a_video_keeps_the_video(hass, rooms, freezer):
     home = rooms
     await _video(hass, home, freezer)
     home.music("paused", media_content_id="t", media_position=10.0, media_position_updated_at=dt_util.utcnow())
     await hass.async_block_till_done()
     await _handover(hass, ROOM, KROOM, source="audio")
     assert home.transferred[-1] == (MUSIC, KITCHEN)
-    assert hass.states.get(KODI).state == "playing" and home.on(TV), "the film plays on"
+    assert hass.states.get(KODI).state == "playing" and home.on(TV), "the video plays on"
 
 
 async def test_not_a_room_names_the_entity(hass, rooms, freezer):

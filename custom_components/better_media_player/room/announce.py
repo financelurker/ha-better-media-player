@@ -6,7 +6,7 @@ supports Home Assistant's announcements, e.g. Music Assistant's):
 1. The player of the active source, if it announces: the announcement takes
    the same way as what plays (same speakers, same input of an amplifier),
    and the player pauses and resumes it itself.
-2. Else the other player of the room, if it announces; a film that plays
+2. Else the other player of the room, if it announces; a video that plays
    meanwhile is paused, overlaid or turned down (a setting of the room).
 3. The room is off: the music player, else the video player. The room's
    devices (speakers, volume device) come up for it and go off right after.
@@ -75,7 +75,7 @@ ANNOUNCE_VOLUME = "announce_volume"  # in extra: 0..100 (Music Assistant's)
 SETTLE_SECONDS = 2  # the room holds still this long after the announcement
 PLAY_TIMEOUT = 300  # s: an announcement that is not over by then is taken as over
 START_SECONDS = 10  # fallback: the announcement starts within this
-RESTORE_SECONDS = 30  # fallback: what played starts again within this (e.g. a film from a NAS)
+RESTORE_SECONDS = 30  # fallback: what played starts again within this (e.g. a video from a NAS)
 _NOT_READY = {STATE_OFF, "standby", "unavailable", "unknown"}
 _PLAYING = {"playing", "buffering"}
 _HOLDS = {"playing", "buffering", "paused"}  # something to come back to
@@ -103,8 +103,8 @@ class RoomAnnouncer:
         self._woken: set[str] = set()  # players that were off: they go off again after
         self._fades = 0.0  # a preset fade held still (s it had left)
         self._off = False  # the room was turned off during an announcement
-        self._film_count = 0  # announcements over the film right now
-        self._film_undo: Callable[[], Awaitable[None]] | None = None
+        self._video_count = 0  # announcements over the video right now
+        self._video_undo: Callable[[], Awaitable[None]] | None = None
         self._fallback_locks: dict[str, asyncio.Lock] = {}
         self._night = 0.0  # the night's fade back held still (s it had left)
 
@@ -148,8 +148,8 @@ class RoomAnnouncer:
         return None
 
     def choose_fallback(self) -> Source | None:
-        """No player announces. A film plays: the music player if it is up and
-        plays nothing (the film is handled as with the native way; paused music
+        """No player announces. A video plays: the music player if it is up and
+        plays nothing (the video is handled as with the native way; paused music
         comes back). Else the player of what plays. The room is off: the music
         player, else the video player. Only players that play media and are in
         no group (a group's queue would be lost)."""
@@ -195,12 +195,12 @@ class RoomAnnouncer:
         level = self.ctrl.volume.preset_value(volume) if isinstance(volume, str) else volume
         return announce_volume(level, self.ctrl.night.cap)
 
-    def film(self, src: Source) -> Source | None:
-        """The film that plays while another player announces."""
+    def video_meanwhile(self, src: Source) -> Source | None:
+        """The video that plays while another player announces."""
         video = self.ctrl.video
         if video is None or video is src or not self.ctrl.source_active(video):
             return None
-        held = self._film_count > 0  # (paused by an announcement that still runs)
+        held = self._video_count > 0  # (paused by an announcement that still runs)
         return video if held or self.ctrl.source_playing(video) else None
 
     # ---------------------------------------------------------- announcing
@@ -236,30 +236,30 @@ class RoomAnnouncer:
                 data[ANNOUNCE_VOLUME] = level
         else:
             fallback_level = self.fallback_volume(volume)
-        film = self.film(src)
+        video = self.video_meanwhile(src)
         roles = self._roles_for(src)
         protected: list[str] = []
-        film_counted = False
+        video_counted = False
         play: asyncio.Task | None = None
 
         async def _finish() -> None:
-            if film_counted:
-                self._film_count -= 1
-                if self._film_count == 0 and self._film_undo is not None:
-                    undo, self._film_undo = self._film_undo, None
-                    await undo()  # the last announcement over the film: it goes on
+            if video_counted:
+                self._video_count -= 1
+                if self._video_count == 0 and self._video_undo is not None:
+                    undo, self._video_undo = self._video_undo, None
+                    await undo()  # the last announcement over the video: it goes on
             self.end_later(roles, protected)
 
         self.begin(roles)
         try:
             await self._power_up(src, roles)
-            protected = [src.player, *([film.player] if film else [])]
+            protected = [src.player, *([video.player] if video else [])]
             self.protect(protected)
-            if film is not None:
-                film_counted = True
-                self._film_count += 1
-                if self._film_count == 1:
-                    self._film_undo = await self._film_before(film)
+            if video is not None:
+                video_counted = True
+                self._video_count += 1
+                if self._video_count == 1:
+                    self._video_undo = await self._video_before(video)
             # its own task: the room holds still until the player's system is
             # through, also if our caller gives up (e.g. an automation restarts)
             if native:
@@ -392,8 +392,8 @@ class RoomAnnouncer:
             await ctrl._source_on(src)
             await ctrl._wait_until(lambda: ctrl.player_state(src) not in _NOT_READY, timeout)
 
-    async def _film_before(self, video: Source) -> Callable[[], Awaitable[None]] | None:
-        """The film meanwhile: paused (turned down if it cannot pause), overlaid
+    async def _video_before(self, video: Source) -> Callable[[], Awaitable[None]] | None:
+        """The video meanwhile: paused (turned down if it cannot pause), overlaid
         or turned down; returns what undoes it afterwards."""
         ctrl = self.ctrl
         mode = ctrl.setting(CONF_ANNOUNCE_VIDEO)
@@ -577,9 +577,9 @@ async def async_announce_rooms(
 
 def _playing_group(hass: HomeAssistant, room: RoomController) -> str | None:
     """The playing group whose member announces for the room (only when the
-    music player announces and no film plays: the group knows nothing of it)."""
+    music player announces and no video plays: the group knows nothing of it)."""
     src = room.announce.choose()
-    if src is None or src.kind != SOURCE_AUDIO or room.announce.film(src) is not None:
+    if src is None or src.kind != SOURCE_AUDIO or room.announce.video_meanwhile(src) is not None:
         return None
     for group in src.backend.groups_of(src.player):
         state = hass.states.get(group)

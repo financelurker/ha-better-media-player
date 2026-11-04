@@ -18,7 +18,7 @@ def turned_off(home) -> list[str]:
     return [c[2] for c in home.calls if c[1] == "turn_off"]
 
 
-async def _film_paused(hass, home, freezer, state="paused"):
+async def _video_paused(hass, home, freezer, state="paused"):
     home.kodi("playing")
     await hass.async_block_till_done()
     await tick(hass, freezer, 5)
@@ -26,9 +26,9 @@ async def _film_paused(hass, home, freezer, state="paused"):
     await hass.async_block_till_done()
 
 
-async def test_a_paused_film_holds_then_sound_player_picture(hass, home, freezer):
+async def test_a_paused_video_holds_then_sound_player_picture(hass, home, freezer):
     await setup_room(hass)
-    await _film_paused(hass, home, freezer)
+    await _video_paused(hass, home, freezer)
     await tick(hass, freezer, 29 * 60, step=60)
     assert home.on(TV) and home.on(SPEAKERS)
     assert not calls_to(home, KODI, "turn_off")
@@ -41,7 +41,7 @@ async def test_a_paused_film_holds_then_sound_player_picture(hass, home, freezer
 
 async def test_kodi_s_menu_is_the_same_as_paused(hass, home, freezer):
     await setup_room(hass)
-    await _film_paused(hass, home, freezer, "idle")
+    await _video_paused(hass, home, freezer, "idle")
     await tick(hass, freezer, 29 * 60, step=60)
     assert home.on(TV)
     await tick(hass, freezer, 90, step=5)
@@ -52,7 +52,7 @@ async def test_the_picture_waits_for_the_player_to_go_off(hass, home, freezer):
     """A slow Kodi: the TV stays until Kodi is off (at most a minute)."""
     home.kodi_suspends = False
     await setup_room(hass)
-    await _film_paused(hass, home, freezer)
+    await _video_paused(hass, home, freezer)
     await tick(hass, freezer, 30 * 60 + 30, step=10)
     assert calls_to(home, KODI, "turn_off") and not home.on(SPEAKERS)
     assert home.on(TV), "waits for Kodi"
@@ -65,7 +65,7 @@ async def test_the_picture_waits_for_the_player_to_go_off(hass, home, freezer):
 async def test_the_picture_goes_after_a_minute_if_the_player_does_not(hass, home, freezer):
     home.kodi_suspends = False
     await setup_room(hass)
-    await _film_paused(hass, home, freezer)
+    await _video_paused(hass, home, freezer)
     await tick(hass, freezer, 30 * 60 + 30, step=10)
     assert home.on(TV)
     await tick(hass, freezer, 70, step=5)
@@ -74,7 +74,7 @@ async def test_the_picture_goes_after_a_minute_if_the_player_does_not(hass, home
 
 async def test_playing_again_in_time_holds_anew(hass, home, freezer):
     await setup_room(hass)
-    await _film_paused(hass, home, freezer)
+    await _video_paused(hass, home, freezer)
     await tick(hass, freezer, 20 * 60, step=60)
     home.kodi("playing")
     await hass.async_block_till_done()
@@ -103,14 +103,14 @@ async def test_a_dropout_of_the_player_does_not_turn_the_room_off(hass, home, fr
 async def test_the_night_idle_timeout(hass, home, freezer):
     await setup_room(hass)
     await set_night(hass)
-    await _film_paused(hass, home, freezer)
+    await _video_paused(hass, home, freezer)
     await tick(hass, freezer, 4 * 60, step=30)
     assert home.on(TV)
     await tick(hass, freezer, 90, step=5)
     assert not home.on(TV), "5 min at night"
 
 
-async def test_music_after_a_film_the_tv_goes_at_once(hass, home, freezer):
+async def test_music_after_a_video_the_tv_goes_at_once(hass, home, freezer):
     """A source chosen: what the new one does not need goes off right away."""
     home.kodi_boots = True
     await setup_room(hass)
@@ -126,7 +126,7 @@ async def test_music_after_a_film_the_tv_goes_at_once(hass, home, freezer):
     assert home.on(SPEAKERS)
 
 
-async def test_music_paused_while_a_film_plays_keeps_what_the_film_needs(hass, home, freezer):
+async def test_music_paused_while_a_video_plays_keeps_what_the_video_needs(hass, home, freezer):
     await setup_room(hass)
     home.music("playing")
     home.kodi("playing")
@@ -135,7 +135,7 @@ async def test_music_paused_while_a_film_plays_keeps_what_the_film_needs(hass, h
     home.music("paused")
     await hass.async_block_till_done()
     await tick(hass, freezer, 40 * 60, step=60)
-    assert home.on(SPEAKERS) and home.on(TV), "the film still needs them"
+    assert home.on(SPEAKERS) and home.on(TV), "the video still needs them"
 
 
 async def test_a_player_the_room_cannot_turn_off_stays_on(hass, home, freezer):
@@ -145,7 +145,7 @@ async def test_a_player_the_room_cannot_turn_off_stays_on(hass, home, freezer):
     hass.config_entries.async_update_entry(entry, options={**entry.options, "sources": sources})
     await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
-    await _film_paused(hass, home, freezer)
+    await _video_paused(hass, home, freezer)
     await tick(hass, freezer, 31 * 60, step=60)
     assert not home.on(TV) and not home.on(SPEAKERS)
     assert not calls_to(home, KODI, "turn_off")
@@ -157,7 +157,7 @@ async def test_the_player_s_plug_waits_for_it_to_shut_down(hass, home, freezer):
     hass.states.async_set(HOST, "on")
     await setup_room(hass, video_host=HOST)
     await set_setting(hass, "off_wait", 3, device="video")
-    await _film_paused(hass, home, freezer)
+    await _video_paused(hass, home, freezer)
     await tick(hass, freezer, 31 * 60, step=30)
     assert hass.states.get(KODI).state == "off" and not home.on(TV)
     assert home.on(HOST), "off_wait after Kodi is off"
@@ -190,7 +190,7 @@ async def test_a_tv_that_kodi_turns_off_goes_with_kodi(hass, home, freezer):
          device("speakers", "speakers", SPEAKERS)],
         [{"from": "video", "to": "display", "signals": ["picture"]}, {"from": "video", "to": "speakers", "signals": ["sound"]}],
     )
-    await _film_paused(hass, home, freezer)
+    await _video_paused(hass, home, freezer)
     await tick(hass, freezer, 30 * 60 + 30, step=10)
     assert not home.on(SPEAKERS)
     assert hass.states.get(KODI).state == "off"
@@ -202,7 +202,7 @@ async def test_a_tv_that_kodi_turns_off_goes_with_kodi(hass, home, freezer):
 async def test_an_idle_timeout_of_zero_never_ends(hass, home, freezer):
     await setup_room(hass)
     await set_setting(hass, "idle_timeout", 0)
-    await _film_paused(hass, home, freezer)
+    await _video_paused(hass, home, freezer)
     await tick(hass, freezer, 4 * 60 * 60, step=600)
     assert home.on(TV)
 
@@ -231,7 +231,7 @@ async def test_a_stopped_music_player_after_a_restart_does_not_switch_anything_o
 
 async def test_the_status_while_it_holds(hass, home, freezer):
     await setup_room(hass)
-    await _film_paused(hass, home, freezer)
+    await _video_paused(hass, home, freezer)
     await tick(hass, freezer, 5)
     assert hass.states.get("sensor.living_room_status").state == "on"
 
@@ -339,8 +339,8 @@ async def test_a_music_player_with_only_its_hardware_plug_goes_off(hass, home, f
     assert not home.on(HOST)
 
 
-async def test_paused_music_ends_when_a_film_is_chosen(hass, home, freezer):
-    """Off means off: after the film nothing waits for the music paused before it."""
+async def test_paused_music_ends_when_a_video_is_chosen(hass, home, freezer):
+    """Off means off: after the video nothing waits for the music paused before it."""
     home.kodi_boots = True
     await setup_room(hass)
     home.music("playing")
@@ -382,7 +382,7 @@ async def test_a_new_time_is_told_again(hass, home, freezer):
     await setup_room(hass)
     seen = []
     hass.bus.async_listen("better_media_player_run_down", lambda e: seen.append(dict(e.data)))
-    await _film_paused(hass, home, freezer)
+    await _video_paused(hass, home, freezer)
     await tick(hass, freezer, 20)
     first = seen[-1]["devices"]["display"]
     n = len(seen)
@@ -396,7 +396,7 @@ async def test_the_player_waits_for_its_sound_devices(hass, home, freezer):
     """Speakers that wait for their standby: Kodi goes after them (at most a minute)."""
     hass.states.async_set("sensor.speaker_power", "20")
     await setup_room(hass, audio_power=["sensor.speaker_power"], audio_standby=True)
-    await _film_paused(hass, home, freezer)
+    await _video_paused(hass, home, freezer)
     await tick(hass, freezer, 30 * 60 + 20, step=10)
     assert home.on(SPEAKERS), "waits for its standby"
     assert not calls_to(home, KODI, "turn_off"), "the sound first"

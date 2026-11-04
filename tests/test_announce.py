@@ -1,4 +1,4 @@
-"""Announcements in a room: the player, the room's devices, the film, the volume."""
+"""Announcements in a room: the player, the room's devices, the video, the volume."""
 
 from __future__ import annotations
 
@@ -76,7 +76,7 @@ async def test_the_player_of_the_active_source_first(hass, home, freezer):
     entry.runtime_data.data["last_source"] = "video"
     await hass.async_block_till_done()
     await speak(hass)
-    assert [a[0] for a in home.announcements] == [KODI], "the film's player announces itself"
+    assert [a[0] for a in home.announcements] == [KODI], "the video's player announces itself"
     assert not calls_to(home, KODI, "media_pause"), "it pauses and resumes itself"
 
 
@@ -116,10 +116,10 @@ async def test_a_room_that_was_on_runs_down_as_usual(hass, home, freezer):
     assert home.on(SPEAKERS), "its run-down goes on"
 
 
-# ------------------------------------------------------------------ the film
+# ------------------------------------------------------------------ the video
 
 
-async def _film(hass, home, freezer, mode=None, lower=None):
+async def _video(hass, home, freezer, mode=None, lower=None):
     entry = await _room(hass, home, freezer, playing=False)
     home.kodi("playing", volume_level=0.6)
     entry.runtime_data.data["last_source"] = "video"
@@ -132,23 +132,23 @@ async def _film(hass, home, freezer, mode=None, lower=None):
     return entry
 
 
-async def test_the_film_pauses_and_goes_on(hass, home, freezer):
-    entry = await _film(hass, home, freezer)
+async def test_the_video_pauses_and_goes_on(hass, home, freezer):
+    entry = await _video(hass, home, freezer)
     assert entry.runtime_data.setting("announce_video") == "pause"
     await speak(hass)
     order = _order(home, {"media_pause", "announce", "media_play"})
     assert order == [("media_pause", KODI), ("announce", MUSIC), ("media_play", KODI)]
 
 
-async def test_the_film_is_overlaid(hass, home, freezer):
-    await _film(hass, home, freezer, mode="overlay")
+async def test_the_video_is_overlaid(hass, home, freezer):
+    await _video(hass, home, freezer, mode="overlay")
     await speak(hass)
     assert not calls_to(home, KODI, "media_pause")
     assert not calls_to(home, KODI, "volume_set")
 
 
-async def test_the_film_is_turned_down_and_back(hass, home, freezer):
-    await _film(hass, home, freezer, mode="lower", lower=25)
+async def test_the_video_is_turned_down_and_back(hass, home, freezer):
+    await _video(hass, home, freezer, mode="lower", lower=25)
     levels = []
     home.announce_hold = asyncio.Event()
     task = speak_later(hass)
@@ -220,7 +220,7 @@ async def test_no_source_change_and_no_snooze_meanwhile(hass, home, freezer):
     from custom_components.better_media_player.const import EVENT_SOURCE_CHANGED
     from pytest_homeassistant_custom_component.common import async_capture_events
 
-    entry = await _film(hass, home, freezer, mode="overlay")
+    entry = await _video(hass, home, freezer, mode="overlay")
     await tick(hass, freezer, 10)
     events = async_capture_events(hass, EVENT_SOURCE_CHANGED)
     home.announce_hold = asyncio.Event()
@@ -363,7 +363,7 @@ async def test_a_preset_fade_goes_on_after_it(hass, home, freezer):
     assert hass.states.get(PRESET).state == "party"
 
 
-# ----------------------------------------------------- groups, films, failures
+# ----------------------------------------------------- groups, videos, failures
 
 
 async def test_a_device_target_announces_once(hass, home, freezer):
@@ -413,15 +413,15 @@ async def test_a_paused_group_is_not_announced_through(hass, house, freezer):
     assert sorted(a[0] for a in house.announcements) == sorted([MUSIC, KITCHEN])
 
 
-async def test_the_film_comes_back_up_although_its_lowering_was_late(hass, home, freezer):
-    await _film(hass, home, freezer, mode="lower", lower=50)
+async def test_the_video_comes_back_up_although_its_lowering_was_late(hass, home, freezer):
+    await _video(hass, home, freezer, mode="lower", lower=50)
     home.volume_lag = 1.0  # Kodi reports the lowered volume a second later
     await speak(hass)
     await tick(hass, freezer, 5)
     assert hass.states.get(KODI).attributes["volume_level"] == 0.6
 
 
-async def test_a_film_that_cannot_pause_is_turned_down(hass, home, freezer):
+async def test_a_video_that_cannot_pause_is_turned_down(hass, home, freezer):
     entry = await _room(hass, home, freezer, playing=False)
     hass.states.async_set(KODI, "playing", {"supported_features": KODI_FEATURES & ~F.PAUSE, "volume_level": 0.6})
     entry.runtime_data.data["last_source"] = "video"

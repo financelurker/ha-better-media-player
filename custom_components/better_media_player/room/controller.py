@@ -814,7 +814,7 @@ class RoomController:
     def _update_host(self, src: Source, now: float) -> None:
         """A player others run on: for them while one of them is used (the room
         started one, or one plays); for itself once it plays on its own for a
-        moment (a film chosen in Kodi), when the room starts it, or when it comes
+        moment (a video chosen in Kodi), when the room starts it, or when it comes
         on with none of them used."""
         state = self.player_state(src)
         guests = [g for g in self.guests(src) if not g.suppressed]  # (one the room stopped is no wish)

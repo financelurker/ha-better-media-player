@@ -29,7 +29,7 @@ def _sources(**more):
         {"id": "video", "player": KODI},
         {"id": "audio", "player": MUSIC},
         {"id": "kitchen", "kind": "audio", "player": KITCHEN, **more},
-        {"id": "film2", "kind": "video", "player": KODI2},
+        {"id": "video2", "kind": "video", "player": KODI2},
     ]
 
 
@@ -64,7 +64,7 @@ def _kitchen(home, state):
 async def test_a_second_music_player_needs_only_the_sound(hass, home, freezer):
     entry = await _room(hass, freezer)
     ctrl = entry.runtime_data
-    assert [(s.key, s.kind) for s in ctrl.sources.values()] == [("video", "video"), ("audio", "audio"), ("kitchen", "audio"), ("film2", "video")]
+    assert [(s.key, s.kind) for s in ctrl.sources.values()] == [("video", "video"), ("audio", "audio"), ("kitchen", "audio"), ("video2", "video")]
     events = async_capture_events(hass, EVENT_SOURCE_CHANGED)
     _kitchen(home, "playing")
     await hass.async_block_till_done()
@@ -143,13 +143,13 @@ async def test_a_trigger_for_each_further_player(hass, home, freezer):
     dev = room_device(hass, entry.entry_id)
     triggers = (await async_get_device_automations(hass, DeviceAutomationType.TRIGGER, [dev.id]))[dev.id]
     started = sorted(t["subtype"] for t in triggers if t["type"] == "source_started")
-    assert started == ["film2", "kitchen"]
+    assert started == ["kitchen", "video2"]
     hits = []
     hass.services.async_register("test", "hit", lambda call: hits.append(call.data["s"]))
     assert await async_setup_component(hass, automation.DOMAIN, {automation.DOMAIN: [
         {"trigger": {"platform": "device", "domain": DOMAIN, "device_id": dev.id, "type": "source_started", "subtype": s},
          "action": {"service": "test.hit", "data": {"s": s}}}
-        for s in ("kitchen", "film2")
+        for s in ("kitchen", "video2")
     ]})
     _kitchen(home, "playing")
     await hass.async_block_till_done()
@@ -186,10 +186,10 @@ def test_the_handover_target():
     assert target_of(dest, music).key == "radio", "neither can: any of the kind that can"
     dest.sources["radio"].backend.ok = False
     assert target_of(dest, music).key == "audio", "none can: the same id (for the message)"
-    film = src("film", "video")
-    dest = room(src("video", "video"), src("film2", "video"), video="film2")
-    assert target_of(dest, film).key == "film2", "video: the one that is on"
-    assert target_of(room(src("film", "video"), video="film"), music) is None
+    other = src("clip", "video")
+    dest = room(src("video", "video"), src("video2", "video"), video="video2")
+    assert target_of(dest, other).key == "video2", "video: the one that is on"
+    assert target_of(room(src("clip", "video"), video="clip"), music) is None
 
 
 # ------------------------------------------------------------------ the panel's checks
@@ -224,20 +224,20 @@ def test_player_ids_are_checked(hass, home):
 
 
 def test_a_device_cannot_have_a_player_s_id(hass, home):
-    for dev_id in ("kitchen", "kitchen_host", "film2_host", "audio_host"):
+    for dev_id in ("kitchen", "kitchen_host", "video2_host", "audio_host"):
         assert "reserved_id" in _codes(hass, _draft(devices=[device(dev_id, "display", TV)])), dev_id
 
 
 def test_the_chosen_players_must_be_there(hass, home):
     assert "source_missing" in _codes(hass, _draft(start_source="gone"))
     assert "source_missing" in _codes(hass, _draft(music_source="gone"))
-    assert "music_source_not_music" in _codes(hass, _draft(music_source="film2"))
-    assert _codes(hass, _draft(start_source="film2", music_source="kitchen")) == set()
+    assert "music_source_not_music" in _codes(hass, _draft(music_source="video2"))
+    assert _codes(hass, _draft(start_source="video2", music_source="kitchen")) == set()
 
 
 async def test_a_wake_without_a_source_takes_the_one_the_room_starts_with(hass, home, freezer):
-    entry = await _room(hass, freezer, start_source="film2")
-    assert entry.runtime_data.wake_source == "film2"
+    entry = await _room(hass, freezer, start_source="video2")
+    assert entry.runtime_data.wake_source == "video2"
 
 
 async def test_the_second_video_player_is_the_room_s_source(hass, home, freezer):
@@ -246,7 +246,7 @@ async def test_the_second_video_player_is_the_room_s_source(hass, home, freezer)
     home.set(KODI2, "idle")
     await hass.async_block_till_done()
     await tick(hass, freezer, 8)
-    assert [e.data["source"] for e in events] == ["film2"]
+    assert [e.data["source"] for e in events] == ["video2"]
 
 
 async def test_the_speakers_of_every_music_player(hass, home, freezer):
@@ -290,10 +290,10 @@ async def test_a_handover_finds_the_player_of_the_kind(hass, home, freezer):
 async def test_the_panel_shows_what_a_player_is_for(hass, home, freezer):
     from custom_components.better_media_player.panel.view import room_view
 
-    entry = await _room(hass, freezer, start_source="film2")
+    entry = await _room(hass, freezer, start_source="video2")
     view = room_view(hass, entry, None)
-    assert [(s["id"], s["kind"], s["needs"]) for s in view["sources"]][2:] == [("kitchen", "audio", ["sound"]), ("film2", "video", ["picture", "sound"])]
-    assert view["start_source"] == "film2" and view["music_source"] is None
+    assert [(s["id"], s["kind"], s["needs"]) for s in view["sources"]][2:] == [("kitchen", "audio", ["sound"]), ("video2", "video", ["picture", "sound"])]
+    assert view["start_source"] == "video2" and view["music_source"] is None
 
 
 async def test_the_room_s_music_player_is_the_one_in_a_group(hass, home, freezer):
@@ -319,7 +319,7 @@ async def test_a_wake_s_player_is_the_room_s_music_player(hass, home, freezer):
 
 
 async def test_a_follow_wake_takes_the_music_player(hass, home, freezer, monkeypatch):
-    entry = await _room(hass, freezer, start_source="film2")
+    entry = await _room(hass, freezer, start_source="video2")
     keys = []
 
     async def _wake(key, *args, **kwargs):
@@ -328,11 +328,11 @@ async def test_a_follow_wake_takes_the_music_player(hass, home, freezer, monkeyp
     monkeypatch.setattr(entry.runtime_data.wake, "async_wake", _wake)
     for follow in (False, True):
         await hass.services.async_call(DOMAIN, "wake", {"entity_id": ROOM, "media_content_id": "x", "media_content_type": "music", "follow": follow}, blocking=True)
-    assert keys == ["film2", "audio"]
+    assert keys == ["video2", "audio"]
 
 
 async def test_turning_on_a_room_that_is_on_keeps_what_plays(hass, home, freezer):
-    entry = await _room(hass, freezer, start_source="film2")
+    entry = await _room(hass, freezer, start_source="video2")
     _kitchen(home, "playing")
     await hass.async_block_till_done()
     await tick(hass, freezer, 5)

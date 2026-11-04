@@ -63,7 +63,7 @@ async def test_a_player_taking_over_by_itself(hass, home, freezer):
     home.music("playing")  # started in the Music Assistant app
     await hass.async_block_till_done()
     await tick(hass, freezer, 5)
-    home.kodi("playing")  # a film cast to Kodi while the music plays
+    home.kodi("playing")  # a video cast to Kodi while the music plays
     await hass.async_block_till_done()
     await tick(hass, freezer, 5)
     assert _data(events) == [("audio", None, "player"), ("video", "audio", "player")]
@@ -271,7 +271,7 @@ async def test_failed_start_leaves_no_stale_request(hass, home, freezer):
     await _call(hass, "turn_on")
     await tick(hass, freezer, 120)
     events = async_capture_events(hass, EVENT_SOURCE_CHANGED)
-    home.kodi("playing")  # a film cast later
+    home.kodi("playing")  # a video cast later
     await hass.async_block_till_done()
     await tick(hass, freezer, 10)
     assert [e[2] for e in _data(events)] == ["player"]

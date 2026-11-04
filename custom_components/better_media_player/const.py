@@ -73,7 +73,7 @@ SERVICE_HANDOVER = "handover"
 # announcements
 SERVICE_ANNOUNCE = "announce"
 ATTR_IGNORE_QUIET = "ignore_quiet"
-CONF_ANNOUNCE_VIDEO = "announce_video"  # a film meanwhile: pause / overlay / lower
+CONF_ANNOUNCE_VIDEO = "announce_video"  # a video meanwhile: pause / overlay / lower
 CONF_ANNOUNCE_VIDEO_LOWER = "announce_video_lower"  # %, how much lower
 ANNOUNCE_PAUSE = "pause"
 ANNOUNCE_OVERLAY = "overlay"

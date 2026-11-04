@@ -68,7 +68,7 @@ async def test_scenario_a_webos_tv_cec_receiver_kodi(hass, home, freezer):
     assert ("media_player", "turn_on", LG) not in home.calls
     assert _selects(home, LG) == [] and _selects(home, AVR) == []
 
-    home.kodi("off")  # film over, music: the receiver goes to its network input
+    home.kodi("off")  # video over, music: the receiver goes to its network input
     home.music("playing")
     await hass.async_block_till_done()
     await tick(hass, freezer, 10)

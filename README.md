@@ -7,7 +7,7 @@
 
 **One smart media player per room.** Better Media Player combines a room's media players (e.g. Kodi and a Music Assistant player) and its TV, speakers and subwoofer into a single Home Assistant entity. Press play and the right devices come on in a safe order; when nothing needs them any more, they go off again by themselves.
 
-It is a custom integration in the spirit of Better Thermostat: you tell it what is in the room, it takes care of the rest.
+You tell it what is in the room, it takes care of the rest.
 
 ![Dashboard while Kodi plays](https://raw.githubusercontent.com/financelurker/ha-better-media-player/main/docs/images/dashboard.png?v=ce396117c6)
 
