@@ -13,7 +13,7 @@ A room has one volume, not one per player. It is the volume last chosen in the r
 
 ## On an own device
 
-With an amplifier, AV receiver or soundbar that has its own volume, choose **Room volume: Own device** and the **Volume device** in *Devices and volume*: a media player that can set a volume, or a `number` / `input_number` (its range counts as 0–100 %, e.g. −80…0 dB).
+With an amplifier, AV receiver or soundbar that has its own volume, give that device its **Volume** in its details (*Devices & cabling*): a media player that can set a volume, or a `number` / `input_number` (its range counts as 0–100 %, e.g. −80…0 dB). Then tick **Use as the room's volume** there, or under *Room & behaviour* → **Room volume** set it **on a device** and pick the **Device**.
 
 - The room's volume is the device's. Volume, steps and mute of the room player go there (mute only with a media player); changes on the device itself (its remote, its app) are learned, also during group playback.
 - The players keep their own level: set it once yourself (e.g. Kodi at 100 %). Better Media Player does not change it; after group playback (below) a player gets its own level back when it plays on its own again – except where follow me was stopped: there it keeps the level it had while it plays on.

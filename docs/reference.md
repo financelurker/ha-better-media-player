@@ -2,7 +2,7 @@
 
 [← Back to the overview](../README.md)
 
-Entities, settings and states of a room. `<room>` is the room's part of the entity id (with Home Assistant 2026.6 or newer it may start with the area's name, see [Setup](setup.md)).
+Entities, settings and states of a room. `<room>` is the room's part of the entity id (with Home Assistant 2026.6 or newer it may start with the area's name, see [Setup](setup.md)); the *off at* sensors always take the room's name only.
 
 ## Entities
 
@@ -11,23 +11,23 @@ Entities, settings and states of a room. `<room>` is the room's part of the enti
 | `media_player.<room>` | the room player, with media browser and search |
 | `sensor.<room>_status` | see table below |
 | `binary_sensor.<room>_problem` | start failed; reason in the attributes |
-| `binary_sensor.<room>_display_needed` | a device for the picture (display, …) is needed right now |
-| `binary_sensor.<room>_speakers_needed` | a device for the sound (speakers, receiver, subwoofer, …) is needed right now |
+| `binary_sensor.<room>_display_needed` | a device for the picture (display, …) is needed right now (only with such a device) |
+| `binary_sensor.<room>_speakers_needed` | a device for the sound (speakers, receiver, subwoofer, …) is needed right now (only with such a device) |
 | `switch.<room>_automatic_power` | off: no automatic switching; commands to the room player still work |
 | `switch.<room>_keep_on` | [keep on](room.md#keep-on): nothing is switched off automatically until it is turned off or *All off* |
-| `sensor.<room>_<device>_off_at` | when the device [goes off](room.md#when-devices-go-off) (the end of the idle timeout once nothing plays); `unknown` while none is planned (also for a device the room never switches off), and then hidden ([dynamic controls](dashboards.md#dynamic-controls)). `<device>` is the device's ID (`display`, `speakers`, …; `<player>_host` for a player's hardware plug, e.g. `video_host`, `audio_host`); passive devices have none |
+| `sensor.<room name>_<device>_off_at` | when the device [goes off](room.md#when-devices-go-off) (the end of the idle timeout once nothing plays); `unknown` while none is planned (also for a device the room never switches off), and then hidden ([dynamic controls](dashboards.md#dynamic-controls)). `<device>` is the device's ID (`display`, `speakers`, …; `<player>_host` for a player's hardware plug, e.g. `video_host`, `audio_host`); passive devices have none |
 | `button.<room>_all_off` | same as turning the room player off |
 | `number.<room>_sleep_timer` | sleep timer: minutes left, 0 = off |
 | `button.<room>_sleep_timer_15_min` | sleep timer +15 min (starts one if none runs) |
 | `sensor.<room>_sleep_timer_end` | when the sleep timer turns the room off |
-| `switch.<room>_quiet` | quiet mode: nothing from outside – no follow me, no announcements |
+| `switch.<room>_quiet` | quiet mode: nothing from outside – no follow me, no announcements (only with a music player) |
 | `switch.<room>_night_mode` | [night mode](night-sleep-wake.md#night-mode) |
 | `sensor.<room>_wake` | wake state; snooze end, end time and volumes in the attributes |
 | `button.<room>_snooze`, `button.<room>_stop_wake` | wake controls |
 | `select.<room>_volume_preset` | volume preset (the offered presets and manual) |
 | `select.<room>_hand_over_to` | [handover](handover.md) to another room |
-| `sensor.<room>_follow` | follow state of the room (with occupancy sensors only) |
-| `button.<room>_follow_me`, `button.<room>_stop_follow_me` | start / stop follow me |
+| `sensor.<room>_follow` | follow state of the room (with a music player and occupancy sensors only) |
+| `button.<room>_follow_me`, `button.<room>_stop_follow_me` | start / stop follow me (*Follow me*: with a music player and occupancy sensors; *Stop follow me*: with a music player) |
 | `sensor.better_media_player_follow_rooms` | central: rooms in follow me; follow-me player, start room in the attributes |
 
 ## Settings
@@ -65,7 +65,7 @@ How a room behaves. They are not entities: the panel shows them, the action [`be
 | `standby_max` | display 20 min, others 5 min | 1–120 | wait for standby at most |
 | `night_off` | subwoofer `true`, others `false` | `true` / `false` | off in night mode |
 
-**A player's**, for the plug of its hardware (only a player set up with one; `entity_id` and `device`: `video`, `audio` or the player's name):
+**A player's**, for the plug of its hardware (only a player set up with one; `entity_id` and `device`: the player's id – `video`, `audio`, … – or its name):
 
 | Setting | Default | Range | What it is |
 |---|---|---|---|

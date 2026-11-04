@@ -46,7 +46,7 @@
   "insp.sensors": "Power sensors",
   "insp.on_by": "Switched on by",
   "insp.off_by": "Switched off by",
-  "insp.fallback": "If CEC has not after {timeout} s, BMP switches it itself",
+  "insp.fallback": "If CEC has not switched it after {timeout} s, BMP switches it itself",
   "insp.inputs": "Inputs",
   "insp.on_routes": "Needed for",
   "insp.cable": "Cable",

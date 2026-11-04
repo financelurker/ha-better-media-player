@@ -16,8 +16,8 @@ All of them target a room player (`media_player.<room>`); the settings' actions 
 | `better_media_player.snooze` / `stop_wake` | snooze (optional `minutes`) / stop a wake |
 | `better_media_player.start_follow` / `stop_follow` | [follow me](follow-me.md) |
 | `better_media_player.handover` | [handover](handover.md) (`destination`; optional `source`, `keep_source_playing`) |
-| `better_media_player.announce` | [announcement](announcements.md) in one or more rooms (`message` or `media_content_id`; optional `tts_entity`, `language`, `volume`, `pre_announce`, `ignore_quiet`) |
-| `better_media_player.set_setting` | change a [setting](reference.md#settings) of the room, of one of its devices (`device`) or a central one (`setting`, `value`) |
+| `better_media_player.announce` | [announcement](announcements.md) in one or more rooms (`message` or `media_content_id` with optional `media_content_type`; optional `tts_entity`, `language`, `volume`, `pre_announce`, `ignore_quiet`) |
+| `better_media_player.set_setting` | change a [setting](reference.md#settings) of the room, of one of its devices or a player with a hardware plug (`device`) or a central one (`setting`, `value`) |
 | `better_media_player.get_settings` | the settings of the room and its devices, or the central ones (as the action's response; optional `device`) |
 | `media_player.play_media` with `extra: {night_mode: true}` | play and switch the [night mode](night-sleep-wake.md#night-mode) along |
 
@@ -74,7 +74,7 @@ Read them, e.g. to put a setting back later:
     message: "Night limit {{ room.settings.night_max_volume }} %, off after {{ room.settings.idle_timeout }} min without playback"
 ```
 
-The response: `settings` (the room's) and `devices` (each device's, by its id); without a room player only `settings` (the central ones). A value outside the setting's range, an unknown setting or device fail the action with the reason. All settings: [Reference](reference.md#settings).
+The response: `settings` (the room's), `devices` (each device's, by its id) and `sources` (each player with a hardware plug, by its id); without a room player only `settings` (the central ones). A value outside the setting's range, an unknown setting or device fail the action with the reason. All settings: [Reference](reference.md#settings).
 
 ### Sleep timer
 
@@ -193,7 +193,7 @@ When the room's source changes, the event `better_media_player_source_changed` i
 
 - Fired once the room is ready for it: after the power-on sequence, so the TV already has power (plus its wait after switching on).
 - Only for a stable change: two players at the same time for a moment fire nothing. A pause, new media on the same player, a dropout of the current source's player or a restart of Home Assistant fire nothing either. Another player that is unavailable (e.g. behind its host plug) counts as off.
-- The same as **device triggers** in the automation editor: *Source changed*, *Switched to video*, *Switched to music*, *Switched to …* (one for each further player, by its ID), *Source off*.
+- The same as **device triggers** in the automation editor: *Source changed*, *Switched to video*, *Switched to music*, *Switched to …* (one for each further player, by its ID), *Source off (no player active)*.
 
 ```yaml
 trigger:
@@ -216,13 +216,13 @@ The event `better_media_player_run_down` (with `entity_id`, `entry_id`, `room`) 
 
 | `type` | When | Data |
 |---|---|---|
-| `started` | nothing plays (for 10 s: not between two items): an off is planned, or its time changed (e.g. night mode) – once for the devices together | `devices`: device ID → when it goes off |
+| `started` | nothing plays (for 10 s: not between two items): an off is planned, or its time changed (e.g. night mode) – once for the devices together | `devices`: device ID (a player's hardware plug: `<player id>_host`) → when it goes off |
 | `cancelled` | the off no longer comes, or the device went off before its time | `devices`: the IDs; `reason`: `needed` (it plays again), `kept_on`, `all_off` (the button or the room player's off), `room_off` (a room off you did not press: sleep timer, end of a wake, handover), `manual`, `switched_off` (by hand, before its time), `automatic_off` |
 | `off` | a device went off after its run-down (one event per device) | `device`: its ID, `name` (its kind if it has none) |
 
 A start is no run-down: what it switches on is not counted until its player is there (nor when the start fails and switches it off again); once it is there and does not play (Kodi in its menu), the idle timeout runs. After a restart of Home Assistant it starts anew, without a new `started`.
 
-The same as device triggers: *Run-down started*, *Run-down cancelled*, *Device switched off after its run-down*. A warning shortly before: a time trigger on the device's `off_at` sensor with an offset.
+The same as device triggers: *Run-down started*, *Run-down cancelled (needed again or kept on)*, *Device switched off after its run-down*. A warning shortly before: a time trigger on the device's `off_at` sensor with an offset.
 
 ```yaml
 trigger:

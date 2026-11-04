@@ -24,10 +24,10 @@ It is a custom integration in the spirit of Better Thermostat: you tell it what 
 - **[One volume per room](https://github.com/financelurker/ha-better-media-player/blob/main/docs/volume.md)**, with presets (quiet, normal, loud, party) – on the players or on an amplifier, AV receiver or soundbar.
 - **[Night mode, sleep timer and wake up](https://github.com/financelurker/ha-better-media-player/blob/main/docs/night-sleep-wake.md)** with fades.
 - **[Announcements](https://github.com/financelurker/ha-better-media-player/blob/main/docs/announcements.md)** over what plays: a room that is off powers up for it and goes off again; a video pauses; at night at most the night mode's limit.
-- **[Media browser and search](https://github.com/financelurker/ha-better-media-player/blob/main/docs/media-browser.md)** across all of the room's players, with their queues on top; picking a movie powers up TV and Kodi first.
+- **[Media browser and search](https://github.com/financelurker/ha-better-media-player/blob/main/docs/media-browser.md)** across all of the room's players, with their queues on top; picking a video powers up TV and Kodi first.
 - **[Manual override](https://github.com/financelurker/ha-better-media-player/blob/main/docs/room.md#switched-by-hand):** switch a plug (or turn a device on) by hand and the room steps back until everything is off again.
 - **[Tidy dashboards](https://github.com/financelurker/ha-better-media-player/blob/main/docs/dashboards.md):** controls that make no sense right now are hidden.
-- **[For your own automations](https://github.com/financelurker/ha-better-media-player/blob/main/docs/automations.md):** events for source changes, night mode, sleep timer and wake up; device triggers for source changes and night mode.
+- **[For your own automations](https://github.com/financelurker/ha-better-media-player/blob/main/docs/automations.md):** events for source changes, night mode, sleep timer and wake up; device triggers for source changes, night mode and the run-down.
 
 ### Across rooms
 
@@ -91,7 +91,7 @@ Without the button: HACS → ⋮ → **Custom repositories** → add `https://gi
 1. Read [Before you start](https://github.com/financelurker/ha-better-media-player/blob/main/docs/setup.md): every plug and device belongs to exactly one controller.
 2. Settings → Devices & services → Add integration → **Better Media Player** (once; the follow-me player is optional).
 3. In the panel **Better Media Player** (sidebar): **+ Add room**, its players and devices, **Save** – once per room ([Setup](https://github.com/financelurker/ha-better-media-player/blob/main/docs/setup.md)).
-4. Use the room player `media_player.<room>` like any media player: press play and the room powers up. How the room behaves (times, night mode, presets, …) are its settings, in the panel or with the action `better_media_player.set_setting`; the defaults are a good start.
+4. Use the room player `media_player.<room>` like any media player: press play and the room powers up. How the room behaves (times, night mode, presets, …) is set by its settings, in the panel or with the action `better_media_player.set_setting`; the defaults are a good start.
 
 ## Documentation
 
