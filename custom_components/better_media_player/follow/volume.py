@@ -173,5 +173,10 @@ class FollowVolume:
 
         return _set
 
+    def member_target(self, player: str) -> float | None:
+        """Where a member's volume fades to after the night (None: no fade)."""
+        ramp = self._group_ramps.get(player)
+        return ramp.target if ramp is not None and ramp.running else None
+
     def member_ramping(self, members: list[str]) -> bool:
         return any((r := self._group_ramps.get(p)) is not None and r.running for p in members)

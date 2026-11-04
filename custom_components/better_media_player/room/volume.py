@@ -95,6 +95,9 @@ class RoomVolume:
         self._own: dict[str, deque[tuple[float, float]]] = {}
         self._pending: dict[str, CALLBACK_TYPE] = {}
         self._learning: dict[str, CALLBACK_TYPE] = {}
+        # with a volume device: players that keep the level follow me gave them while
+        # they play on (True: it played since; its next start gets its own level back)
+        self._kept: dict[str, bool] = {}
         self._fades: dict[str, VolumeRamp] = {}
         # fades cut by a restart, waiting for their player to play again
         self._cut: dict[str, dict[str, float]] = {}
@@ -243,18 +246,26 @@ class RoomVolume:
         self.ctrl._notify()
 
     @callback
-    def keep(self, src: Source) -> None:
+    def keep(self, src: Source, volume: float | None = None) -> None:
         """The player goes on on its own at the volume a group gave it (follow me
-        ended here): that is the room's volume now (with a volume device: the
-        player's own level), so it does not jump back to the one from before."""
-        current = _volume(self.hass.states.get(src.player))
-        if current is None or not self._takes_part(src):
+        ended here; volume: where it goes, else what it has): that is the room's
+        volume now, so it does not jump back to the one from before. With a
+        volume device the player keeps that level while it plays on (its own
+        level comes back the next time). Not while the sleep timer or a wake
+        sets its volume, and not when the room would set about that anyway
+        (e.g. its volume at night: the limit)."""
+        ctrl = self.ctrl
+        if ctrl.sleep.fading_player(src.player) or ctrl.wake.owns(src.player) or not self._takes_part(src):
             return
-        if self.ctrl.volume_device is not None:
-            self._levels[src.player] = round(current, 3)
-            self.ctrl._save()
-        else:
-            self.learn(current)
+        current = volume if volume is not None else _volume(self.hass.states.get(src.player))
+        if current is None:
+            return
+        if ctrl.volume_device is not None:
+            self._kept[src.player] = False
+            return
+        if self.value is not None and abs(ctrl.night.limit(self.value) - current) <= TOLERANCE:
+            return  # what it would get anyway: the room's volume (and preset) stay
+        self.learn(current)
 
     @callback
     def learn_wish(self, src: Source, volume: float) -> None:
@@ -296,6 +307,11 @@ class RoomVolume:
             return
         if self.ctrl.serving(src):
             return  # (on for a player that runs on it, e.g. Sendspin in Kodi: its volume is that one's)
+        if src.player in self._kept:
+            if new.state in _PLAYING:
+                self._kept[src.player] = True
+            elif self._kept[src.player] and new.state != "paused":
+                del self._kept[src.player]  # played on and stopped: its own level next time
         self._check_cut(src.player, *([self.ctrl.volume_device.id] if self.ctrl.volume_device else []))
         vol_new, vol_old = _volume(new), _volume(old)
         if self.ctrl.volume_device is not None:
@@ -372,6 +388,8 @@ class RoomVolume:
         """The player plays on its own: its own level back (a group set it)."""
         if (not left_group and self._in_group(src)) or self.ctrl.player_state(src) not in _POWERED:
             return
+        if src.player in self._kept:
+            return  # (follow me ended here: it plays on at that level)
         if not self._takes_part(src):
             return
         current = _volume(self.hass.states.get(src.player))

@@ -1153,3 +1153,57 @@ async def test_stop_keeps_the_volume_it_played_at(hass, house, freezer):
     assert hass.states.get(KITCHEN).attributes["volume_level"] == pytest.approx(joined, abs=0.01)
     assert kitchen.volume.value == pytest.approx(joined, abs=0.01), "the room's volume now"
 
+
+
+def _kitchen(hass):
+    from custom_components.better_media_player.room import get_rooms
+
+    return next(r for r in get_rooms(hass).values() if r.entry.title == "Kitchen")
+
+
+async def _kitchen_plays_along(hass, house, freezer, night: bool = False):
+    k = _kitchen(hass)
+    k.data["room_volume"] = 0.8
+    if night:
+        await hass.services.async_call("switch", "turn_on", {"entity_id": "switch.kitchen_night_mode"}, blocking=True)
+        await hass.async_block_till_done()
+    hass.states.async_set(LIVING_OCC, "on")
+    await follow_from(hass, house, volume=0.6)
+    hass.states.async_set(KITCHEN_OCC, "on")
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 3)
+    return k
+
+
+async def test_stop_at_night_keeps_the_rooms_own_volume(hass, house, freezer):
+    """At night it plays at the limit either way: the room's volume (for after the night) stays."""
+    k = await _kitchen_plays_along(hass, house, freezer, night=True)
+    at_limit = hass.states.get(KITCHEN).attributes["volume_level"]
+    await stop_follow(hass, KROOM)
+    await tick(hass, freezer, 5)
+    assert hass.states.get(KITCHEN).attributes["volume_level"] == pytest.approx(at_limit, abs=0.01)
+    assert k.volume.value == pytest.approx(0.8)
+
+
+async def test_stop_during_the_sleep_fade_learns_nothing(hass, house, freezer):
+    k = await _kitchen_plays_along(hass, house, freezer)
+    await hass.services.async_call(DOMAIN, "set_sleep_timer", {"entity_id": KROOM, "minutes": 10, "fade_minutes": 10}, blocking=True)
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 400, step=10)
+    assert k.sleep.fading_player(KITCHEN)
+    await stop_follow(hass, KROOM)
+    await tick(hass, freezer, 5)
+    assert k.volume.value == pytest.approx(0.8), "not the sleep timer's faded volume"
+
+
+async def test_stop_during_the_fade_back_after_the_night_takes_where_it_goes(hass, house, freezer):
+    k = await _kitchen_plays_along(hass, house, freezer, night=True)
+    await hass.services.async_call("switch", "turn_off", {"entity_id": "switch.kitchen_night_mode"}, blocking=True)
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 40, step=5)
+    target = get_hub(hass).volume.member_target(KITCHEN)
+    assert target is not None
+    await stop_follow(hass, KROOM)
+    await tick(hass, freezer, 900, step=10)
+    assert hass.states.get(KITCHEN).attributes["volume_level"] == pytest.approx(target, abs=0.01)
+    assert k.volume.value == pytest.approx(target, abs=0.01)

@@ -320,8 +320,8 @@ async def test_follow_from_a_device_room_keeps_follow_me_volume(hass, home, free
 
 
 async def test_follow_me_ended_here_keeps_the_players_level(hass, home, freezer):
-    """Follow me stopped in this room: the player goes on at the level the group
-    gave it (its own level from before does not come back)."""
+    """Follow me stopped in this room: the player plays on at the level the group
+    gave it; its own level comes back the next time it plays on its own."""
     from .conftest import start_follow
 
     await _device_house(hass, home)
@@ -338,9 +338,13 @@ async def test_follow_me_ended_here_keeps_the_players_level(hass, home, freezer)
     await hass.services.async_call(DOMAIN, "stop_follow", {"entity_id": ROOM}, blocking=True)
     await hass.async_block_till_done()
     await tick(hass, freezer, 5)
-    assert vol(hass, MUSIC) == joined
-    entry = next(e for e in hass.config_entries.async_entries(DOMAIN) if e.title == "Living Room")
-    assert entry.runtime_data.data["player_levels"][MUSIC] == joined, "its own level now"
+    assert vol(hass, MUSIC) == joined, "it plays on at that level"
+    home.music("idle")
+    await hass.async_block_till_done()
+    home.music("playing")  # the next time: its own level again
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 5)
+    assert vol(hass, MUSIC) == 1.0
 
 
 async def test_group_with_only_device_rooms_not_limited_at_night(hass, home, freezer):
