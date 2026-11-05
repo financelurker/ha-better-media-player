@@ -11,11 +11,11 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.components.media_player import DOMAIN as MP_DOMAIN
+from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import Context, HomeAssistant, callback
-from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 
 from .. import clock
 from ..const import CONF_WAKE_DETECT_LEFT, DOMAIN, FOLLOW_WAITING, FOLLOW_WAKING, WAKE_ARRIVAL_WINDOW, WAKE_END_LEFT
@@ -46,7 +46,7 @@ async def _wait(hass: HomeAssistant, entity_ids: list[str], cond: Callable[[], b
             done.set()
 
     unsub = async_track_state_change_event(hass, entity_ids, _look)
-    unsub_timer = async_call_later(hass, timeout, lambda _now: done.set())
+    unsub_timer = async_call_later(hass, timeout, callback(lambda _now: done.set()))  # (on the loop)
     try:
         await done.wait()
     finally:
@@ -57,7 +57,7 @@ async def _wait(hass: HomeAssistant, entity_ids: list[str], cond: Callable[[], b
 
 async def _sleep(hass: HomeAssistant, seconds: float) -> None:
     done = asyncio.Event()
-    unsub = async_call_later(hass, seconds, lambda _now: done.set())
+    unsub = async_call_later(hass, seconds, callback(lambda _now: done.set()))
     try:
         await done.wait()
     finally:
@@ -189,6 +189,8 @@ class FollowWake:
             try:
                 await hass.services.async_call(MP_DOMAIN, service, data, blocking=True, context=Context())
             except Exception as err:  # noqa: BLE001 - Music Assistant's refusal, whatever it is
+                if ma.state(group) in PLAYING:
+                    return  # it plays after all (the error came late): no second start
                 if attempt == PLAY_TRIES:
                     raise HomeAssistantError(f"{group} did not start after {PLAY_TRIES} tries: {err}") from err
                 _LOGGER.info("Follow wake: %s did not start (%s), try %d of %d again in %d s", group, err, attempt, PLAY_TRIES, PLAY_RETRY_SECONDS)

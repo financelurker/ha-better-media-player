@@ -144,6 +144,7 @@ class FakeHome:
     volume_lag: float = 0.0  # s a player reports a volume it was set to (in order)
     _volume_reports: dict[str, deque] = field(default_factory=dict)  # volumes set, not reported yet
     group_play_fails: int = 0  # Music Assistant refuses to play a group this many times
+    on_group_play_fail: Any = None  # called before such a refusal (e.g. it plays after all)
     join_lag: float = 0.0  # s until Music Assistant reports a joined player in the group
     ma_power: bool = False  # the music players have Music Assistant's (fake) power control
     ma_announce: bool = False  # the music players announce (Music Assistant)
@@ -440,6 +441,8 @@ def home(hass: HomeAssistant):
                 return await fake.announce(ids, service_data)
             if service in ("play_media", "media_play") and ids in GROUPS and fake.group_play_fails > 0:
                 fake.group_play_fails -= 1
+                if fake.on_group_play_fail is not None:
+                    fake.on_group_play_fail()
                 fake.played.append((service, ids, dict(service_data or {})))
                 raise HomeAssistantError("The command to the player failed.")
             if fake.handle(domain, service, ids, service_data, context):

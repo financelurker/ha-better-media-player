@@ -108,6 +108,6 @@ def keep_position(
         _check(event.data["new_state"])
 
     unsubs.append(async_track_state_change_event(hass, [target], _changed))
-    unsubs.append(async_call_later(hass, WAIT, lambda _now: _done()))
+    unsubs.append(async_call_later(hass, WAIT, callback(lambda _now: _done())))
     _check(hass.states.get(target))
     return _done
