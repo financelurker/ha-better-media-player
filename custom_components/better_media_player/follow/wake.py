@@ -6,12 +6,16 @@ async_start, async_resume and async_snooze here.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from homeassistant.components.media_player import DOMAIN as MP_DOMAIN
 from homeassistant.const import ATTR_ENTITY_ID
-from homeassistant.core import callback
+from homeassistant.core import Context, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 
 from .. import clock
 from ..const import CONF_WAKE_DETECT_LEFT, DOMAIN, FOLLOW_WAITING, FOLLOW_WAKING, WAKE_ARRIVAL_WINDOW, WAKE_END_LEFT
@@ -22,6 +26,42 @@ if TYPE_CHECKING:
     from .manager import FollowManager
 
 _LOGGER = logging.getLogger(__name__)
+
+# a follow wake that starts follow me: Music Assistant may refuse to play the group
+# right after the wake room joined it (the join not done yet)
+JOIN_WAIT_SECONDS = 10  # at most this long for the room's player to show up in the group
+PLAY_TRIES = 3
+PLAY_RETRY_SECONDS = 5
+
+
+async def _wait(hass: HomeAssistant, entity_ids: list[str], cond: Callable[[], bool], timeout: float) -> bool:
+    """Until cond holds (looked at when one of the entities changes), at most timeout s."""
+    if cond():
+        return True
+    done = asyncio.Event()
+
+    @callback
+    def _look(_event=None) -> None:
+        if cond():
+            done.set()
+
+    unsub = async_track_state_change_event(hass, entity_ids, _look)
+    unsub_timer = async_call_later(hass, timeout, callback(lambda _now: done.set()))  # (on the loop)
+    try:
+        await done.wait()
+    finally:
+        unsub()
+        unsub_timer()
+    return cond()
+
+
+async def _sleep(hass: HomeAssistant, seconds: float) -> None:
+    done = asyncio.Event()
+    unsub = async_call_later(hass, seconds, callback(lambda _now: done.set()))
+    try:
+        await done.wait()
+    finally:
+        unsub()
 
 
 class FollowWake:
@@ -133,14 +173,30 @@ class FollowWake:
                 self.manager._commands.pop((room.audio_player, f"join:{group}"), None)
                 await self.manager._join(room, group, volume_override=volume)
             if not running:
-                if media:
-                    ok = await self.manager._call("play_media", {ATTR_ENTITY_ID: group, **media})
-                else:
-                    ok = await self.manager._call("media_play", {ATTR_ENTITY_ID: group})
-                if not ok:
-                    raise HomeAssistantError(f"Could not start playback on {group}")
+                await self._play(room, group, media)
         self.manager.async_schedule("wake")
         return group
+
+    async def _play(self, room: RoomController, group: str, media: dict[str, Any] | None) -> None:
+        """Play the group once the room's player is in it; tried again a few times
+        (Music Assistant refuses a group whose join is not done yet)."""
+        ma = self.manager.ma
+        if not await _wait(self.manager.hass, [group, room.audio_player], lambda: room.audio_player in ma.members(group), JOIN_WAIT_SECONDS):
+            _LOGGER.info("Follow wake: %s not reported in %s yet, playing anyway", room.audio_player, group)
+        service, data = ("play_media", {ATTR_ENTITY_ID: group, **media}) if media else ("media_play", {ATTR_ENTITY_ID: group})
+        hass = self.manager.hass
+        for attempt in range(1, PLAY_TRIES + 1):
+            try:
+                await hass.services.async_call(MP_DOMAIN, service, data, blocking=True, context=Context())
+            except Exception as err:  # noqa: BLE001 - Music Assistant's refusal, whatever it is
+                if ma.state(group) in PLAYING:
+                    return  # it plays after all (the error came late): no second start
+                if attempt == PLAY_TRIES:
+                    raise HomeAssistantError(f"{group} did not start after {PLAY_TRIES} tries: {err}") from err
+                _LOGGER.info("Follow wake: %s did not start (%s), try %d of %d again in %d s", group, err, attempt, PLAY_TRIES, PLAY_RETRY_SECONDS)
+                await _sleep(hass, PLAY_RETRY_SECONDS)
+            else:
+                return
 
     async def async_resume(self, room: RoomController, volume: float | None) -> str:
         """After a snooze: back into the follow-me player (playing it again if it paused)."""

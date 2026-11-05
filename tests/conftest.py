@@ -14,6 +14,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from homeassistant.components.media_player import MediaPlayerEntityFeature as F
 from homeassistant.core import HomeAssistant, ServiceRegistry, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_call_later
 from homeassistant.util import dt as dt_util
 
@@ -142,6 +143,9 @@ class FakeHome:
     inputs_obey: bool = True  # the LG TV and the AVR follow select_source
     volume_lag: float = 0.0  # s a player reports a volume it was set to (in order)
     _volume_reports: dict[str, deque] = field(default_factory=dict)  # volumes set, not reported yet
+    group_play_fails: int = 0  # Music Assistant refuses to play a group this many times
+    on_group_play_fail: Any = None  # called before such a refusal (e.g. it plays after all)
+    join_lag: float = 0.0  # s until Music Assistant reports a joined player in the group
     ma_power: bool = False  # the music players have Music Assistant's (fake) power control
     ma_announce: bool = False  # the music players announce (Music Assistant)
     plays_media: bool = False  # play_media plays (a tts clip is over right away), media_play resumes
@@ -342,6 +346,14 @@ class FakeHome:
             elif service == "unjoin":
                 self._leave_groups(entity_id)
                 self.set(entity_id, "idle")
+            elif service == "join" and entity_id in GROUPS and self.join_lag > 0:
+                lag, self.join_lag = self.join_lag, 0.0
+
+                @callback
+                def _joined(_now, entity_id=entity_id, data=dict(data)) -> None:
+                    self.handle("media_player", "join", entity_id, data, None)
+
+                async_call_later(self.hass, lag, _joined)
             elif service == "join" and entity_id in GROUPS:
                 g = self.hass.states.get(entity_id)
                 for p in data.get("group_members", []):
@@ -427,6 +439,12 @@ def home(hass: HomeAssistant):
                 return fake.respond(service, ids, service_data or {})
             if service == "play_media" and (service_data or {}).get("announce"):
                 return await fake.announce(ids, service_data)
+            if service in ("play_media", "media_play") and ids in GROUPS and fake.group_play_fails > 0:
+                fake.group_play_fails -= 1
+                if fake.on_group_play_fail is not None:
+                    fake.on_group_play_fail()
+                fake.played.append((service, ids, dict(service_data or {})))
+                raise HomeAssistantError("The command to the player failed.")
             if fake.handle(domain, service, ids, service_data, context):
                 return None
         return await original(self, domain, service, service_data, blocking, context, *a, **kw)

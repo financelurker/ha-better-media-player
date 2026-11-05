@@ -306,7 +306,7 @@ class WakeAlarm:
             raise
         except Exception as err:  # noqa: BLE001 - any failure of the start is a failed wake
             _LOGGER.warning("%s: wake start failed: %s", ctrl.entry.title, err)
-            await self._fail(w, FAILED_START)
+            await self._fail(w, FAILED_START, str(err))
             return
         if self._w is not w or w["phase"] != PHASE_STARTING:
             return  # ended, replaced or snoozed meanwhile
@@ -332,6 +332,8 @@ class WakeAlarm:
         else:
             data = w.get("data") or {}
             media = {k: data[k] for k in ("media_content_id", "media_content_type") if data.get(k)}
+            # kept out of follow me before (turned off in its session): again if the wake fails
+            w["opted_out"] = self.ctrl.entry.entry_id in hub.session.opted_out
             w["follow"] = await hub.wake.async_start(self.ctrl, media, join_volume)
             w["started_once"] = True
         self.ctrl.data.setdefault("last_source", w["source"])
@@ -425,13 +427,14 @@ class WakeAlarm:
         else:
             self._unschedule()
 
-    async def _fail(self, w: dict[str, Any], reason: str) -> None:
+    async def _fail(self, w: dict[str, Any], reason: str, error: str | None = None) -> None:
         if self._w is not w:
             return  # an older wake's start: the current one is not affected
         self._clear()
-        self._fire(EVENT_WAKE_FAILED, {"reason": reason})
+        self._fire(EVENT_WAKE_FAILED, {"reason": reason, "error": error})
         if w.get("room_was_off"):
-            await self.ctrl.async_turn_off()
+            # tidying up: no "off" for follow me (as it was before the wake)
+            await self.ctrl.async_turn_off(opt_out=bool(w.get("opted_out")))
 
     @callback
     def async_night_changed(self) -> None:
@@ -610,7 +613,7 @@ class WakeAlarm:
             if self._task_running:
                 # the start hangs (beyond start timeout + play check)
                 self._cancel_task()
-                await self._fail(w, FAILED_START)
+                await self._fail(w, FAILED_START, "the start took too long")
             elif w.get("requested_at") is not None and now - w["requested_at"] >= PLAY_TIMEOUT - 0.5:
                 if ctrl.source_playing(src):
                     await self._playing(w)  # plays (the same media as before, maybe)
