@@ -1239,18 +1239,19 @@ class RoomController:
                 elif self.player_supports(other, MediaPlayerEntityFeature.PAUSE):
                     await self._player(other, "media_pause")
 
-    async def async_turn_off(self, all_off: bool = False) -> None:
+    async def async_turn_off(self, all_off: bool = False, opt_out: bool = True) -> None:
         """Room off: stop sources, then power down in order.
 
         all_off: the user's "All off" (button, the room player's off), which also
         ends "Keep on". Otherwise (sleep timer, wake, handover) the sources stop and,
-        while the room is kept on, its devices stay on."""
+        while the room is kept on, its devices stay on. opt_out: follow me keeps the
+        room out for the rest of its session (not after a failed wake)."""
         self.turning_off = True
         try:
             if all_off and self.keep_on:
                 self.data["keep_on"] = False
                 self._save()
-            await self._turn_off("all_off" if all_off else "room_off")
+            await self._turn_off("all_off" if all_off else "room_off", opt_out)
         finally:
             self.turning_off = False
 
@@ -1268,13 +1269,13 @@ class RoomController:
         for node in nodes:
             self._not_run_down[node.key] = reason
 
-    async def _turn_off(self, reason: str) -> None:
+    async def _turn_off(self, reason: str, opt_out: bool = True) -> None:
         await self.wake.async_finish(WAKE_END_ROOM_OFF)
         self.sequence.cancel()
         self._reset_overrides()
         self.volume.async_off()
         self.announce.async_room_off()
-        if (hub := get_hub(self.hass)) is not None:
+        if opt_out and (hub := get_hub(self.hass)) is not None:
             hub.room_turned_off(self)
         self.follow.prewarm = False
         # flag everything first: state events during the awaits below must not

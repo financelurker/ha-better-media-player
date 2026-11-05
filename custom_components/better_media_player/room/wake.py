@@ -306,7 +306,7 @@ class WakeAlarm:
             raise
         except Exception as err:  # noqa: BLE001 - any failure of the start is a failed wake
             _LOGGER.warning("%s: wake start failed: %s", ctrl.entry.title, err)
-            await self._fail(w, FAILED_START)
+            await self._fail(w, FAILED_START, str(err))
             return
         if self._w is not w or w["phase"] != PHASE_STARTING:
             return  # ended, replaced or snoozed meanwhile
@@ -425,13 +425,13 @@ class WakeAlarm:
         else:
             self._unschedule()
 
-    async def _fail(self, w: dict[str, Any], reason: str) -> None:
+    async def _fail(self, w: dict[str, Any], reason: str, error: str | None = None) -> None:
         if self._w is not w:
             return  # an older wake's start: the current one is not affected
         self._clear()
-        self._fire(EVENT_WAKE_FAILED, {"reason": reason})
+        self._fire(EVENT_WAKE_FAILED, {"reason": reason, "error": error})
         if w.get("room_was_off"):
-            await self.ctrl.async_turn_off()
+            await self.ctrl.async_turn_off(opt_out=False)  # (tidying up: no "off" for follow me)
 
     @callback
     def async_night_changed(self) -> None:

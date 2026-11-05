@@ -13,7 +13,7 @@ from custom_components.better_media_player.follow import get_hub
 from custom_components.better_media_player.follow.manager import FollowSession
 
 from .conftest import FOLLOW, KITCHEN, KITCHEN_OCC, LIVING_OCC, MUSIC, SPEAKERS, setup_hub, setup_room
-from .helpers import KROOM, ROOM, WAKE, set_setting, settle, tick, vol
+from .helpers import KROOM, ROOM, WAKE, set_setting, settle, settle_held, tick, tick_held, vol
 
 LSTATE = "sensor.living_room_follow"
 KSTATE = "sensor.kitchen_follow"
@@ -394,3 +394,62 @@ async def test_group_stopped_by_hand_ends_the_wake(hass, house, freezer):
     await hass.async_block_till_done()
     await tick(hass, freezer, 15)
     assert [e.data["reason"] for e in finished] == ["stopped"]
+
+
+async def test_the_group_refusing_at_first_is_tried_again(hass, house, freezer):
+    """Music Assistant refuses to play the follow-me player right after the join
+    (as in real life at 5:20): tried again, the wake goes on."""
+    from .conftest import FOLLOW as GROUP_PLAYER
+
+    house.group_play_fails = 2
+    await hass.services.async_call(DOMAIN, "wake", {
+        "entity_id": ROOM, "media_content_id": "library://album/1", "media_content_type": "music",
+        "follow": True, "start_volume": 0.05, "target_volume": 0.4, "fade_minutes": 2}, blocking=True)
+    await settle_held(hass)
+    await tick_held(hass, freezer, 40)  # (each try runs a while)
+    await settle(hass)
+    assert len(_played(house, GROUP_PLAYER, "play_media")) == 3
+    assert hass.states.get(WAKE).state in ("fading", "playing")
+    assert MUSIC in house.members(FOLLOW)
+
+
+async def test_the_group_refusing_for_good_fails_the_wake_and_tells_why(hass, house, freezer):
+    from custom_components.better_media_player.const import EVENT_WAKE_FAILED
+
+    failed = async_capture_events(hass, EVENT_WAKE_FAILED)
+    follow_states = []
+    hass.bus.async_listen("state_changed", lambda e: e.data["entity_id"] == LSTATE and e.data["new_state"] and follow_states.append(e.data["new_state"].state))
+    house.group_play_fails = 5
+    await hass.services.async_call(DOMAIN, "wake", {
+        "entity_id": ROOM, "media_content_id": "library://album/1", "media_content_type": "music",
+        "follow": True, "start_volume": 0.05, "fade_minutes": 2}, blocking=True)
+    await settle_held(hass)
+    await tick_held(hass, freezer, 40)
+    await settle(hass)
+    assert len(_played(house, FOLLOW, "play_media")) == 3, "three tries"
+    assert [e.data["reason"] for e in failed] == ["start_failed"]
+    assert "The command to the player failed" in failed[0].data["error"]
+    assert hass.states.get(WAKE).state == "idle"
+    # the room went off again (it was off): tidying up, follow me does not keep it out
+    assert "excluded_off" not in follow_states
+    # and the logbook says why
+    from custom_components.better_media_player import logbook as bmp_logbook
+
+    described = {}
+    bmp_logbook.async_describe_events(hass, lambda domain, event, fn: described.__setitem__(event, fn))
+    out = described[EVENT_WAKE_FAILED](failed[0])
+    assert out["entity_id"] == ROOM
+    assert out["message"].startswith("wake failed: the start failed (")
+
+
+async def test_the_join_reported_late_is_waited_for(hass, house, freezer):
+    house.join_lag = 3.0  # Music Assistant reports the wake room in the group 3 s later
+    await hass.services.async_call(DOMAIN, "wake", {
+        "entity_id": ROOM, "media_content_id": "library://album/1", "media_content_type": "music",
+        "follow": True, "start_volume": 0.05, "fade_minutes": 2}, blocking=True)
+    await settle_held(hass)
+    assert not _played(house, FOLLOW, "play_media"), "not before the join is reported"
+    await tick_held(hass, freezer, 5)
+    await settle(hass)
+    assert len(_played(house, FOLLOW, "play_media")) == 1
+    assert MUSIC in house.members(FOLLOW)
