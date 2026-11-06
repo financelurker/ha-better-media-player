@@ -7,6 +7,8 @@
   "nav.not_loaded": "nicht geladen",
   "tab.wiring": "Geräte & Verkabelung",
   "tab.settings": "Raum & Verhalten",
+  "tab.wiring_short": "Geräte",
+  "tab.settings_short": "Raum",
   "loading": "Lädt …",
   "error": "Konnte nicht laden: {error}",
   "no_rooms": "Noch keine Räume: links einen hinzufügen (Raum hinzufügen).",
@@ -399,5 +401,7 @@
   "problem.runs_on_missing": "{source} läuft auf „{device}“, das nicht mehr im Raum ist.",
   "problem.guest_cable": "{source} läuft auf etwas: Ton und Bild gehen über dessen Kabel, nicht über eigene.",
   "details.show": "Details einblenden",
+  "details.back": "Zurück zur Zeichnung",
+  "details.overview": "Der Raum im Überblick",
   "details.hide": "Details ausblenden"
 }

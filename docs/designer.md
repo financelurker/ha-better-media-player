@@ -79,4 +79,4 @@ A new room (**+ Add room**, left) starts on this page; it is created with Save, 
 - **Zoom:** Ctrl + wheel (or a trackpad pinch), or the buttons. With the drawing focused (click into it), also the keys + and −; **0** fits the drawing to the screen, **1** shows it at its actual size.
 - **Arrange:** drag a tile to another place; the room keeps the arrangement at once (it changes nothing in how the room works). *Arrange automatically* places everything anew.
 
-On a phone the rooms are a row above the drawing, the details below it.
+On a phone (or a window as small) one bar on top holds the room (or *General*) and the two tabs, *Devices* and *Room*; on *Devices* a second bar holds Live, the route to show, the room at a glance (**i**) and **+** (turned sideways, all in one bar). The drawing fits the room on the screen (zoom with two fingers); a picked tile or cable opens its details as a page of their own, **‹ Back to the drawing** returns.

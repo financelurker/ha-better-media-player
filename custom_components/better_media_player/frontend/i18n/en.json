@@ -7,6 +7,8 @@
   "nav.not_loaded": "not loaded",
   "tab.wiring": "Devices & cabling",
   "tab.settings": "Room & behaviour",
+  "tab.wiring_short": "Devices",
+  "tab.settings_short": "Room",
   "loading": "Loading …",
   "error": "Could not load: {error}",
   "no_rooms": "No rooms yet: add one (left, Add room).",
@@ -399,5 +401,7 @@
   "problem.runs_on_missing": "{source} runs on “{device}”, which is no longer in the room.",
   "problem.guest_cable": "{source} runs on something: its sound and picture go out through that one's cables, not its own.",
   "details.show": "Show the details",
+  "details.back": "Back to the drawing",
+  "details.overview": "The room at a glance",
   "details.hide": "Hide the details"
 }

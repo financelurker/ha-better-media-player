@@ -44,6 +44,9 @@ class BmpPanel extends LitElement {
     _live: { state: true },
     _lines: { state: true },
     _liveOn: { state: true },
+    _phone: { state: true },
+    _wide: { state: true },
+    _overview: { state: true },
   };
 
   constructor() {
@@ -86,6 +89,18 @@ class BmpPanel extends LitElement {
     this._liveFails = 0; // subscriptions that failed in a row (then tried less often)
     this._liveSub = null; // {entry_id, unsub: Promise}
     this._linesSub = null;
+    // a phone (or a window as small): one column, the details as a page of their own
+    this._phoneQuery = window.matchMedia("(max-width: 820px), (max-height: 500px)");
+    this._wideQuery = window.matchMedia("(orientation: landscape)");
+    this._phone = this._phoneQuery.matches;
+    this._wide = this._wideQuery.matches;
+    this._overview = false; // on a phone: the room's overview opened as a page
+    this._onScreen = () => {
+      const was = [this._phone, this._wide];
+      this._phone = this._phoneQuery.matches;
+      this._wide = this._wideQuery.matches;
+      if (was[0] !== this._phone || was[1] !== this._wide) requestAnimationFrame(() => this._fit?.()); // (turned: fitted anew)
+    };
     this._onDeleteKey = this._onDeleteKey.bind(this);
     this._onBeforeUnload = (e) => { if (this._dirtyRooms().length || this._centralDirty()) e.preventDefault(); };
   }
@@ -95,6 +110,8 @@ class BmpPanel extends LitElement {
     window.addEventListener("pointermove", this._onMove);
     window.addEventListener("pointerup", this._onUp);
     window.addEventListener("beforeunload", this._onBeforeUnload);
+    this._phoneQuery.addEventListener("change", this._onScreen);
+    this._wideQuery.addEventListener("change", this._onScreen);
     this.addEventListener("keydown", this._onDeleteKey);
     // counting down (only while something counts)
     this._ticker = setInterval(() => { if (this._counting()) this.requestUpdate(); }, 1000);
@@ -108,6 +125,8 @@ class BmpPanel extends LitElement {
     window.removeEventListener("pointermove", this._onMove);
     window.removeEventListener("pointerup", this._onUp);
     window.removeEventListener("beforeunload", this._onBeforeUnload);
+    this._phoneQuery.removeEventListener("change", this._onScreen);
+    this._wideQuery.removeEventListener("change", this._onScreen);
     super.disconnectedCallback();
   }
 
@@ -260,6 +279,7 @@ class BmpPanel extends LitElement {
     this._selected = null;
     this._source = null;
     this._armed = null;
+    this._overview = false;
     const path = page === "room" && roomId && !this._drafts[roomId]?.isNew ? `/${PANEL_URL}/${roomId}` : `/${PANEL_URL}`;
     if (location.pathname !== path) history.replaceState(history.state, "", path);
   }
@@ -363,15 +383,15 @@ class BmpPanel extends LitElement {
     const room = this._room;
     this._lv = room ? this._liveFor(room) : null; // (once per drawing)
     return html`
-      <div class="app">
-        <header class="toolbar">
+      <div class="app ${this._phone ? "phone" : ""} ${this._phone && this._wide ? "wide" : ""}">
+        ${this._phone ? this._renderPhoneBar(room) : html`<header class="toolbar">
           <ha-menu-button .hass=${this.hass} .narrow=${this.narrow}></ha-menu-button>
           <h1>${t("title")}</h1>
-        </header>
+        </header>`}
         ${this._renderSaveBar()}
         ${this._notice ? html`<div class="notice" role="alert">${this._notice}<button class="chip" @click=${() => { this._notice = null; }}>${t("dismiss")}</button></div>` : html`<div></div>`}
         <div class="main ${this._page === "room" && this._tab === "wiring" ? `details${this._detailsOpen ? "" : " folded"}` : ""}">
-          ${this._renderNav()}
+          ${this._phone ? nothing : this._renderNav()}
           ${this._page === "central"
             ? html`<section class="stage"><div class="page">${renderCentral(this)}</div></section>`
             : room
@@ -387,7 +407,7 @@ class BmpPanel extends LitElement {
     const t = this._t;
     const dirty = this._dirtyRooms();
     const central = this._centralDirty();
-    if (!dirty.length && !central) return html`<div class="savebar idle">${t("save.idle")}</div>`;
+    if (!dirty.length && !central) return this._phone ? html`<div></div>` : html`<div class="savebar idle">${t("save.idle")}</div>`;
     const errors = dirty.flatMap((d) => (d.problems || []).filter((x) => x.error).map((x) => ({ d, x })));
     // a room whose setup changed is set up again: one that plays says so
     const restart = dirty.filter((d) => !d.isNew && this._setupChanged(d) && d.sources.some((s) => this.hass.states[s.player]?.state === "playing"));
@@ -439,23 +459,84 @@ class BmpPanel extends LitElement {
     const t = this._t;
     return html`
       <section class="stage ${this._tab}">
-        <div class="tabs" role="tablist">
+        <div class="tabs" role="tablist" ?hidden=${this._phone}>
           ${["wiring", "settings"].map(
             (tab) => html`<button role="tab" aria-selected=${String(this._tab === tab)} @click=${() => { this._tab = tab; this._selected = null; this._armed = null; }}>${t(`tab.${tab}`)}</button>`
           )}
         </div>
         ${this._tab === "settings"
           ? html`<div class="page">${renderSettings(this, room)}</div>`
-          : html`${this._renderSources(room)}${this._renderProblems(room)}${this._renderDiagram(room)}${this._renderRoute(room)}`}
+          : html`${this._phone ? html`<div></div>` : this._renderSources(room)}${this._renderProblems(room)}${this._renderDiagram(room)}${this._renderRoute(room)}`}
       </section>
-      ${this._tab === "wiring" && !this._detailsOpen ? html`<section class="inspector folded">
+      ${this._phone ? this._renderPhonePage(room) : nothing}
+      ${!this._phone && this._tab === "wiring" && !this._detailsOpen ? html`<section class="inspector folded">
         <button class="fold" title=${t("details.show")} aria-label=${t("details.show")} aria-expanded="false" @click=${() => this._foldDetails(true)}>‹</button></section>` : nothing}
-      ${this._tab === "wiring" && this._detailsOpen ? html`<section class="inspector">
+      ${!this._phone && this._tab === "wiring" && this._detailsOpen ? html`<section class="inspector">
         <button class="fold ${this._selected ? "beside" : ""}" title=${t("details.hide")} aria-label=${t("details.hide")} aria-expanded="true" @click=${() => this._foldDetails(false)}>›</button>
         ${this._selected ? html`<button class="close" title=${t("close")} aria-label=${t("close")} @click=${() => { this._selected = null; }}>×</button>` : nothing}
         ${this._selected?.type === "node" && this._lv ? liveBox(this, room, this._lv, this._selected.id) : nothing}
         ${this._selected ? renderInspector(this, room) : renderOverview(this, room)}</section>` : nothing}
     `;
+  }
+
+  // a phone: one bar on top – the room (or General), its two tabs and, for the drawing,
+  // Live, the route and + (turned sideways all in one line, else a second one)
+  _renderPhoneBar(room) {
+    const t = this._t;
+    const page = this._page === "central" ? "central" : room?.entry_id || "";
+    const go = (v) => (v === "central" ? this._go("central") : v === "+" ? this._addRoom() : this._go("room", v));
+    const tabs = this._page === "room" && room ? html`<span class="seg tabseg" role="tablist">${["wiring", "settings"].map(
+      (tab) => html`<button role="tab" aria-pressed=${String(this._tab === tab)} aria-selected=${String(this._tab === tab)} @click=${() => { this._tab = tab; this._selected = null; this._armed = null; this._overview = false; }}>${tab === "wiring" ? t("tab.wiring_short") : t("tab.settings_short")}</button>`
+    )}</span>` : nothing;
+    const tools = this._page === "room" && room && this._tab === "wiring" ? this._renderPhoneTools(room) : null;
+    return html`<header class="pbar">
+        <ha-menu-button .hass=${this.hass} .narrow=${this.narrow}></ha-menu-button>
+        <select class="roomsel" aria-label=${t("nav.rooms")} .value=${page} @change=${(e) => { const v = e.target.value; e.target.value = page; go(v); }}>
+          <option value="central" ?selected=${page === "central"}>${t("nav.general")}</option>
+          ${this._rooms().map((r) => html`<option value=${r.entry_id} ?selected=${page === r.entry_id}>${r.name}${r.isNew || !same(r, this._base[r.entry_id]) ? " •" : ""}</option>`)}
+          <option value="+">+ ${t("nav.add_room")}</option>
+        </select>
+        ${this._wide ? nothing : html`<span class="grow"></span>`}
+        ${tabs}
+        ${this._wide && tools ? tools : nothing}
+      </header>
+      ${!this._wide && tools ? html`<div class="pbar sub">${tools}</div>` : nothing}`;
+  }
+
+  _renderPhoneTools(room) {
+    const t = this._t;
+    const live = !room.isNew;
+    const value = this._lv ? "live" : this._source || "all";
+    const pick = (v) => {
+      if (v === "live") return this._setLive(true);
+      this._source = v === "all" ? null : v;
+      if (live) this._livePaused = true;
+    };
+    return html`
+      ${live ? html`<label class="livesw" title=${t("live.switch_hint")}>
+        <input type="checkbox" role="switch" .checked=${this._liveOn && !this._livePaused} @change=${(e) => this._setLive(e.target.checked)}>
+        ${this._lv ? html`<span class="livedot"></span>` : nothing}<span>${t("live.switch")}</span></label>` : nothing}
+      <select class="routesel" aria-label=${t("routes.label")} .value=${value} @change=${(e) => pick(e.target.value)}>
+        ${this._lv ? html`<option value="live" selected>${t("routes.label")} ${t("live.switch")}</option>` : nothing}
+        ${room.sources.filter((s) => s.player).map((s) => html`<option value=${s.id} ?selected=${value === s.id}>${t("routes.label")} ${this._sourceLabel(s)}</option>`)}
+        <option value="all" ?selected=${value === "all"}>${t("routes.label")} ${t("routes.all")}</option>
+      </select>
+      <span class="grow"></span>
+      <button class="iconbtn" title=${t("details.overview")} aria-label=${t("details.overview")} @click=${() => { this._selected = null; this._overview = true; }}>i</button>
+      <button class="iconbtn" title=${t("add.button")} aria-label=${t("add.button")} @click=${() => { this._dialog = { type: "add" }; }}>+</button>`;
+  }
+
+  // a phone: the details of what is picked (or the room's overview) as a page of their own
+  _renderPhonePage(room) {
+    const t = this._t;
+    if (this._tab !== "wiring" || (!this._selected && !this._overview)) return nothing;
+    return html`<section class="inspector ppage" role="dialog" aria-label=${t("details.show")}>
+      <header class="pbar"><button class="back" @click=${() => { this._selected = null; this._overview = false; }}>‹ ${t("details.back")}</button></header>
+      <div class="pbody">
+        ${this._selected?.type === "node" && this._lv ? liveBox(this, room, this._lv, this._selected.id) : nothing}
+        ${this._selected ? renderInspector(this, room) : renderOverview(this, room)}
+      </div>
+    </section>`;
   }
 
   _foldDetails(open) {
@@ -551,11 +632,11 @@ class BmpPanel extends LitElement {
         </g>
       </svg>
       <div class="zoombar" role="toolbar">
-        <button title=${t("zoom.in")} aria-label=${t("zoom.in")} @click=${() => this._zoomBy(1.2)}><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
-        <button title=${t("zoom.out")} aria-label=${t("zoom.out")} @click=${() => this._zoomBy(1 / 1.2)}><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
-        <div class="pct">${Math.round(v.k * 100)}%</div>
+        <button class="more" title=${t("zoom.in")} aria-label=${t("zoom.in")} @click=${() => this._zoomBy(1.2)}><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+        <button class="more" title=${t("zoom.out")} aria-label=${t("zoom.out")} @click=${() => this._zoomBy(1 / 1.2)}><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
+        <div class="pct more">${Math.round(v.k * 100)}%</div>
         <button title=${t("zoom.fit")} aria-label=${t("zoom.fit")} @click=${() => this._fit()}><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
-        <button title=${t("zoom.actual")} aria-label=${t("zoom.actual")} @click=${() => this._zoomBy(1 / v.k)}><svg viewBox="0 0 24 24"><path d="M7 8v8M11 9.5v.01M11 14.5v.01M15 8v8"/></svg></button>
+        <button class="more" title=${t("zoom.actual")} aria-label=${t("zoom.actual")} @click=${() => this._zoomBy(1 / v.k)}><svg viewBox="0 0 24 24"><path d="M7 8v8M11 9.5v.01M11 14.5v.01M15 8v8"/></svg></button>
         <button title=${t("zoom.arrange")} aria-label=${t("zoom.arrange")} @click=${() => this._rearrange(room)}><svg viewBox="0 0 24 24"><path d="M4 5h6v5H4zM14 14h6v5h-6zM10 7.5h3a2 2 0 0 1 2 2V14"/></svg></button>
       </div>
       <div class="navhint">${this._armed ? t("cable.armed") : t("nav_hint")}</div>
@@ -948,8 +1029,9 @@ class BmpPanel extends LitElement {
     if (!b.width || !b.height) return;
     const box = bounds(this._tiles(room));
     if (!box) return this._setView(40, 40, 1);
-    const w = b.width - 64, h = b.height - 68; // clear of the zoom buttons, the hint and the tiles' live lines
-    const k = Math.max(b.width < 600 ? 0.5 : 0, Math.min(1.2, w / (box.x1 - box.x0), h / (box.y1 - box.y0)));
+    const w = b.width - (this._phone ? 52 : 64), h = b.height - (this._phone ? 30 : 68); // clear of the zoom buttons, the hint and the tiles' live lines
+    const small = b.width < 600 && !this._phone; // (a phone: all of the room, zoomed by two fingers)
+    const k = Math.max(small ? 0.5 : 0.25, Math.min(1.2, w / (box.x1 - box.x0), h / (box.y1 - box.y0)));
     // wider than the screen (narrow, not smaller than readable): from the left, the rest by dragging
     const tx = (box.x1 - box.x0) * k > w ? -box.x0 * k : (w - (box.x1 - box.x0) * k) / 2 - box.x0 * k;
     this._setView(tx, (h - (box.y1 - box.y0) * k) / 2 - box.y0 * k, k);
@@ -1064,6 +1146,7 @@ class BmpPanel extends LitElement {
     .stage { display: grid; grid-template-rows: auto auto auto 1fr auto; min-width: 0; min-height: 0; }
     .stage.settings { grid-template-rows: auto 1fr; }
     .tabs { display: flex; gap: 4px; padding: 0 16px; background: var(--bmp-card); border-bottom: 1px solid var(--bmp-line); }
+    .tabs[hidden] { display: none; }
     .tabs button { border: 0; background: none; padding: 12px 14px 10px; border-bottom: 3px solid transparent; color: var(--bmp-muted); font-weight: 500; }
     .tabs button[aria-selected="true"] { color: var(--bmp-primary); border-bottom-color: var(--bmp-primary); }
     .page { overflow: auto; padding: 20px 16px; display: grid; gap: 16px; align-content: start; align-items: start; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
@@ -1210,19 +1293,45 @@ class BmpPanel extends LitElement {
     .pick-list button:hover { border-color: var(--bmp-primary); }
     .pick-list small { color: var(--bmp-muted); }
     @media (max-width: 1100px) { .main { grid-template-columns: 180px 1fr; } .main.details { grid-template-columns: 180px 1fr 300px; } .main.details.folded { grid-template-columns: 180px 1fr 44px; } }
-    @media (max-width: 820px) {
-      .main { display: block; overflow: auto; }
-      aside { display: flex; gap: 8px; align-items: center; overflow-x: auto; padding: 8px 16px; border-right: 0; border-bottom: 1px solid var(--bmp-line); }
-      .side-title { display: none; }
-      .nav { flex: 0 0 auto; width: auto; flex-direction: row; padding: 6px 14px; border: 1px solid var(--bmp-line); border-radius: 16px; background: var(--bmp-chip); white-space: nowrap; }
-      .nav small, .nav .rl { display: none; }
-      .nav.active { background: var(--bmp-primary); border-color: var(--bmp-primary); color: #fff; }
-      .stage, .stage.settings { display: block; }
-      .canvas-wrap { height: 60vh; min-height: 360px; }
-      .page { grid-template-columns: 1fr; }
-      .legend, .navhint { display: none; }
-      .inspector { border-left: 0; border-top: 1px solid var(--bmp-line); }
-    }
+    /* a phone (or a window as small; set in JS): one bar on top, the drawing fills the rest,
+       the details are a page of their own */
+    .app.phone { display: flex; flex-direction: column; }
+    .app.phone > .main { flex: 1; display: flex; min-height: 0; }
+    .app.phone .stage { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+    .app.phone .stage > .canvas-wrap { flex: 1; min-height: 120px; }
+    .app.phone .stage > .page { flex: 1; }
+    .app.phone .page { grid-template-columns: 1fr; padding: 10px; gap: 10px; }
+    .app.phone .card { padding: 12px 14px; }
+    .app.phone .savebar { padding: 6px 10px; gap: 8px; }
+    .app.phone .savebar .msg { min-width: 0; flex-basis: 100%; font-size: 13px; }
+    .app.phone .savebar .savewarn { flex-basis: 100%; }
+    .app.phone .notice { padding: 6px 10px; font-size: 13px; }
+    .app.phone .problems.strip { padding: 6px 10px; max-height: 72px; font-size: 12.5px; }
+    .app.phone .route { padding: 6px 10px; min-height: 0; font-size: 13px; }
+    .app.phone .route .acts { margin: 4px 0 0; display: flex; flex-wrap: wrap; }
+    .app.phone .navhint, .app.phone .legend { display: none; }
+    .app.phone .zoombar { right: 8px; bottom: 8px; }
+    .app.phone .zoombar .more { display: none; }
+    .app.phone .zoombar button { width: 34px; height: 34px; }
+    .pbar { display: flex; align-items: center; gap: 8px; padding: 4px 10px 4px 2px; min-height: 48px; background: var(--app-header-background-color, var(--bmp-card)); color: var(--app-header-text-color, var(--bmp-text)); border-bottom: 1px solid var(--bmp-line); }
+    .pbar.sub { min-height: 44px; padding-left: 10px; background: var(--bmp-card); color: var(--bmp-text); }
+    .pbar select { max-width: 46vw; padding: 6px 8px; font-weight: 500; border-radius: 8px; font-size: 16px; }
+    .pbar .routesel { font-weight: 400; max-width: 52vw; }
+    .wide .pbar select { max-width: 24vw; }
+    .pbar .grow { flex: 1; }
+    .pbar .livesw { padding-right: 8px; margin-right: 0; white-space: nowrap; }
+    .tabseg { flex: none; }
+    .tabseg button { padding: 6px 10px; white-space: nowrap; }
+    .iconbtn { flex: none; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--bmp-line); background: var(--bmp-card); color: var(--bmp-text); font-size: 18px; line-height: 1; display: grid; place-items: center; }
+    .iconbtn:first-of-type { font-style: italic; font-family: Georgia, serif; font-size: 17px; }
+    .ppage { position: fixed; inset: 0; z-index: 6; display: flex; flex-direction: column; padding: 0; border: 0; background: var(--bmp-bg); }
+    .ppage .pbody { flex: 1; overflow: auto; padding: 12px 14px 24px; background: var(--bmp-card); }
+    .ppage .back { border: 0; background: none; color: inherit; font-size: 16px; padding: 8px 10px; }
+    .ppage .inspector h2, .ppage h2 { padding-right: 0; }
+    .ppage .livebox { margin-right: 0; }
+    .app.phone input, .app.phone select, .ppage input, .ppage select { font-size: 16px; } /* (no zoom on focus on a phone) */
+    .app.phone .dlg { padding: 16px; }
+    @media (pointer: coarse) { .port { r: 7px; } .cable-hit { stroke-width: 22; } }
   `;
 }
 
