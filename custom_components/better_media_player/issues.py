@@ -49,6 +49,7 @@ SCRIPT_RELOAD_DELAY = 3  # s: the call comes before the scripts are loaded again
 RENAME_DELAY = 0.5  # s: a device's entities are renamed one after the other
 NOT_KNOWN = (STATE_UNAVAILABLE, STATE_UNKNOWN)
 REMOVED_KEY = "removed_entities"  # in a room's or the central entry's store: setting entities removed (version 4)
+REMOVED_FOLLOW_KEY = "removed_follow_buttons"  # in a room's store: the follow me buttons removed (version 4.3)
 
 
 def _is_hub(entry: ConfigEntry) -> bool:
@@ -234,6 +235,12 @@ class IssueChecker:
                 if in_use := removed_in_use(self.hass, removed):
                     lines = "\n".join(f"- `{e}`: {', '.join(names)}" for e, names in sorted(in_use.items()))
                     wanted.add(self._issue("removed_entities", sorted(in_use), ir.IssueSeverity.WARNING, entry, entities=lines))
+            # the follow me buttons, replaced by a switch (version 4.3)
+            if removed := list((getattr(owner, "data", None) or {}).get(REMOVED_FOLLOW_KEY) or []):
+                if in_use := removed_in_use(self.hass, removed):
+                    lines = "\n".join(f"- `{e}`: {', '.join(names)}" for e, names in sorted(in_use.items()))
+                    switch = er.async_get(self.hass).async_get_entity_id("switch", DOMAIN, f"{entry.entry_id}_follow_me")
+                    wanted.add(self._issue("follow_buttons", sorted(in_use), ir.IssueSeverity.WARNING, entry, entities=lines, switch=switch or "switch.<room>_follow_me"))
 
             # group players: only from a state that tells (Music Assistant may still be loading)
             known = []

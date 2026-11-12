@@ -395,7 +395,7 @@ async def test_entity_ids_match_readme(hass, home):
         "sensor.living_room_wake",
         "button.living_room_snooze",
         "button.living_room_stop_wake",
-        "button.living_room_stop_follow_me",
+        "switch.living_room_follow_me",
         "select.living_room_volume_preset",
         "select.living_room_hand_over_to",
         "switch.living_room_keep_on",

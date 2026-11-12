@@ -20,7 +20,7 @@ from .players.music_assistant import MusicAssistant
 
 class BetterMediaPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 4
-    MINOR_VERSION = 2
+    MINOR_VERSION = 3
 
     async def async_step_user(self, user_input: dict | None = None) -> ConfigFlowResult:
         if any(e.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_HUB for e in self._async_current_entries()):

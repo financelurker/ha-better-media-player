@@ -37,10 +37,8 @@ from .conftest import (
 )
 from .helpers import KROOM, ROOM, follow_from, get_settings, quiet_leaves_and_cuts_speakers, tick
 
-START = "button.living_room_follow_me"
-FOLLOW_STOP = "button.living_room_stop_follow_me"
-KSTART = "button.kitchen_follow_me"
-KITCHEN_STOP = "button.kitchen_stop_follow_me"
+SWITCH = "switch.living_room_follow_me"
+KSWITCH = "switch.kitchen_follow_me"
 TRACK = "library://track/42"
 
 
@@ -110,39 +108,42 @@ async def test_follow_player_playing_without_follow_me_can_be_started(hass, hous
     assert get_hub(hass).active
 
 
-# --------------------------------------------------------------- buttons
+# --------------------------------------------------------------- the switch
 
 
-async def test_buttons_shown_only_when_usable(hass, house, freezer):
+async def test_the_switch_is_on_while_follow_me_runs_and_shown_when_usable(hass, house, freezer):
     await tick(hass, freezer, 5)  # hidden after the start and the hide delay
     reg = er.async_get(hass)
     hidden = er.RegistryEntryHider.INTEGRATION
-    assert reg.async_get(START).hidden_by == hidden  # nothing plays
-    assert reg.async_get(FOLLOW_STOP).hidden_by == hidden
+    assert reg.async_get(SWITCH).hidden_by == hidden  # nothing plays, follow me off
+    assert hass.states.get(SWITCH).state == "off"
 
     house.music("playing")
     await hass.async_block_till_done()
-    assert reg.async_get(START).hidden_by is None
-    assert reg.async_get(KSTART).hidden_by == hidden  # nothing plays in the kitchen
+    assert reg.async_get(SWITCH).hidden_by is None  # it can start here
+    assert reg.async_get(KSWITCH).hidden_by == hidden  # nothing plays in the kitchen
 
-    await hass.services.async_call("button", "press", {"entity_id": START}, blocking=True)
+    await hass.services.async_call("switch", "turn_on", {"entity_id": SWITCH}, blocking=True)
     await hass.async_block_till_done()
     assert get_hub(hass).active
-    await tick(hass, freezer, 4)  # hidden after the hide delay (3 s)
-    assert reg.async_get(START).hidden_by == hidden  # follow me runs: no start anywhere
-    assert reg.async_get(FOLLOW_STOP).hidden_by is None
-    assert reg.async_get(KITCHEN_STOP).hidden_by is None
+    await tick(hass, freezer, 4)
+    # on in every room while follow me runs, also where the music is not
+    assert hass.states.get(SWITCH).state == "on"
+    assert hass.states.get(KSWITCH).state == "on"
+    assert reg.async_get(KSWITCH).hidden_by is None
 
-    await hass.services.async_call("button", "press", {"entity_id": FOLLOW_STOP}, blocking=True)
+    await hass.services.async_call("switch", "turn_off", {"entity_id": KSWITCH}, blocking=True)
     await hass.async_block_till_done()
     assert not get_hub(hass).active
+    assert hass.states.get(SWITCH).state == "off"
     await tick(hass, freezer, 4)
-    assert reg.async_get(FOLLOW_STOP).hidden_by == hidden
+    assert reg.async_get(KSWITCH).hidden_by == hidden
 
 
-async def test_pressing_a_hidden_start_fails(hass, house):
+async def test_turning_on_where_it_cannot_start_fails(hass, house):
     with pytest.raises(ServiceValidationError):
-        await hass.services.async_call("button", "press", {"entity_id": START}, blocking=True)
+        await hass.services.async_call("switch", "turn_on", {"entity_id": SWITCH}, blocking=True)
+    assert hass.states.get(SWITCH).state == "off"
 
 
 # --------------------------------------------------------------- walking
@@ -586,7 +587,9 @@ async def test_room_without_occupancy_cannot_start(hass, home):
     await setup_hub(hass)
     home.music("playing")
     await hass.async_block_till_done()
-    assert hass.states.get("button.living_room_follow_me") is None
+    assert hass.states.get(SWITCH).state == "off"
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call("switch", "turn_on", {"entity_id": SWITCH}, blocking=True)
     with pytest.raises(ServiceValidationError):
         await hass.services.async_call(DOMAIN, "start_follow", {"entity_id": ROOM}, blocking=True)
 
@@ -927,7 +930,7 @@ async def test_start_in_a_group_says_so(hass, house):
     err = await _start_error(hass)
     assert err.translation_key == "start_in_group"
     assert err.translation_placeholders == {"room": "Living Room", "player": "Office Player", "group": "All Players"}
-    assert hass.states.get("button.living_room_follow_me").attributes["blocked_by"] == "start_in_group"
+    assert hass.states.get(SWITCH).attributes["blocked_by"] == "start_in_group"
     assert "All Players" in str(err)
 
 
@@ -978,7 +981,7 @@ async def test_start_without_follow_player_says_so(hass, home):
 async def test_can_start_shows_no_blocker(hass, house):
     house.music("playing")
     await hass.async_block_till_done()
-    assert hass.states.get("button.living_room_follow_me").attributes["blocked_by"] is None
+    assert hass.states.get(SWITCH).attributes["blocked_by"] is None
 
 
 async def test_start_while_left_in_the_paused_follow_player_says_so(hass, house):

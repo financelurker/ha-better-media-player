@@ -27,8 +27,10 @@ Entities, settings and states of a room. `<room>` is the room's part of the enti
 | `select.<room>_volume_preset` | volume preset (the offered presets and manual) |
 | `select.<room>_hand_over_to` | [handover](handover.md) to another room |
 | `sensor.<room>_follow` | follow state of the room (with a music player and occupancy sensors only) |
-| `button.<room>_follow_me`, `button.<room>_stop_follow_me` | start / stop follow me (*Follow me*: with a music player and occupancy sensors; *Stop follow me*: with a music player) |
+| `switch.<room>_follow_me` | on while follow me runs (anywhere); turning it on starts follow me from this room (with a music player and occupancy sensors, while music plays on its own player; else it fails with the reason, also in its attribute `blocked_by`), turning it off ends follow me (only with a music player) |
 | `sensor.better_media_player_follow_rooms` | central: rooms in follow me; follow-me player, start room in the attributes |
+
+Up to 1.3.0 follow me had two buttons, `button.<room>_follow_me` and `button.<room>_stop_follow_me`; the switch `switch.<room>_follow_me` replaces them. Automations and scripts that still press one are shown in Repairs until changed (`switch.turn_on` / `switch.turn_off`, or the actions `start_follow` / `stop_follow`).
 
 ## Settings
 

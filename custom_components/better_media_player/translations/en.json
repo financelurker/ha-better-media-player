@@ -135,6 +135,9 @@
       "night_mode": {
         "name": "Night mode"
       },
+      "follow_me": {
+        "name": "Follow me"
+      },
       "keep_on": {
         "name": "Keep on"
       }
@@ -156,12 +159,6 @@
       },
       "wake_stop": {
         "name": "Stop wake"
-      },
-      "follow_start": {
-        "name": "Follow me"
-      },
-      "follow_stop": {
-        "name": "Stop follow me"
       }
     },
     "select": {
@@ -536,6 +533,10 @@
     "follow_player_disabled": {
       "title": "Follow me: follow-me player disabled",
       "description": "The follow-me player `{entity}` is disabled. Enable it again, or choose another under **Configure** of the central settings (Settings → Devices & services → Better Media Player)."
+    },
+    "follow_buttons": {
+      "title": "{room}: follow me is now a switch",
+      "description": "The buttons *Follow me* and *Stop follow me* are replaced by the switch `{switch}` (on while follow me runs; turning it on starts follow me from this room, turning it off ends it). These removed buttons are still used:\n\n{entities}\n\nChange those automations and scripts to the switch (`switch.turn_on` / `switch.turn_off`) or to the actions `better_media_player.start_follow` / `stop_follow`. This note goes away once nothing uses them any more."
     },
     "removed_entities": {
       "title": "{room}: settings now set by an action",
