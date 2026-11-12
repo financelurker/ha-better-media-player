@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import BetterMediaPlayerConfigEntry
-from .entity import BetterMediaPlayerEntity, ControlEntity, prune_entities
+from .entity import BetterMediaPlayerEntity, ControlEntity, hub_pending, prune_entities
 from .follow import async_start_follow, async_stop_follow, get_hub
 
 
@@ -100,6 +100,11 @@ class FollowMeSwitch(ControlEntity, SwitchEntity):
     def usable(self) -> bool:
         hub = get_hub(self.hass)
         return hub is not None and (hub.active or hub.can_start(self.ctrl))
+
+    @property
+    def available(self) -> bool:
+        """Not while the central settings are not running (start, reload): unknown, not off."""
+        return super().available and (get_hub(self.hass) is not None or not hub_pending(self.hass))
 
     @property
     def is_on(self) -> bool:

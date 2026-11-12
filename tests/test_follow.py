@@ -1210,3 +1210,21 @@ async def test_stop_during_the_fade_back_after_the_night_takes_where_it_goes(has
     await tick(hass, freezer, 900, step=10)
     assert hass.states.get(KITCHEN).attributes["volume_level"] == pytest.approx(target, abs=0.01)
     assert k.volume.value == pytest.approx(target, abs=0.01)
+
+
+async def test_the_switch_is_unknown_not_off_while_the_central_entry_reloads(hass, house):
+    """A reload of the central settings (follow me goes on): no off and on again."""
+    from homeassistant.helpers.event import async_track_state_change_event
+
+    from custom_components.better_media_player.const import CONF_ENTRY_TYPE, ENTRY_TYPE_HUB
+
+    hass.states.async_set(LIVING_OCC, "on")
+    await follow_from(hass, house)
+    seen = []
+    async_track_state_change_event(hass, [SWITCH], lambda e: seen.append(e.data["new_state"].state))
+    hub_entry = next(e for e in hass.config_entries.async_entries(DOMAIN) if e.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_HUB)
+    hass.config_entries.async_update_entry(hub_entry, options={**hub_entry.options, "x": 1})  # (reloads it)
+    await hass.async_block_till_done()
+    assert get_hub(hass).active
+    assert "off" not in seen
+    assert hass.states.get(SWITCH).state == "on"

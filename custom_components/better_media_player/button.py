@@ -8,7 +8,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import BetterMediaPlayerConfigEntry
 from .const import WAKE_END_STOPPED
-from .entity import ControlEntity
+from .entity import ControlEntity, prune_entities
 
 
 async def async_setup_entry(
@@ -23,6 +23,7 @@ async def async_setup_entry(
         WakeSnoozeButton(entry, ctrl, "wake_snooze"),
         WakeStopButton(entry, ctrl, "wake_stop"),
     ]
+    prune_entities(hass, entry, "button", entities)  # (e.g. the follow me buttons, back after a downgrade)
     async_add_entities(entities)
 
 
