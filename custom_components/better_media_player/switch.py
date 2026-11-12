@@ -1,4 +1,4 @@
-"""Auto-power, keep on, quiet and night mode switches."""
+"""Auto-power, keep on, quiet, follow me and night mode switches."""
 
 from __future__ import annotations
 
@@ -10,7 +10,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import BetterMediaPlayerConfigEntry
-from .entity import BetterMediaPlayerEntity, ControlEntity, prune_entities
+from .entity import BetterMediaPlayerEntity, ControlEntity, hub_pending, prune_entities
+from .follow import async_start_follow, async_stop_follow, get_hub
 
 
 async def async_setup_entry(
@@ -22,6 +23,7 @@ async def async_setup_entry(
     entities: list[SwitchEntity] = [AutoPowerSwitch(entry, ctrl, "auto_power"), KeepOnSwitch(entry, ctrl, "keep_on")]
     if ctrl.audio_player is not None:
         entities.append(QuietSwitch(entry, ctrl, "quiet"))
+        entities.append(FollowMeSwitch(entry, ctrl, "follow_me"))
     entities.append(NightModeSwitch(entry, ctrl, "night_mode"))
     prune_entities(hass, entry, "switch", entities)
     async_add_entities(entities)
@@ -87,6 +89,42 @@ class QuietSwitch(ControlEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self.ctrl.async_set_quiet(False)
+
+
+class FollowMeSwitch(ControlEntity, SwitchEntity):
+    """On while follow me runs (anywhere: the music need not be here). On: follow
+    me from here (only while music plays on this room's own player); off: follow
+    me ends, the music stays here (or goes back where it was started)."""
+
+    @property
+    def usable(self) -> bool:
+        hub = get_hub(self.hass)
+        return hub is not None and (hub.active or hub.can_start(self.ctrl))
+
+    @property
+    def available(self) -> bool:
+        """Not while the central settings are not running (start, reload): unknown, not off."""
+        return super().available and (get_hub(self.hass) is not None or not hub_pending(self.hass))
+
+    @property
+    def is_on(self) -> bool:
+        hub = get_hub(self.hass)
+        return hub is not None and hub.active
+
+    @property
+    def extra_state_attributes(self) -> dict[str, str | None]:
+        """Why it cannot be turned on here right now (None: it can, or it is on)."""
+        hub = get_hub(self.hass)
+        blocker = hub.start_blocker(self.ctrl) if hub is not None else ("no_follow_player", {})
+        return {"blocked_by": blocker[0] if blocker and not self.is_on else None}
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        if not self.is_on:
+            await async_start_follow(self.hass, self.ctrl)  # (refuses with the reason)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        if self.is_on:
+            await async_stop_follow(self.hass, self.ctrl)
 
 
 class NightModeSwitch(ControlEntity, SwitchEntity):

@@ -75,6 +75,15 @@ class BetterMediaPlayerEntity(Entity):
 _PENDING = (ConfigEntryState.SETUP_IN_PROGRESS, ConfigEntryState.UNLOAD_IN_PROGRESS)
 
 
+def hub_pending(hass) -> bool:
+    """Central settings that are set up and enabled, but not running (start, reload,
+    an error): what follow me does is not known."""
+    entry = next(
+        (e for e in hass.config_entries.async_entries(DOMAIN) if e.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_HUB), None
+    )
+    return entry is not None and entry.disabled_by is None and hass.data.get(DOMAIN, {}).get("hub") is None
+
+
 def controls_settings(hass) -> tuple[bool, float] | None:
     """Dynamic controls on (central device, default on) and the hide delay (s).
 

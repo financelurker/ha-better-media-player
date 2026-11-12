@@ -176,7 +176,7 @@ async def test_room_options_move_to_the_device(hass, home, hass_storage):
     assert entry.version == 4
     assert set(entry.options) == {"sources", "devices", "cables", "volume", "occupancy"}
     got = await get_settings(hass)
-    assert entry.minor_version == 2
+    assert entry.minor_version == 3
     assert "run_down" not in got["devices"]["speakers"], "no run-down any more: the idle timeout"
     assert got["devices"]["display"]["on_wait"] == 3
     assert got["settings"]["sleep_fade"] == 7

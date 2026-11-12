@@ -2,7 +2,7 @@
 
 The whole installation has one follow-me player: a Music Assistant group
 player with dynamic members. Follow me is started explicitly in a room where
-music plays (button, action or a follow wake): the room joins the follow-me
+music plays (switch, action or a follow wake): the room joins the follow-me
 player and its queue moves there. From then on the music follows the people:
 
 - all follow rooms are prewarmed (speakers on) while it plays
@@ -16,7 +16,7 @@ player and its queue moves there. From then on the music follows the people:
 - members that are not backed by presence (resume, restart) are kept while
   nobody is detected in any eligible room ("override")
 
-Stopping it (button or action) brings the music back to one room: the room it
+Stopping it (switch or action) brings the music back to one room: the room it
 is stopped in if that room plays along, else the room it was started in. Every
 other room stops. It also ends by itself when the follow-me player stops, or
 when it paused because everybody left.
@@ -177,7 +177,7 @@ class FollowManager:
             async_track_time_interval(self.hass, self._on_tick, timedelta(seconds=TICK_SECONDS))
         )
         self.async_refresh_tracking()
-        self._notify_rooms()  # their follow me buttons depend on the central entry
+        self._notify_rooms()  # their follow me switches depend on the central entry
 
         @callback
         def _started(_hass: HomeAssistant) -> None:
@@ -434,7 +434,7 @@ class FollowManager:
 
     @callback
     def _notify_rooms(self) -> None:
-        """The rooms' follow me buttons depend on it."""
+        """The rooms' follow me switches depend on it."""
         for room in get_rooms(self.hass).values():
             room.notify()
 

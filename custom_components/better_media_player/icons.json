@@ -131,6 +131,13 @@
           "off": "mdi:weather-sunny"
         }
       },
+      "follow_me": {
+        "default": "mdi:account-music-outline",
+        "state": {
+          "on": "mdi:account-music",
+          "off": "mdi:account-music-outline"
+        }
+      },
       "keep_on": {
         "default": "mdi:power-plug-outline",
         "state": {
@@ -160,12 +167,6 @@
       },
       "wake_stop": {
         "default": "mdi:alarm-off"
-      },
-      "follow_start": {
-        "default": "mdi:account-music"
-      },
-      "follow_stop": {
-        "default": "mdi:account-music-outline"
       }
     },
     "select": {

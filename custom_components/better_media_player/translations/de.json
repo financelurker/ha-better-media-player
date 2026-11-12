@@ -135,6 +135,9 @@
       "night_mode": {
         "name": "Nachtmodus"
       },
+      "follow_me": {
+        "name": "Follow-Me"
+      },
       "keep_on": {
         "name": "Anlassen"
       }
@@ -156,12 +159,6 @@
       },
       "wake_stop": {
         "name": "Wecken beenden"
-      },
-      "follow_start": {
-        "name": "Follow-Me"
-      },
-      "follow_stop": {
-        "name": "Follow-Me beenden"
       }
     },
     "select": {
@@ -536,6 +533,10 @@
     "follow_player_disabled": {
       "title": "Follow me: Follow-me-Player deaktiviert",
       "description": "Der Follow-me-Player `{entity}` ist deaktiviert. Aktiviere ihn wieder, oder wähle einen anderen unter **Konfigurieren** der zentralen Einstellungen (Einstellungen → Geräte & Dienste → Better Media Player)."
+    },
+    "follow_buttons": {
+      "title": "{room}: Follow-Me ist jetzt ein Schalter",
+      "description": "Die Buttons *Follow-Me* und *Follow-Me beenden* sind durch den Schalter `{switch}` ersetzt (an, solange Follow-Me läuft; Einschalten startet Follow-Me aus diesem Raum, Ausschalten beendet es). Diese entfernten Buttons werden noch verwendet:\n\n{entities}\n\nÄndere diese Automationen und Skripte auf den Schalter (`switch.turn_on` / `switch.turn_off`) oder die Aktionen `better_media_player.start_follow` / `stop_follow`. Der Hinweis verschwindet, sobald nichts sie mehr verwendet."
     },
     "removed_entities": {
       "title": "{room}: Einstellungen jetzt per Aktion",

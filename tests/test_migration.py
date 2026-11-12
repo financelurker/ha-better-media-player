@@ -113,7 +113,7 @@ def test_a_players_only_room_gets_a_device_for_its_volume():
 async def test_a_room_is_migrated(hass, home, hass_storage):
     entry = await _room_v3(hass, hass_storage)
     await _setup(hass, entry)
-    assert (entry.version, entry.minor_version) == (4, 2)
+    assert (entry.version, entry.minor_version) == (4, 3)
     assert entry.options == options_v4(LIVING_V3)
     got = await get_settings(hass)
     assert "run_down" not in got["devices"]["display"], "no run-down any more: the idle timeout"
@@ -228,7 +228,7 @@ async def test_a_room_of_a_pre_release_gets_the_idle_timeout(hass, home, hass_st
         "sources": {"audio": {"run_down": 6, "on_wait": 2}},
     }}
     await _setup(hass, entry)
-    assert (entry.version, entry.minor_version) == (4, 2)
+    assert (entry.version, entry.minor_version) == (4, 3)
     got = await get_settings(hass)
     assert (got["settings"]["idle_timeout"], got["settings"]["night_idle_timeout"]) == (45, 0)
     assert got["settings"]["night_max_volume"] == 25
@@ -253,3 +253,33 @@ async def test_scripts_that_use_a_removed_entity_are_in_repairs_until_changed(ha
         await hass.services.async_call("script", "reload", blocking=True)
     await tick(hass, freezer, 5)
     assert not [i for (d, i) in ir.async_get(hass).issues if d == DOMAIN]
+
+
+async def test_the_follow_buttons_become_a_switch_and_their_use_is_in_repairs(hass, home, hass_storage, freezer):
+    """4.3: the buttons Follow me / Stop follow me go, the switch follow_me comes;
+    automations that still press a button are shown in Repairs."""
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="Living Room", entry_id="room1", data={CONF_ENTRY_TYPE: ENTRY_TYPE_ROOM},
+        options=options_v4(LIVING_V3), version=4, minor_version=2,
+    )
+    entry.add_to_hass(hass)
+    reg = er.async_get(hass)
+    reg.async_get_or_create("button", DOMAIN, "room1_follow_start", suggested_object_id="living_room_follow_me", config_entry=entry)
+    reg.async_get_or_create("button", DOMAIN, "room1_follow_stop", suggested_object_id="living_room_stop_follow_me", config_entry=entry)
+    assert await async_setup_component(hass, "automation", {"automation": [
+        {"id": "morning", "alias": "Morning", "triggers": [{"trigger": "time", "at": "06:00:00"}],
+         "actions": [{"action": "button.press", "target": {"entity_id": "button.living_room_stop_follow_me"}}]},
+    ]})
+    await _setup(hass, entry)
+    await tick(hass, freezer, START_DELAY + 3)
+    assert (entry.version, entry.minor_version) == (4, 3)
+    assert reg.async_get_entity_id("button", DOMAIN, "room1_follow_start") is None
+    assert reg.async_get_entity_id("button", DOMAIN, "room1_follow_stop") is None
+    assert reg.async_get_entity_id("switch", DOMAIN, "room1_follow_me") == "switch.living_room_follow_me"
+    assert sorted(entry.runtime_data.data["removed_follow_buttons"]) == ["button.living_room_follow_me", "button.living_room_stop_follow_me"]
+    issues = [i for (d, i) in ir.async_get(hass).issues if d == DOMAIN and i.startswith("follow_buttons")]
+    assert len(issues) == 1
+    issue = ir.async_get(hass).async_get_issue(DOMAIN, issues[0])
+    assert issue.translation_placeholders["switch"] == "switch.living_room_follow_me"
+    assert "button.living_room_stop_follow_me" in issue.translation_placeholders["entities"]
+    assert "`button.living_room_follow_me`" not in issue.translation_placeholders["entities"], "only what is used"

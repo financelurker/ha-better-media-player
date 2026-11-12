@@ -34,7 +34,7 @@ def get_hub(hass: HomeAssistant) -> FollowManager | None:
 
 
 async def async_start_follow(hass: HomeAssistant, room: RoomController) -> None:
-    """Follow me from this room (the room's button and action)."""
+    """Follow me from this room (the room's switch and action)."""
     hub = get_hub(hass)
     if hub is None:
         raise ServiceValidationError(translation_domain=DOMAIN, translation_key="no_follow_player")
@@ -42,7 +42,7 @@ async def async_start_follow(hass: HomeAssistant, room: RoomController) -> None:
 
 
 async def async_stop_follow(hass: HomeAssistant, room: RoomController) -> None:
-    """Follow me off, from this room (the room's button and action)."""
+    """Follow me off, from this room (the room's switch and action)."""
     hub = get_hub(hass)
     if hub is None:
         raise ServiceValidationError(translation_domain=DOMAIN, translation_key="follow_not_running")

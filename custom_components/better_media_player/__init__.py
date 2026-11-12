@@ -35,7 +35,7 @@ from .room.controller import RoomController
 from .follow.manager import FollowManager
 from .room import get_rooms
 from .hide import async_setup_hider, get_hider
-from .issues import REMOVED_KEY, async_setup_issues, get_checker
+from .issues import REMOVED_FOLLOW_KEY, REMOVED_KEY, async_setup_issues, get_checker
 from .model import REMOVED_CENTRAL_ENTITIES, REMOVED_ROOM_ENTITIES, migrate_store, migrate_store_4_2, options_v4
 from .panel import async_setup_panel
 
@@ -138,6 +138,22 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if (data := await store.async_load()) is not None:
                 await store.async_save(migrate_store_4_2(data))
         hass.config_entries.async_update_entry(entry, minor_version=2)
+    if entry.version == 4 and entry.minor_version < 3:
+        # the follow me buttons are one switch now; automations and scripts that
+        # use them are shown in Repairs (issues.py) until they no longer do
+        if not is_hub(entry):
+            reg = er.async_get(hass)
+            gone = []
+            for key in ("follow_start", "follow_stop"):
+                if entity_id := reg.async_get_entity_id("button", DOMAIN, f"{entry.entry_id}_{key}"):
+                    gone.append(entity_id)
+                    reg.async_remove(entity_id)
+            if gone:
+                store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
+                data = await store.async_load() or {}
+                data[REMOVED_FOLLOW_KEY] = sorted({*data.get(REMOVED_FOLLOW_KEY, []), *gone})
+                await store.async_save(data)
+        hass.config_entries.async_update_entry(entry, minor_version=3)
     return True
 
 

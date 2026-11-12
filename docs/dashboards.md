@@ -40,7 +40,7 @@ A room's controls that make no sense right now are hidden (`hidden_by: integrati
 | *Device* off at | an off is planned (nothing plays and the idle timeout runs, or it waits to go off) |
 | Quiet | always in a room that takes part in follow me (occupancy sensors, a music player, a follow-me player in the central settings); elsewhere while it is on |
 | Wake, Snooze, Stop wake | a wake runs |
-| Follow me / Stop follow me | it can be started here / follow me runs |
+| Follow me (switch) | follow me runs, or it can be started here |
 | Volume preset | the room plays or is on |
 | Hand over to | something plays that another room can take over |
 | central: Follow rooms | follow me runs |

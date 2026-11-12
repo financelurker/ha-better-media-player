@@ -8,16 +8,16 @@ Needs the **Central settings** entry with the **follow-me player**: a Music Assi
 
 > Group players with **static** members are not supported: Music Assistant stops the whole group when a static member is removed. Use groups with dynamic members only.
 
-**Start** follow me in a room where music plays directly on its music player (not video, not in quiet mode), with the room's **Follow me** button or the action `better_media_player.start_follow` ([example](automations.md#follow-me)).
+**Start** follow me in a room where music plays directly on its music player (not video, not in quiet mode), by turning on the room's **Follow me** switch (`switch.<room>_follow_me`) or with the action `better_media_player.start_follow` ([example](automations.md#follow-me)).
 
-The room joins the follow-me player and its queue moves there (`music_assistant.transfer_queue`); the track goes on where it was (if the follow-me player starts it from the beginning, it is set to the position; not for streams without a duration, e.g. radio). The room's volume becomes follow me's volume (its offset taken out). While follow me runs, the **Follow me** buttons are hidden in every room and the **Stop follow me** buttons are shown ([dynamic controls](dashboards.md#dynamic-controls)); pressing *Follow me* while it runs, or *Stop follow me* while it does not, gives an error.
+The room joins the follow-me player and its queue moves there (`music_assistant.transfer_queue`); the track goes on where it was (if the follow-me player starts it from the beginning, it is set to the position; not for streams without a duration, e.g. radio). The room's volume becomes follow me's volume (its offset taken out). While follow me runs, the **Follow me** switch is on and shown in every room ([dynamic controls](dashboards.md#dynamic-controls)); while it is off, only where it can be started. While the central settings load (a start, a reload) the switch is unavailable rather than off.
 
-If follow me cannot be started in a room, the error says why. The button's attribute `blocked_by` shows the same reason (`null` while it can be started):
+If follow me cannot be started in a room, the error says why. The switch's attribute `blocked_by` shows the same reason (`null` while it can be started, and while follow me runs):
 
 | `blocked_by` | Reason |
 |---|---|
 | `no_follow_player` | no follow-me player in the central settings |
-| `follow_running` | follow me runs already |
+| `follow_running` | follow me runs already (only from the action `start_follow`; the switch is on then) |
 | `start_not_follow_room` | the room takes no part (it needs a music player and occupancy sensors) |
 | `start_quiet` | the room is in quiet mode |
 | `start_video` | the video player is on |
@@ -37,7 +37,7 @@ While it plays:
 - **Nobody detected** at the start: the start room stays as long as nobody is detected in any follow room; then the normal rules apply, including the idle timeout. The same goes for a room you add to the group by hand.
 - **Paused by you:** follow me goes on, rooms stay as they are (their speakers for the idle timeout), the prewarmed speakers go off. On resume the rules apply again.
 
-**Stop** follow me with any room's **Stop follow me** button or `better_media_player.stop_follow` (target: a room player). The music goes back to one room: the room you stop it in if it plays along, else the room it was started in (paused music stays paused there); playing music goes on there where it was. If that room played along, it keeps the volume it had in follow me: stopping follow me does not change what you hear. That volume is the room's volume from then on – unless the room would play at about that anyway (at night: its limit; the room's volume for after the night stays) or the sleep timer or a wake sets its volume. With a [volume device](volume.md) the player keeps follow me's level while it plays on; its own level comes back the next time. All other rooms stop. Stopping while follow me is off gives an error. Follow me also ends by itself when the follow-me player is stopped in Music Assistant.
+The **Follow me** switch is on in every room while follow me runs – also where the music is not right now – so a dashboard shows it highlighted. **Stop** follow me by turning off any room's switch, or with `better_media_player.stop_follow` (target: a room player). The music goes back to one room: the room you stop it in if it plays along, else the room it was started in (paused music stays paused there); playing music goes on there where it was. If that room played along, it keeps the volume it had in follow me: stopping follow me does not change what you hear. That volume is the room's volume from then on – unless the room would play at about that anyway (at night: its limit; the room's volume for after the night stays) or the sleep timer or a wake sets its volume. With a [volume device](volume.md) the player keeps follow me's level while it plays on; its own level comes back the next time. All other rooms stop. Turning the switch on while it is on, or off while it is off, does nothing; the actions `start_follow` / `stop_follow` give an error then. Follow me also ends by itself when the follow-me player is stopped in Music Assistant.
 
 ---
 
