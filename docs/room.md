@@ -40,7 +40,7 @@ One rule for every player:
 - The picture waits for the player to go off (at most a minute): a TV that the player turns off over HDMI-CEC goes with it.
 - A player's hardware plug waits `off_wait` (2 min) after its player is off, so its system can shut down.
 - A dropout of the player (unavailable for a moment) is no stop: it counts as not playing.
-- A video player that reports off by itself gets a moment (`video_off_grace`, 30 s; 0 = off at once): Home Assistant's Kodi integration reports off as soon as a ping to Kodi fails, and its state again once it has reconnected. Everything stays as it is meanwhile; if it is still off then, everything goes off as above. A video player the room turns off (*All off*, idle timeout) goes off at once.
+- A video player that reports off by itself gets a moment (`video_off_grace`, 30 s; 0 = off at once): Home Assistant's Kodi integration reports off as soon as a ping to Kodi fails, and its state again once it has reconnected. Everything stays as it is meanwhile, also when it becomes unavailable after the off; if it is still off (or gone) then, everything goes off as above. A video player the room turns off (*All off*, idle timeout) goes off at once.
 - After a restart of Home Assistant a player that does not play holds anew (music only while its speakers are on). Until a player has reported (at most 5 min), what is on stays on.
 - Choosing a source starts its player: it holds until it plays, also while it still reports off.
 

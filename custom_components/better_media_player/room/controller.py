@@ -191,7 +191,7 @@ class RoomController:
         self._stopped = False
         self._side_tasks: set[asyncio.Task] = set()
         self._alone_checks: dict[str, Callable[[], None]] = {}  # (a player others run on: _later)
-        self._off_checks: dict[str, Callable[[], None]] = {}  # (a video player off for a moment: _off_grace)
+        self._off_checks: dict[str, tuple[Callable[[], None], float]] = {}  # (a video player off for a moment: _off_grace)
         self._own_contexts: deque[str] = deque(maxlen=OWN_CONTEXTS)
 
         self.status = STATUS_OFF
@@ -296,7 +296,7 @@ class RoomController:
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()
-        for unsub in (*self._alone_checks.values(), *self._off_checks.values()):
+        for unsub in (*self._alone_checks.values(), *(u for u, _due in self._off_checks.values())):
             unsub()
         self._alone_checks.clear()
         self._off_checks.clear()
@@ -384,6 +384,11 @@ class RoomController:
         for src in self.sources.values():
             if entity_id != src.player:
                 continue
+            if new is not None and new.state in (STATE_OFF, STATE_STANDBY):
+                if src.off_since is None:
+                    src.off_since = clock.now()  # (_off_grace: maybe only its connection is gone)
+            elif new is not None and new.state not in NOT_AVAILABLE:
+                src.off_since = None
             if self.announce.protects(src.player):
                 continue  # an announcement: what the player does now is no wish
             self.volume.async_on_state(src, old, new)
@@ -400,11 +405,6 @@ class RoomController:
                 src.in_use = True  # turned on (in Music Assistant, say): its devices come up
                 src.hold_since = None
                 src.expired = False
-            if new is not None and new.state in (STATE_OFF, STATE_STANDBY):
-                if src.off_since is None:
-                    src.off_since = clock.now()  # (_off_grace: maybe only its connection is gone)
-            elif new is not None and new.state not in NOT_AVAILABLE:
-                src.off_since = None
             if new is None or new.state in (STATE_OFF, *PLAYING_STATES, *NOT_AVAILABLE):
                 src.off_sent_at = None  # off, or in use again: the next idle timeout turns it off again
                 src.going_off = False
@@ -917,6 +917,12 @@ class RoomController:
                 return  # (it may come back: everything stays as it is for a moment)
             self.end_use(src)  # turned off: off means off
             return
+        if src.kind == SOURCE_VIDEO and state in NOT_AVAILABLE and src.off_since is not None:
+            # off, then gone (shut down, its network down): off, not a dropout
+            if self._off_grace(src, now):
+                return
+            self.end_use(src)
+            return
         if state in POWERED_STATES:
             src.begun = False
         if src.kind == SOURCE_VIDEO:
@@ -954,7 +960,11 @@ class RoomController:
         left = src.off_since + grace - now
         if left <= 0:
             return False
-        if src.key not in self._off_checks and not self._stopped:
+        due = src.off_since + grace
+        pending = self._off_checks.get(src.key)
+        if not self._stopped and (pending is None or pending[1] > due):
+            if pending is not None:
+                pending[0]()  # (the setting was shortened)
 
             @callback
             def _again(_now: Any) -> None:
@@ -962,7 +972,7 @@ class RoomController:
                 if not self._stopped:
                     self._spawn(self.async_update("off_grace"))
 
-            self._off_checks[src.key] = async_call_later(self.hass, left + 0.1, _again)
+            self._off_checks[src.key] = (async_call_later(self.hass, left + 0.1, _again), due)
         return True
 
     def _video_follows(self, src: Source) -> None:

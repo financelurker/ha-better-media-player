@@ -111,3 +111,85 @@ async def test_after_keep_on_a_lost_connection_switches_nothing(hass, home, free
     await _gone(hass, home, freezer, 10, back="paused")
     await tick(hass, freezer, 60)
     assert _switched(home, since) == []
+
+
+async def test_off_then_gone_is_off(hass, home, freezer):
+    """Shut down: off, then unavailable (its network is gone): no dropout, off after the moment."""
+    await _playing(hass, home, freezer)
+    home.kodi("off")
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 5)
+    home.kodi("unavailable")
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 15)
+    assert home.on(TV) and home.on(SPEAKERS), "still its moment"
+    await tick(hass, freezer, 15)
+    assert not home.on(TV) and not home.on(SPEAKERS)
+
+
+async def test_off_then_gone_and_back_switches_nothing(hass, home, freezer):
+    await _playing(hass, home, freezer)
+    since = len(home.calls)
+    home.kodi("off")
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 3)
+    home.kodi("unavailable")
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 5)
+    home.kodi("playing")
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 30)
+    assert _switched(home, since) == []
+
+
+async def test_standby_counts_as_off(hass, home, freezer):
+    await _playing(hass, home, freezer)
+    since = len(home.calls)
+    await _gone(hass, home, freezer, 10)
+    home.kodi("standby")
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 10)
+    home.kodi("playing")
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 30)
+    assert _switched(home, since) == []
+
+
+async def test_a_shorter_setting_counts_at_once(hass, home, freezer):
+    await _playing(hass, home, freezer)
+    await set_setting(hass, "video_off_grace", 300)
+    home.kodi("off")
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 10, step=0.5)
+    await set_setting(hass, "video_off_grace", 16)
+    await tick(hass, freezer, 5, step=0.5)
+    assert home.on(TV)
+    await tick(hass, freezer, 1.5, step=0.5)
+    assert not home.on(TV) and not home.on(SPEAKERS)
+
+
+async def test_back_during_an_announcement_starts_anew(hass, home, freezer):
+    """What the player reports while an announcement protects it still counts for the moment."""
+    entry = await _playing(hass, home, freezer)
+    ctrl = entry.runtime_data
+    src = ctrl.sources["video"]
+    home.kodi("off")
+    await hass.async_block_till_done()
+    protects = ctrl.announce.protects
+    ctrl.announce.protects = lambda entity_id: entity_id == KODI
+    home.kodi("playing")
+    await hass.async_block_till_done()
+    ctrl.announce.protects = protects
+    assert src.off_since is None, "back: no old time for the next drop"
+
+
+async def test_all_off_while_it_is_gone_goes_at_once(hass, home, freezer):
+    await _playing(hass, home, freezer)
+    home.kodi("off")
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 3)
+    assert home.on(TV)
+    await hass.services.async_call("media_player", "turn_off", {"entity_id": ROOM}, blocking=True)
+    await hass.async_block_till_done()
+    await tick(hass, freezer, 3)
+    assert not home.on(TV) and not home.on(SPEAKERS)
