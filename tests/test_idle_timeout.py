@@ -174,7 +174,7 @@ async def test_turned_off_the_player_s_plug_still_waits(hass, home, freezer):
     await tick(hass, freezer, 5)
     home.kodi("off")  # turned off with its remote
     await hass.async_block_till_done()
-    await tick(hass, freezer, 5)
+    await tick(hass, freezer, 35)  # (after video_off_grace)
     assert not home.on(TV) and not home.on(SPEAKERS)
     assert home.on(HOST)
     await tick(hass, freezer, 2 * 60 + 30, step=10)
@@ -356,7 +356,7 @@ async def test_paused_music_ends_when_a_video_is_chosen(hass, home, freezer):
     await tick(hass, freezer, 60)
     home.kodi("off")  # turned off with its remote
     await hass.async_block_till_done()
-    await tick(hass, freezer, 10)
+    await tick(hass, freezer, 35)  # (after video_off_grace)
     assert not home.on(SPEAKERS) and not home.on(TV)
 
 

@@ -43,6 +43,7 @@ How a room behaves. They are not entities: the panel shows them, the action [`be
 | `idle_timeout` | 30 min | 0–480, 0 = never | [nothing plays](room.md#when-devices-go-off) (paused, stopped, a menu) this long: the room goes off |
 | `night_idle_timeout` | 5 min | 0–480, 0 = never | the same at night |
 | `start_timeout` | 90 s | 10–600 | a start that takes longer fails |
+| `video_off_grace` | 30 s | 0–300, 0 = at once | a video player that reports off by itself (e.g. Kodi losing its connection): everything stays as it is this long, in case it comes back |
 | `night_max_volume` | 30 % | 0–100, 0 = no limit | [night mode](night-sleep-wake.md#night-mode): maximum volume |
 | `night_fade_in` | 2 min | 0–30 | after the night: back up to the room volume |
 | `preset_quiet`, `preset_normal`, `preset_loud`, `preset_party` | 15 / 30 / 50 / 70 % | 0–100, 0 = not offered | [volume presets](volume.md#presets) |

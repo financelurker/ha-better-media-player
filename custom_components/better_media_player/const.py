@@ -190,6 +190,7 @@ CONF_HOST_RUN_DOWN = "host_run_down"  # min
 CONF_VIDEO_IDLE_TIMEOUT = "video_idle_timeout"  # min (up to version 4.1)
 CONF_IDLE_TIMEOUT = "idle_timeout"  # min, 0 = never
 CONF_START_TIMEOUT = "start_timeout"  # s
+CONF_VIDEO_OFF_GRACE = "video_off_grace"  # s a video player that reports off by itself may come back
 CONF_DISPLAY_ON_WAIT = "display_on_wait"  # s
 CONF_HOST_ON_WAIT = "host_on_wait"  # s
 CONF_AUDIO_ON_WAIT = "audio_on_wait"  # s

@@ -92,6 +92,7 @@
   "setting.announce_video": "Durchsage während Video",
   "setting.announce_video_lower": "Durchsage: Video leiser um",
   "setting.start_timeout": "Start-Zeitlimit",
+  "setting.video_off_grace": "Video-Player aus: warten",
   "setting.sleep_fade": "Sleep-Timer ausblenden",
   "setting.snooze_minutes": "Schlummerzeit",
   "setting.presence_run_down": "Follow me: verlassen nach",
