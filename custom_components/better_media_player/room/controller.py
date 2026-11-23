@@ -57,6 +57,7 @@ from homeassistant.util import dt as dt_util
 
 from ..const import (
     CONF_IDLE_TIMEOUT,
+    CONF_VIDEO_OFF_GRACE,
     CONF_NIGHT_IDLE_TIMEOUT,
     EVENT_RUN_DOWN,
     KIND_NAMES,
@@ -150,6 +151,7 @@ class Source:
     begun: bool = False  # the room started it and it has not been on yet (e.g. "off" until it plays)
     off_sent_at: float | None = None  # the room turned it off (once, until it is off)
     going_off: bool = False  # its idle timeout ran out: off after its sound devices, before the picture
+    off_since: float | None = None  # it reports off since
 
 
 class RoomController:
@@ -189,6 +191,7 @@ class RoomController:
         self._stopped = False
         self._side_tasks: set[asyncio.Task] = set()
         self._alone_checks: dict[str, Callable[[], None]] = {}  # (a player others run on: _later)
+        self._off_checks: dict[str, tuple[Callable[[], None], float]] = {}  # (a video player off for a moment: _off_grace)
         self._own_contexts: deque[str] = deque(maxlen=OWN_CONTEXTS)
 
         self.status = STATUS_OFF
@@ -293,9 +296,10 @@ class RoomController:
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()
-        for unsub in self._alone_checks.values():
+        for unsub in (*self._alone_checks.values(), *(u for u, _due in self._off_checks.values())):
             unsub()
         self._alone_checks.clear()
+        self._off_checks.clear()
         self.sleep.async_stop()
         self.volume.async_stop()
         self.night.async_stop()
@@ -380,6 +384,11 @@ class RoomController:
         for src in self.sources.values():
             if entity_id != src.player:
                 continue
+            if new is not None and new.state in (STATE_OFF, STATE_STANDBY):
+                if src.off_since is None:
+                    src.off_since = clock.now()  # (_off_grace: maybe only its connection is gone)
+            elif new is not None and new.state not in NOT_AVAILABLE:
+                src.off_since = None
             if self.announce.protects(src.player):
                 continue  # an announcement: what the player does now is no wish
             self.volume.async_on_state(src, old, new)
@@ -904,7 +913,15 @@ class RoomController:
             self.end_use(src)
             return
         if state in (STATE_OFF, STATE_STANDBY, None) and not src.begun:
+            if self._off_grace(src, now):
+                return  # (it may come back: everything stays as it is for a moment)
             self.end_use(src)  # turned off: off means off
+            return
+        if src.kind == SOURCE_VIDEO and state in NOT_AVAILABLE and src.off_since is not None:
+            # off, then gone (shut down, its network down): off, not a dropout
+            if self._off_grace(src, now):
+                return
+            self.end_use(src)
             return
         if state in POWERED_STATES:
             src.begun = False
@@ -930,6 +947,33 @@ class RoomController:
             if src.kind == SOURCE_VIDEO and self.switched_by(src, False) is not None:
                 src.going_off = True  # (off after its sound devices: _video_follows)
         src.in_use = not src.expired
+
+    def _off_grace(self, src: Source, now: float) -> bool:
+        """A video player in use that reported off by itself is given a moment: its
+        integration may report off while only the connection is gone (Home
+        Assistant's Kodi reports off when a ping fails, and its state again once
+        it has reconnected, within seconds). Turned off by the room (no longer in
+        use): off at once."""
+        grace = float(self.setting(CONF_VIDEO_OFF_GRACE) or 0)
+        if src.kind != SOURCE_VIDEO or grace <= 0 or not src.in_use or src.off_since is None:
+            return False
+        left = src.off_since + grace - now
+        if left <= 0:
+            return False
+        due = src.off_since + grace
+        pending = self._off_checks.get(src.key)
+        if not self._stopped and (pending is None or pending[1] > due):
+            if pending is not None:
+                pending[0]()  # (the setting was shortened)
+
+            @callback
+            def _again(_now: Any) -> None:
+                self._off_checks.pop(src.key, None)
+                if not self._stopped:
+                    self._spawn(self.async_update("off_grace"))
+
+            self._off_checks[src.key] = (async_call_later(self.hass, left + 0.1, _again), due)
+        return True
 
     def _video_follows(self, src: Source) -> None:
         """The video player's idle timeout ran out: its sound devices go off first,

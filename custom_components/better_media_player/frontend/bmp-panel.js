@@ -17,7 +17,7 @@ const PANEL_URL = "better-media-player";
 const UNITS = {
   idle_timeout: "min", night_idle_timeout: "min", night_max_volume: "%", night_fade_in: "min",
   preset_quiet: "%", preset_normal: "%", preset_loud: "%", preset_party: "%", preset_fade: "s",
-  announce_video_lower: "%", start_timeout: "s", sleep_fade: "min",
+  announce_video_lower: "%", start_timeout: "s", video_off_grace: "s", sleep_fade: "min",
   snooze_minutes: "min", presence_run_down: "min", volume_offset: "pts",
   off_wait: "min", on_wait: "s", standby_w: "W", standby_max: "min",
   default_volume: "%", hide_delay: "s",

@@ -130,7 +130,9 @@ async def test_kodi_turned_off_everything_goes_off(hass, home, freezer):
     await tick(hass, freezer, 5)
     home.kodi("off")
     await hass.async_block_till_done()
-    await tick(hass, freezer, 5)
+    await tick(hass, freezer, 25)
+    assert home.on(SPEAKERS) and home.on(TV), "it may come back (video_off_grace)"
+    await tick(hass, freezer, 10)
     assert not home.on(SPEAKERS) and not home.on(TV)
     assert call_order(home, [SPEAKERS, TV], "turn_off") == [SPEAKERS, TV]
 

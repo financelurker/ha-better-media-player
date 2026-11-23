@@ -113,6 +113,7 @@ ROOM_SETTINGS: dict[str, Any] = {
     "announce_video": ANNOUNCE_PAUSE,
     "announce_video_lower": 50,  # %
     "start_timeout": 90,  # s
+    "video_off_grace": 30,  # s a video player that reported off by itself may come back (0 = off at once)
     "sleep_fade": 5,  # min
     "snooze_minutes": 9,
     "presence_run_down": 2,  # min, follow me: leave after
@@ -152,6 +153,7 @@ SPECS: dict[str, tuple[float, float] | list[str] | type] = {
     "announce_video": list(ANNOUNCE_VIDEO_MODES),
     "announce_video_lower": (0, 100),
     "start_timeout": (10, 600),
+    "video_off_grace": (0, 300),
     "sleep_fade": (0, 60),
     "snooze_minutes": (1, 120),
     "presence_run_down": (0, 60),

@@ -92,6 +92,7 @@
   "setting.announce_video": "Announcement during video",
   "setting.announce_video_lower": "Announcement: lower video by",
   "setting.start_timeout": "Start timeout",
+  "setting.video_off_grace": "Video player off: wait",
   "setting.sleep_fade": "Sleep timer fade-out",
   "setting.snooze_minutes": "Snooze time",
   "setting.presence_run_down": "Follow me: leave after",

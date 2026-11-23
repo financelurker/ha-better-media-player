@@ -8,7 +8,7 @@ import { areaField, entitiesField, entityField, segField, settingRow, textField 
 const GROUPS = [
   ["night", ["night_max_volume", "night_idle_timeout", "night_fade_in"]],
   ["presets", ["preset_quiet", "preset_normal", "preset_loud", "preset_party", "preset_fade", "power_on_preset"]],
-  ["times", ["idle_timeout", "start_timeout"]],
+  ["times", ["idle_timeout", "start_timeout", "video_off_grace"]],
   ["announce", ["announce_video", "announce_video_lower"]],
   ["sleep", ["sleep_fade", "snooze_minutes"]],
   ["follow", ["presence_run_down", "volume_offset", "prewarm", "wake_detect_left"]],
